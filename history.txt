@@ -1,0 +1,6 @@
+Goomba Revision history
+-=-=-=-=-=-=-=-=
+
+V0 - 2003-09-24 (FluBBa)
+   Started coding.
+
