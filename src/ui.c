@@ -1,0 +1,494 @@
+#include <stdio.h>
+#include <string.h>
+
+#include "gba.h"
+
+//header files?  who needs 'em :P
+
+void cls(int);		//from main.c
+void rommenu(void);
+void drawtext(int,char*,int);
+void waitframe(void);
+extern char *textstart;
+
+int SendMBImageToClient(void);	//mbclient.c
+
+//----asm calls------
+void resetSIO(u32);			//io.s
+void doReset(void);			//io.s
+void suspend(void);			//io.s
+int gettime(void);			//io.s
+void debug_(int,int);		//lcd.s
+void paletteinit(void);		//lcd.s
+void PaletteTxAll(void);	//lcd.s
+void makeborder(void);		//lcd.s
+//-------------------
+
+extern u32 joycfg;			//from io.s
+extern char novblankwait;	//from gb-z80.s
+extern u32 sleeptime;		//from gb-z80.s
+extern u32 FPSValue;		//from lcd.s
+extern char fpsenabled;		//from lcd.s
+extern u32 gammavalue;		//from lcd.s
+extern u32 palettebank;		//from lcd.s palette bank
+extern u32 bcolor;			//from lcd.s ,border color, black, grey, blue
+
+extern char rtc;
+extern char pogoshell;
+extern char gameboyplayer;
+
+int autoA,autoB;	//0=off, 1=on, 2=R
+u8 stime=0;
+u8 autostate=0;
+
+void autoAset(void);
+void autoBset(void);
+void swapAB(void);
+void controller(void);
+void vblset(void);
+void restart(void);
+void exit(void);
+void multiboot(void);
+void scrolll(int f);
+void scrollr(void);
+void drawui1(void);
+void drawui2(void);
+void drawui3(void);
+void subui(int menunr);
+void ui2(void);
+void ui3(void);
+void drawclock(void);
+void sleep(void);
+void sleepset(void);
+void fpsset(void);
+void brightset(void);
+void fadetowhite(void);
+void loadstatemenu(void);
+void savestatemenu(void);
+void autostateset(void);
+void chpalette(void);
+void border(void);
+void gbtype(void);
+
+void managesram(void);	//sram.c
+void writeconfig(void);	//sram.c
+
+#define MENU2ITEMS 5		//othermenu items
+#define MENU3ITEMS 3		//displaymenu items
+#define CARTMENUITEMS 12 //mainmenuitems when running from cart (not multiboot)
+#define MULTIBOOTMENUITEMS 8 //"" when running from multiboot
+const fptr multifnlist[]={autoBset,autoAset,controller,ui3,ui2,multiboot,sleep,restart};
+const fptr fnlist1[]={autoBset,autoAset,controller,ui3,ui2,multiboot,managesram,savestatemenu,loadstatemenu,sleep,restart,exit};
+const fptr fnlist2[]={vblset,fpsset,swapAB,sleepset,autostateset,gbtype};
+const fptr fnlist3[]={chpalette,brightset,border};
+
+int selected;//selected menuitem.  used by all menus.
+int mainmenuitems;//? or CARTMENUITEMS, depending on whether saving is allowed
+
+u32 oldkey;//init this before using getmenuinput
+u32 getmenuinput(int menuitems) {
+	u32 keyhit;
+	u32 tmp;
+	int sel=selected;
+
+	waitframe();		//(polling REG_P1 too fast seems to cause problems)
+	tmp=~REG_P1;
+	keyhit=(oldkey^tmp)&tmp;
+	oldkey=tmp;
+	if(keyhit&UP)
+		sel=(sel+menuitems-1)%menuitems;
+	if(keyhit&DOWN)
+		sel=(sel+1)%menuitems;
+	if(keyhit&RIGHT) {
+		sel+=10;
+		if(sel>menuitems-1) sel=menuitems-1;
+	}
+	if(keyhit&LEFT) {
+		sel-=10;
+		if(sel<0) sel=0;
+	}
+	if((oldkey&(L_BTN+R_BTN))!=L_BTN+R_BTN)
+		keyhit&=~(L_BTN+R_BTN);
+	selected=sel;
+	return keyhit;
+}
+
+void ui() {
+	int key,soundvol,oldsel,tm0cnt,i;
+
+	autoA=joycfg&A_BTN?0:1;
+	autoA|=joycfg&(A_BTN<<16)?0:2;
+	autoB=joycfg&B_BTN?0:1;
+	autoB|=joycfg&(B_BTN<<16)?0:2;
+
+	mainmenuitems=((u32)textstart>0x8000000?CARTMENUITEMS:MULTIBOOTMENUITEMS);//running from rom or multiboot?
+	FPSValue=0;			//Stop FPS meter
+
+	soundvol=REG_SGCNT0_L;
+	REG_SGCNT0_L=0;		//stop sound (GB)
+	tm0cnt=REG_TM0CNT;
+	REG_TM0CNT=0;		//stop sound (directsound)
+
+	REG_BG2HOFS=0x0100;	//Screen left
+	selected=0;
+	drawui1();
+	REG_BLDCNT=0x00fb;	//darken screen
+	REG_COLY=0x0000;	//set normal blending
+	for(i=0;i<8;i++)
+	{
+		waitframe();
+		REG_COLY=i;		//Darken screen
+		REG_BG2HOFS=224-i*32;	//Move screen right
+	}
+
+	oldkey=~REG_P1;			//reset key input
+	do {
+		drawclock();
+		key=getmenuinput(mainmenuitems);
+		if(key&(A_BTN)) {
+			oldsel=selected;
+			if(mainmenuitems<CARTMENUITEMS)
+				multifnlist[selected]();
+			else
+				fnlist1[selected]();
+			selected=oldsel;
+		}
+		if(key&(A_BTN+UP+DOWN+LEFT+RIGHT))
+			drawui1();
+	} while(!(key&(B_BTN+R_BTN+L_BTN)));
+	writeconfig();		//save any changes
+	for(i=0;i<8;i++)
+	{
+		REG_COLY=7-i;		//Lighten screen
+		REG_BG2HOFS=i*32;	//Move screen left
+		waitframe();
+	}
+	REG_BG2HOFS=0x0100;		//Screen left
+	while(key&(B_BTN)) {
+		waitframe();		//(polling REG_P1 too fast seems to cause problems)
+		key=~REG_P1;
+	}
+	REG_SGCNT0_L=soundvol;	//resume sound (GB)
+	REG_TM0CNT=tm0cnt;	//resume sound (directsound)
+	cls(3);
+}
+
+void subui(int menunr) {
+	int key,oldsel;
+
+	selected=0;
+	if(menunr==2)drawui2();
+	if(menunr==3)drawui3();
+	scrolll(0);
+	oldkey=~REG_P1;			//reset key input
+	do {
+		if(menunr==2)key=getmenuinput(MENU2ITEMS);
+		if(menunr==3)key=getmenuinput(MENU3ITEMS);
+		if(key&(A_BTN)) {
+			oldsel=selected;
+			if(menunr==2)fnlist2[selected]();
+			if(menunr==3)fnlist3[selected]();
+			selected=oldsel;
+		}
+		if(key&(A_BTN+UP+DOWN+LEFT+RIGHT))
+			if(menunr==2)drawui2();
+			if(menunr==3)drawui3();
+	} while(!(key&(B_BTN+R_BTN+L_BTN)));
+	scrollr();
+	while(key&(B_BTN)) {
+		waitframe();		//(polling REG_P1 too fast seems to cause problems)
+		key=~REG_P1;
+	}
+}
+
+void ui2() {
+	subui(2);
+}
+void ui3() {
+	subui(3);
+}
+
+void text(int row,char *str) {
+	drawtext(row+10-mainmenuitems/2,str,selected==row);
+}
+void text2(int row,char *str) {
+	drawtext(35+row+2,str,selected==row);
+}
+
+
+//trying to avoid using sprintf...  (takes up almost 3k!)
+void strmerge(char *dst,char *src1,char *src2) {
+	if(dst!=src1)
+		strcpy(dst,src1);
+	strcat(dst,src2);
+}
+
+char *const ctrltxt[]={"1P","2P","Link2P","Link3P","Link4P"};
+char *const autotxt[]={"OFF","ON","with R"};
+char *const vsynctxt[]={"ON","OFF","SLOWMO"};
+char *const sleeptxt[]={"5min","10min","30min","OFF"};
+char *const brightxt[]={"I","II","III","IIII","IIIII"};
+char *const bordtxt[]={"Black","Grey","Blue","None"};
+char *const paltxt[16]={"Yellow","Grey","Multi1","Multi2","Zelda","Metroid",
+				"AdvIsland","AdvIsland2","BaloonKid","Batman","BatmanROTJ",
+				"BionicCom","CV Adv","Dr.Mario","Kirby","DK Land"};
+char *const gbtxt[]={"DMG","MGB","SGB","CGB","AGB","Auto"};
+void drawui1() {
+	char str[30];
+
+	cls(1);
+	drawtext(18,"Powered by XGFLASH2.com 2004",0);
+	if(pogoshell){
+		drawtext(19,"               PoGoomba v2.1",0);}
+	else{
+		if(gameboyplayer){
+			drawtext(19,"          Goomba v2.1 on GBP",0);}
+		else{
+			drawtext(19,"                 Goomba v2.1",0);}
+	}
+	strmerge(str,"B autofire: ",autotxt[autoB]);
+	text(0,str);
+	strmerge(str,"A autofire: ",autotxt[autoA]);
+	text(1,str);
+	strmerge(str,"Controller: ",ctrltxt[(joycfg>>29)-2]);
+	text(2,str);
+	text(3,"Display->");
+	text(4,"Other Settings->");
+	text(5,"Link Transfer");
+	if(mainmenuitems==MULTIBOOTMENUITEMS) {
+		text(6,"Sleep");
+		text(7,"Restart");
+	} else {
+		text(6,"Manage SRAM->");
+		text(7,"Save State->");
+		text(8,"Load State->");
+		text(9,"Sleep");
+		text(10,"Restart");
+		text(11,"Exit");
+	}
+}
+
+void drawui2() {
+	char str[30];
+
+	cls(2);
+	drawtext(32,"       Other Settings",0);
+	strmerge(str,"VSync: ",vsynctxt[novblankwait]);
+	text2(0,str);
+	strmerge(str,"FPS-Meter: ",autotxt[fpsenabled]);
+	text2(1,str);
+	strmerge(str,"Swap A-B: ",autotxt[(joycfg>>10)&1]);
+	text2(2,str);
+	strmerge(str,"Autosleep: ",sleeptxt[stime]);
+	text2(3,str);
+	strmerge(str,"Autoload state: ",autotxt[autostate&1]);
+	text2(4,str);
+	strmerge(str,"Game Boy: ",gbtxt[0]);
+	text2(5,str);
+}
+
+void drawui3() {
+	char str[30];
+
+	cls(2);
+	drawtext(32,"      Display Settings",0);
+	strmerge(str,"Palette: ",paltxt[palettebank]);
+	text2(0,str);
+	strmerge(str,"Gamma: ",brightxt[gammavalue]);
+	text2(1,str);
+	strmerge(str,"Border: ",bordtxt[bcolor]);
+	text2(2,str);
+}
+
+void drawclock() {
+
+    char str[30];
+    char *s=str+20;
+    int timer,mod;
+
+    if(rtc)
+    {
+	strcpy(str,"                    00:00:00");
+	timer=gettime();
+	mod=(timer>>4)&3;		//Hours.
+	*(s++)=(mod+'0');
+	mod=(timer&15);
+	*(s++)=(mod+'0');
+	s++;
+	mod=(timer>>12)&15;
+	*(s++)=(mod+'0');
+	mod=(timer>>8)&15;
+	*(s++)=(mod+'0');
+	s++;
+	mod=(timer>>20)&15;
+	*(s++)=(mod+'0');
+	mod=(timer>>16)&15;
+	*(s++)=(mod+'0');
+
+	drawtext(0,str,0);
+    }
+}
+
+void autoAset() {
+	autoA++;
+	joycfg|=A_BTN+(A_BTN<<16);
+	if(autoA==1)
+		joycfg&=~A_BTN;
+	else if(autoA==2)
+		joycfg&=~(A_BTN<<16);
+	else
+		autoA=0;
+}
+
+void autoBset() {
+	autoB++;
+	joycfg|=B_BTN+(B_BTN<<16);
+	if(autoB==1)
+		joycfg&=~B_BTN;
+	else if(autoB==2)
+		joycfg&=~(B_BTN<<16);
+	else
+		autoB=0;
+}
+
+void swapAB() {
+	joycfg^=0x400;
+}
+
+void controller() {		//see io.s: refreshGBjoypads
+	u32 i=joycfg+0x20000000;
+	if(i>=0xe0000000)
+		i-=0xa0000000;
+	resetSIO(i);		//reset link state
+}
+
+void sleepset() {
+	stime++;
+	if(stime==1)
+		sleeptime=60*60*10;			// 10min
+	else if(stime==2)
+		sleeptime=60*60*30;			// 30min
+	else if(stime==3)
+		sleeptime=0x7F000000;		// 360days...
+	else if(stime>=4){
+		sleeptime=60*60*5;			// 5min
+		stime=0;
+	}
+}
+
+void vblset() {
+	novblankwait++;
+	if(novblankwait>=3)
+		novblankwait=0;
+}
+
+void fpsset() {
+	fpsenabled = (fpsenabled^1)&1;
+}
+
+void brightset() {
+	gammavalue++;
+	if (gammavalue>4) gammavalue=0;
+	paletteinit();
+	PaletteTxAll();			//make new palette visible
+}
+
+void multiboot() {
+	int i;
+	cls(1);
+	drawtext(9,"          Sending...",0);
+	i=SendMBImageToClient();
+	if(i) {
+		if(i<3)
+			drawtext(9,"         Link error.",0);
+		else
+			drawtext(9,"  Game is too big to send.",0);
+		if(i==2) drawtext(10,"       (Check cable?)",0);
+		for(i=0;i<90;i++)		//wait a while
+			waitframe();
+	}
+}
+
+void restart() {
+	writeconfig();		//save any changes
+	scrolll(1);
+	REG_BLDCNT=0;		//no dark
+	__asm {mov r0,#0x3007f00}	//stack reset
+	__asm {mov sp,r0}
+	rommenu();
+}
+void exit() {
+	writeconfig();		//save any changes
+	fadetowhite();
+	REG_DISPCNT=FORCE_BLANK;	//screen OFF
+	REG_BG0HOFS=0;
+	REG_BG0VOFS=0;
+	REG_BLDCNT=0;		//no blending
+	doReset();
+}
+
+void sleep() {
+	fadetowhite();
+	suspend();
+	REG_BLDCNT=0x00fb;	//restore screen
+	REG_COLY=7;		//restore screen
+	while((~REG_P1)&0x3ff) {
+		while(REG_VCOUNT>=160) {};	//wait a while
+		while(REG_VCOUNT<160) {};	//(polling REG_P1 too fast seems to cause problems)
+	}
+}
+void fadetowhite() {
+	int i;
+	REG_BLDCNT=0x00fb;	//darken screen
+	for(i=7;i>=0;i--)
+	{
+		REG_COLY=i;	//go from dark to normal
+		waitframe();
+	}
+	REG_BLDCNT=0xbf;	//(brightness increase)
+	for(i=0;i<17;i++) {	//fade to white
+		REG_COLY=i;
+		waitframe();
+	}
+}
+
+void scrolll(int f) {
+	int i;
+	for(i=0;i<9;i++)
+	{
+		if(f) REG_COLY=8+i;	//Darken screen
+		REG_BG2HOFS=i*32;	//Move screen left
+		waitframe();
+	}
+}
+void scrollr() {
+	int i;
+	for(i=8;i>=0;i--)
+	{
+		waitframe();
+		REG_BG2HOFS=i*32;	//Move screen left
+	}
+	cls(2);					//Clear BG2
+}
+
+void autostateset() {
+	autostate = (autostate^1)&1;
+}
+
+void chpalette() {
+	palettebank++;
+	palettebank&=15;
+	paletteinit();
+	PaletteTxAll();
+}
+
+void border() {
+	bcolor++;
+	if(bcolor>=4)
+		bcolor=0;
+	makeborder();
+}
+
+void gbtype() {
+}
+
