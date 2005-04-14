@@ -2,12 +2,15 @@
 	INCLUDE memory.h
 	INCLUDE cart.h
 	INCLUDE io.h
-	INCLUDE gb-z80.h
+	INCLUDE gbz80.h
 	INCLUDE sound.h
 	INCLUDE mappers.h
 
-	EXPORT lcd_init
-	EXPORT lcd_reset
+	IMPORT RumbleInterrupt
+	IMPORT StartRumbleComs
+
+	EXPORT GFX_init
+	EXPORT GFX_reset
 	EXPORT FF40_R
 	EXPORT FF40_W
 	EXPORT FF41_R
@@ -36,7 +39,7 @@
 ;	EXPORT VRAM_chr
 	EXPORT debug_
 	EXPORT AGBinput
-	EXPORT XGBinput
+	EXPORT EMUinput
 	EXPORT paletteinit
 	EXPORT PaletteTxAll
 	EXPORT newframe
@@ -142,7 +145,7 @@ GBPalettes; RGB 24bit.
 	DCB 0xF7,0xFF,0x63, 0xC6,0xCE,0x42, 0x73,0x7B,0x21, 0x00,0x00,0x00
 
 ;----------------------------------------------------------------------------
-lcd_init	;(called from main.c) only need to call once
+GFX_init	;(called from main.c) only need to call once
 ;----------------------------------------------------------------------------
 	mov addy,lr
 
@@ -191,7 +194,7 @@ ppi0	mov r0,#0
 	strh r0,[r1,#REG_DISPSTAT]	;vblank en
 
 	mov r0,#8
-	strh r0,[r1,#REG_COLY]		;darkness setting for faded screens (bigger number=darker)
+	strh r0,[r1,#REG_BLDY]		;darkness setting for faded screens (bigger number=darker)
 	ldr r0,=0x3F3F
 	strh r0,[r1,#REG_WININ]		;WinIN0/1, BG0 not enable in Win0
 	sub r0,r0,#2				;r0=0x3f3f
@@ -202,7 +205,7 @@ ppi0	mov r0,#0
 	str r0,[r1,#REG_DM0DAD]
 	mov r0,#1					;1 word transfer
 	strh r0,[r1,#REG_DM0CNT_L]
-	ldr r0,=DMA0BUFF			;dmasrc=
+	ldr r0,=DMA0BUFF			;DMA0 src=
 	str r0,[r1,#REG_DM0SAD]
 
 	str r1,[r1,#REG_DM1DAD]		;DMA1 goes here
@@ -223,7 +226,7 @@ ppi0	mov r0,#0
 
 	bx addy
 ;----------------------------------------------------------------------------
-lcd_reset	;called with CPU reset
+GFX_reset	;called with CPU reset
 ;----------------------------------------------------------------------------
 	mov r0,#0
 	strb r0,lcdstat		;flags off
@@ -347,7 +350,7 @@ paletteinit;	r0-r3 modified.
 	add r1,r1,r1,lsl#1	;r1 x 3
 	add r7,r7,r1,lsl#4	;r7 + r1 x 16
 	ldr r6,=MAPPED_RGB
-	ldr r1,gammavalue	;gamma value = 0 -> 4
+	ldrb r1,gammavalue	;gamma value = 0 -> 4
 	mov r4,#16
 nomap					;map rrrrrrrrggggggggbbbbbbbb  ->  0bbbbbgggggrrrrr
 	ldrb r0,[r7],#1		;Red ready
@@ -390,6 +393,14 @@ showfps_		;fps output, r0-r3=used.
 	movmi r0,#59
 	strb r0,fpschk
 	bxpl lr					;End if not 60 frames has passed
+
+	str lr,[sp,#-4]!
+	ldr r1,=StartRumbleComs
+	adr lr,ret_
+	bx r1
+ret_
+	ldr lr,[sp],#4
+
 
 	ldrb r0,fpsenabled
 	tst r0,#1
@@ -445,11 +456,11 @@ db0
 	bx lr
 ;----------------------------------------------------------------------------
 palettebank	DCD 0
-gammavalue DCD 0
 fpstext DCB "FPS:    "
 fpsenabled DCB 0
 fpschk	DCB 0
-		DCB 0,0
+gammavalue DCB 0
+		DCB 0
 ;----------------------------------------------------------------------------
 	AREA wram_code1, CODE, READWRITE
 irqhandler	;r0-r3,r12 are safe to use
@@ -465,7 +476,8 @@ irqhandler	;r0-r3,r12 are safe to use
 		;---this CAN'T be interrupted
 		ands r0,r1,#0x80
 		strneh r0,[r2,#2]		;IF clear
-		bne serialinterrupt
+		ldrne r12,serialfptr
+		bxne r12
 		;---
 		adr r12,irq0
 
@@ -486,7 +498,7 @@ jmpintr
 	stmfd sp!,{lr}
 	adr lr,irq0
 
-	mov pc,r12
+	bx r12
 
 
 irq0
@@ -501,6 +513,8 @@ vbldummy
 	bx lr
 ;----------------------------------------------------------------------------
 vblankfptr DCD vbldummy			;later switched to vblankinterrupt
+;serialfptr DCD serialinterrupt
+serialfptr DCD RumbleInterrupt
 twitch DCD 0
 vblankinterrupt;
 ;----------------------------------------------------------------------------
@@ -1086,7 +1100,7 @@ FPSValue
 	DCD 0
 AGBinput		;this label here for main.c to use
 	DCD 0 ;AGBjoypad (why is this in lcd.s again?  um.. i forgot)
-XGBinput	DCD 0 ;XGBjoypad (this is what GB sees)
+EMUinput	DCD 0 ;EMUjoypad (this is what GB sees)
 
 lcdstate
 	DCB 0 ;scrollX

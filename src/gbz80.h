@@ -1,5 +1,5 @@
 	IMPORT |wram_globals0$$Base|
-	IMPORT gb_reset
+	IMPORT emu_reset
 	IMPORT default_scanlinehook
 	IMPORT cpustate
 	IMPORT rommap

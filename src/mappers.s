@@ -6,6 +6,8 @@
 	INCLUDE cart.h
 	INCLUDE io.h
 
+	IMPORT DoRumble
+
 	EXPORT mbc0init
 	EXPORT mbc1init
 	EXPORT mbc2init
@@ -152,6 +154,7 @@ clk_min
 ;------------------------------
 clk_hrs
 	ldrb r0,mapperdata+28
+	and r0,r0,#0x3F
 	b calctime
 ;------------------------------
 clk_dayL
@@ -185,8 +188,12 @@ MBC5map0
 ;----------------------------------------------------------------------------
 MBC5RAMB
 ;----------------------------------------------------------------------------
-;	tst r0,#0x08		;rumble motor.
 	strb r0,mapperdata+4
+;	tst r0,#0x08		;rumble motor.
+	and r0,r0,#0x8
+	ldr r1,=DoRumble
+	str r0,[r1]
+
 	b RamSelect
 
 ;----------------------------------------------------------------------------

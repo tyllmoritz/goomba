@@ -1,4 +1,4 @@
-Goomba v2.0
+Goomba v2.2
 -=-=-=-=-=-=-
 
 It's a Gameboy emulator for the GameBoy Advance. 
@@ -46,10 +46,18 @@ Link transfer:  Sends Goomba to another GBA.  The other GBA must be in
   be sent to 1 (one) Gameboy at a time, disconnect all other gameboys during
   transfer.
 
+Use an original Nintendo cable!
+
 Multi player link play: NOT DONE YET.
 
 PoGoomba: If you wish to use Goomba with Pogoshell
   just rename goomba.gba to gb.bin and put it in the plugins directory.
+
+GameBoy Player:
+  To be able to check for the GameBoy Player one must display the
+  GameBoy Player logo, the easiest way to get it is by downloading it from my
+  homepage. Otherwise you can rip it from any other game that displays it
+  (SMA4 & Pokemon Pinball). This is a must if you want rumble to work.
 
 -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 Big thanks to www.XGFlash2.com for support, go there for all your GBA/SP flash card needs.

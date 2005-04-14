@@ -1,7 +1,7 @@
 	AREA wram_code2, CODE, READWRITE
 
 	INCLUDE equates.h
-	INCLUDE gb-z80.h
+	INCLUDE gbz80.h
 	INCLUDE lcd.h
 
 	EXPORT void

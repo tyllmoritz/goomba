@@ -7,7 +7,7 @@
 u8 *findrom(int);
 
 extern u8 Image$$RO$$Limit;
-extern u8 Image$$RW$$Limit;
+extern u8 Image$$ZI$$Base;
 extern u32 romnum;	//from cart.s
 extern u8 *textstart;	//from main.c
 
@@ -42,7 +42,7 @@ const
 
 void delay() {
 	int i=32768;
-	while(--i);	//(we're running from EXRAM)
+	while(--i);	//(we're running from EWRAM)
 }
 
 void DelayCycles (u32 cycles)
@@ -95,7 +95,7 @@ int SendMBImageToClient(void) {
 	u32 emusize1,emusize2,romsize;
 
 	emusize1=((u32)(&Image$$RO$$Limit)&0x3ffff);
-	emusize2=((u32)(&Image$$RW$$Limit)&0x7fff);
+	emusize2=((u32)(&Image$$ZI$$Base)&0x7fff);
 //	if(pogoshell) romsize=48+16+(*(u8*)(findrom(romnum)+48+4))*16*1024+(*(u8*)(findrom(romnum)+48+5))*8*1024;  //need to read this from ROM
 //	else romsize=48+*(u32*)(findrom(romnum)+32);
 	romsize = (0x8000 << (*(findrom(romnum)+0x148)));

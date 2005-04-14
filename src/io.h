@@ -1,5 +1,5 @@
 	IMPORT thumbcall_r1
-	IMPORT IO_reset_
+	IMPORT IO_reset
 	IMPORT IO_R
 	IMPORT IO_High_R
 	IMPORT IO_W

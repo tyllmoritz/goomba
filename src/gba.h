@@ -14,7 +14,7 @@ typedef void (*fptr)(void);
 #define MEM_PALETTE (u16*)0x5000000
 #define MEM_VRAM (u16*)0x6000000
 #define MEM_OAM (u32*)0x7000000
-#define MEM_SRAM (u8*)0xe000000
+#define MEM_SRAM (u8*)0xE000000
 #define XGB_SRAM (u8*)0x2038000	//from equates.h
 #define INTR_VECT *(u32*)0x3007FFC
 #define SCREENBASE (u16*)0x6003000
@@ -89,7 +89,8 @@ typedef void (*fptr)(void);
 #define REG_DM2CNT_H *(u16*)0x40000d2
 #define REG_DM3CNT_H *(u16*)0x40000de
 #define REG_BLDCNT *(u16*)0x4000050
-#define REG_COLY *(u16*)0x4000054
+#define REG_BLDALPHA *(u16*)0x4000052
+#define REG_BLDY *(u16*)0x4000054
 #define REG_SGCNT0_L *(u16*)0x4000080
 #define REG_SGBIAS *(u16*)0x4000088
 #define REG_BG2X *(u32*)0x4000028
@@ -99,11 +100,15 @@ typedef void (*fptr)(void);
 #define REG_BG2PC *(u16*)0x4000024
 #define REG_BG2PD *(u16*)0x4000026
 
+#define REG_SIODATA32 *(vu32*)0x4000120
 #define REG_SIOMULTI0 *(vu16*)0x4000120
 #define REG_SIOMULTI1 *(vu16*)0x4000122
+#define REG_SIOMULTI2 *(vu16*)0x4000124
+#define REG_SIOMULTI3 *(vu16*)0x4000126
 #define REG_SIOCNT *(vu16*)0x4000128
 #define REG_SIOMLT_SEND *(vu16*)0x400012a
 #define REG_RCNT *(vu16*)0x4000134
 #define REG_TM0CNT *(vu16*)0x4000102
+#define REG_WRWAITCTL *(vu32*)0x04000800
 
 #endif

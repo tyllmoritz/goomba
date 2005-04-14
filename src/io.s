@@ -3,9 +3,9 @@
 	INCLUDE lcd.h
 	INCLUDE sound.h
 	INCLUDE cart.h
-	INCLUDE gb-z80.h
+	INCLUDE gbz80.h
 
-	EXPORT IO_reset_
+	EXPORT IO_reset
 	EXPORT IO_R
 	EXPORT IO_High_R
 	EXPORT IO_W
@@ -19,13 +19,23 @@
 	EXPORT resetSIO
 	EXPORT thumbcall_r1
 	EXPORT gettime
+	EXPORT vbaprint
+	EXPORT waitframe
+	EXPORT LZ77UnCompVram
+	EXPORT LZ77UnCompWram
+	EXPORT CheckGBAVersion
 	EXPORT gbpadress
 	EXPORT OAMfinish
-	EXPORT LZ77UnCompVram
-	EXPORT waitframe
+
 
  AREA rom_code, CODE, READONLY ;-- - - - - - - - - - - - - - - - - - - - - -
 
+vbaprint
+	swi 0xFF0000		;!!!!!!! Doesn't work on hardware !!!!!!!
+	bx lr
+LZ77UnCompWram
+	swi 0x110000
+	bx lr
 LZ77UnCompVram
 	swi 0x120000
 	bx lr
@@ -35,8 +45,24 @@ VblWait
 	mov r1,#1				;VBL wait
 	swi 0x040000			; Turn of CPU until VBLIRQ if not too late allready.
 	bx lr
+CheckGBAVersion
+	ldr r0,=0x5AB07A6E		;Fool proofing
+	mov r12,#0
+	swi 0x0D0000			;GetBIOSChecksum
+	ldr r1,=0xABBE687E		;Proto GBA
+	cmp r0,r1
+	moveq r12,#1
+	ldr r1,=0xBAAE187F		;Normal GBA
+	cmp r0,r1
+	moveq r12,#2
+	ldr r1,=0xBAAE1880		;Nintendo DS
+	cmp r0,r1
+	moveq r12,#4
+	mov r0,r12
+	bx lr
+
 ;----------------------------------------------------------------------------
-IO_reset_
+IO_reset
 ;----------------------------------------------------------------------------
 	mov r0,#0
 	strb r0,stctrl
@@ -44,7 +70,6 @@ IO_reset_
 ;----------------------------------------------------------------------------
 suspend	;called from ui.c and 6502.s
 ;----------------------------------------------------------------------------
-	stmfd sp!,{r0,r1,lr}
 	mov r3,#REG_BASE
 
 	ldr r1,=REG_P1CNT
@@ -66,7 +91,6 @@ suspend	;called from ui.c and 6502.s
 
 	strh r1,[r3,#REG_SGCNT_L]	;sound on
 
-	ldmfd sp!,{r0,r1,lr}
 	bx lr
 
 ;----------------------------------------------------------------------------
@@ -80,8 +104,6 @@ gettime	;called from ui.c and mappers.s
 	mov r1,#7
 	strh r1,[r3,#2]			;enable write
 
-;	mov r1,#0
-;	strh r1,[r3]
 	mov r1,#1
 	strh r1,[r3]
 	mov r1,#5
@@ -141,9 +163,9 @@ RTCLoop3
 ;----------------------------------------------------------------------------
 IO_R		;I/O read
 ;----------------------------------------------------------------------------
-	and r2,addy,#0xFF
 	cmp addy,#0xFF00
 	bmi OAM_R	;OAM, C000-DCFF mirror.
+	and r2,addy,#0xFF
 ;----------------------------------------------------------------------------
 IO_High_R	;I/O read
 ;----------------------------------------------------------------------------
@@ -309,9 +331,9 @@ wtexten
 ;----------------------------------------------------------------------------
 IO_W		;I/O write
 ;----------------------------------------------------------------------------
-	and r2,addy,#0xFF
 	cmp addy,#0xFF00
 	bmi OAM_W	;OAM, C000-DCFF mirror.
+	and r2,addy,#0xFF
 ;----------------------------------------------------------------------------
 IO_High_W	;I/O write
 ;----------------------------------------------------------------------------
@@ -406,7 +428,7 @@ joypad_write_ptr
 	DCD void
 	DCD void	;VBK - VRAM Bank - CGB Mode Only
 
-	DCD void
+	DCD _FF50W	;BIOS bank select
 	DCD void	;HDMA1
 	DCD void	;HDMA2
 	DCD void	;HDMA3
@@ -520,6 +542,13 @@ _FF0FW
 	strb r0,gb_if
 	mov pc,lr
 ;----------------------------------------------------------------------------
+_FF50W;		Undocumented BIOS banking
+;----------------------------------------------------------------------------
+	cmp r0,#1
+	mov r0,#0
+	beq map0123_
+	mov pc,lr
+;----------------------------------------------------------------------------
 _FF01R;		SB - Serial Transfer Data
 ;----------------------------------------------------------------------------
 	mov r0,#0xff		;When no GB attached
@@ -571,7 +600,8 @@ FF46_W;		sprite DMA transfer
 	ldr r2,=GBOAM_BUFFER
 
 	mov r1,#40		;number of sprites on the GB
-OAMLoop	ldr r0,[addy],#4
+OAMLoop
+	ldr r0,[addy],#4
 	str r0,[r2],#4
 	subs r1,r1,#1
 	bne OAMLoop
@@ -837,13 +867,13 @@ resetSIO	;r0=joycfg
 	add r2,r2,#0x100
 
 	mov r1,#0
-	strh r1,[r2,#REG_RCNT]
+;	strh r1,[r2,#REG_RCNT]
 
 	tst r0,#0x80000000
 	moveq r1,#0x2000
 	movne r1,   #0x6000
 	addne r1,r1,#0x0002	;16bit multiplayer, 57600bps
-	strh r1,[r2,#REG_SIOCNT]
+;	strh r1,[r2,#REG_SIOCNT]
 
 	bx lr
 ;----------------------------------------------------------------------------
@@ -854,7 +884,8 @@ refreshNESjoypads	;call every frame
 ;----------------------------------------------------------------------------
 	mov r6,lr		;return with this..
 
-;	ldr r0,received0
+;	ldr r0,=SerCounter
+;	ldr r0,[r0]
 ;	mov r1,#4
 ;	bl debug_
 ;	ldr r0,received1

@@ -1,4 +1,4 @@
-	IMPORT sound_reset_
+	IMPORT Sound_reset
 	IMPORT _FF10W
 	IMPORT _FF11W
 	IMPORT _FF12W

@@ -34,15 +34,15 @@
 	DCB 120,0,144,203,136,17,58,148,101,192,124,99,135,240,60,175
 	DCB 214,37,228,139,56,10,172,114,33,212,248,7
 	DCB "GOOMBAGOOMBA"	;title
-	DCB "GMBA"		;gamecode
-	DCW 0			;maker
-	DCB 0x96		;fixed value
-	DCB 0			;unit code
-	DCB 0			;device type
+	DCB "GMBA"			;gamecode
+	DCW 0				;maker
+	DCB 0x96			;fixed value
+	DCB 0				;unit code
+	DCB 0				;device type
 	DCB 0,0,0,0,0,0,0	;unused
-	DCB 0			;version
-	DCB 0xd0		;complement check
-	DCW 0			;unused
+	DCB 0				;version
+	DCB 0xd0			;complement check
+	DCW 0				;unused
 ;----------------------------------------------------------
 __main
 ;----------------------------------------------------------
@@ -70,7 +70,7 @@ __main
 		add r6,r6,#0x6000000		;textstart=8xxxxxx
 		add r5,r5,#0x6000000		;RW code ptr=8xxxxxx
 
-		ldr r1,=|Image$$RO$$Base|	;copy rom code to exram
+		ldr r1,=|Image$$RO$$Base|	;copy rom code to ewram
 		adr r0,headcopy				; XG2 resets when 0x08000000 is accessed.
 		add r3,r1,#192				; EZFA mess with the GBA header
 _5		cmp r1,r3
@@ -83,7 +83,7 @@ _2		cmp r1,r3
 		ldrcc r2, [r0], #4
 		strcc r2, [r1], #4
 		bcc _2
-		sub pc,lr,#0x6000000	;jump to exram copy
+		sub pc,lr,#0x6000000	;jump to ewram copy
 _3
 	LDR	r1, =|Image$$RW$$Base|
 	LDR	r3, =|Image$$ZI$$Base| ; Zero init base => top of initialized data
@@ -112,7 +112,6 @@ _loop
 	mov r6,r0				;new textstart
 _4
 ;---------------------------------------- MB test ----------
-
  [ DEBUG
 	ldr r0,=GB_RAM
 	cmp r1,r0		;sanity check - make sure iwram code fits in iwram
@@ -151,15 +150,15 @@ headcopy
 	DCB 120,0,144,203,136,17,58,148,101,192,124,99,135,240,60,175
 	DCB 214,37,228,139,56,10,172,114,33,212,248,7
 	DCB "GOOMBAGOOMBA"	;title
-	DCB "GMBA"		;gamecode
-	DCW 0			;maker
-	DCB 0x96		;fixed value
-	DCB 0			;unit code
-	DCB 0			;device type
+	DCB "GMBA"			;gamecode
+	DCW 0				;maker
+	DCB 0x96			;fixed value
+	DCB 0				;unit code
+	DCB 0				;device type
 	DCB 0,0,0,0,0,0,0	;unused
-	DCB 0			;version
-	DCB 0xd0		;complement check
-	DCW 0			;unused
+	DCB 0				;version
+	DCB 0xd0			;complement check
+	DCW 0				;unused
 
 font
 	INCBIN font.lz77

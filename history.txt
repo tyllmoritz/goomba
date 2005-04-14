@@ -1,6 +1,9 @@
 Goomba revision history
 -=-=-=-=-=-=-=-=-=-=-=-
 
+V2.2 - 2005-04-14 (FluBBa)
+   Added rumble support on Gameboy Player.
+
 V2.1 - 2004-11-03 (FluBBa)
    Fixed clock on EZ3 cards, maybe others as well.
    Now saves Gamma setting.
