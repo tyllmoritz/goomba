@@ -8,6 +8,8 @@ extern u32 g_emuflags;			//from cart.s
 extern u32 joycfg;				//from io.s
 extern u32 font;				//from boot.s
 extern u32 fontpal;				//from boot.s
+extern u32 bfont;				//from boot.s
+extern u32 bfontpal;				//from boot.s
 extern u32 *vblankfptr;			//from lcd.s
 extern u32 vbldummy;			//from lcd.s
 extern u32 vblankinterrupt;		//from lcd.s
@@ -112,6 +114,13 @@ void C_entry() {
 	//load font+palette
 	LZ77UnCompVram(&font,(u16*)0x6002400);
 	memcpy((void*)0x5000080,&fontpal,64);
+	// Load new border 
+	LZ77UnCompWram(&bfont,&Image$$RO$$Limit);
+        for (i=0; i<2720; i++)
+	{
+	  write_byte((u8 *) (0x6000800+i),*((&Image$$RO$$Limit)+i));
+	}
+	memcpy((void*)0x50001C0,&bfontpal,32);
 	readconfig();
 	rommenu();
 }

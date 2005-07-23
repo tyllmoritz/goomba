@@ -234,7 +234,7 @@ char *const brightxt[]={"I","II","III","IIII","IIIII"};
 char *const memtxt[]={"Normal","Turbo"};
 char *const hostname[]={"Crap","Prot","GBA","GBP","NDS"};
 char *const ctrltxt[]={"1P","2P","Link2P","Link3P","Link4P"};
-char *const bordtxt[]={"Black","Grey","Blue","None"};
+char *const bordtxt[]={"Black","Grey","Blue","Goomba","None"};
 char *const paltxt[16]={"Yellow","Grey","Multi1","Multi2","Zelda","Metroid",
 				"AdvIsland","AdvIsland2","BaloonKid","Batman","BatmanROTJ",
 				"BionicCom","CV Adv","Dr.Mario","Kirby","DK Land"};
@@ -248,7 +248,7 @@ void drawui1() {
 	
 	drawtext(18,"Powered by XGFLASH2.com 2005",0);
 	if(pogoshell) i=1;
-	strmerge(str,emuname[i],"v2.20 on ");
+	strmerge(str,emuname[i],"v2.21 on ");
 	strmerge(str,str,hostname[gbaversion]);
 	drawtext(19,str,0);
 
