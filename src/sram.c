@@ -8,12 +8,15 @@
 #define SRAMSAVE 1
 #define CONFIGSAVE 2
 #define MBC_SAV 2
+#define PALETTE 5
 
 extern u8 Image$$RO$$Limit;
 extern u8 g_cartflags;	//(from GB header)
 extern int bcolor;		//Border Color
 extern int palettebank;	//Palette for DMG games
 extern u8 gammavalue;	//from lcd.s
+extern u8 custompal;	//from lcd.s
+extern u8 GBPalettes;	//from lcd.s 
 extern u8 gbadetect;	//from gb-z80.s
 extern u8 stime;		//from ui.c
 extern u8 autostate;	//from ui.c
@@ -311,7 +314,12 @@ void compressstate(lzo_uint size,u16 type,u8 *src,void *workspace) {
 	lzo_uint compressedsize;
 	stateheader *sh;
 
-	lzo1x_1_compress(src,size,BUFFER3+sizeof(stateheader),&compressedsize,workspace);	//workspace needs to be 64k
+	if (workspace == NULL) {
+		memcpy(BUFFER3+sizeof(stateheader),src,size);
+		compressedsize=size;
+	} else {
+		lzo1x_1_compress(src,size,BUFFER3+sizeof(stateheader),&compressedsize,workspace);	//workspace needs to be 64k
+	}
 
 	//setup header:
 	sh=(stateheader*)BUFFER3;
@@ -453,6 +461,53 @@ void quicksave() {
 	if(!updatestates(i,0,STATESAVE))
 		writeerror();
 	cls(2);
+}
+
+void paletteload() {
+	stateheader *sh;
+	int i;
+
+	if(!using_flashcart())
+		return;
+
+	i=findstate(checksum((u8*)romstart),PALETTE,&sh);
+	if (i>=0) {
+		memcpy(&custompal,(u8*)(sh+1),48);
+	} else {
+		//Clean palette.
+		memcpy(&custompal,&((&GBPalettes)[48]),48);
+	}
+}
+
+void palettesave() {
+	stateheader *sh;
+	int i;
+
+	if(!using_flashcart())
+		return;
+
+	setdarknessgs(7);	//darken
+	drawtext(32+9,"           Saving.",0);
+
+	compressstate(48,PALETTE,&custompal,NULL);
+	i=findstate(checksum((u8*)romstart),PALETTE,&sh);
+	if(i<0) i=65536;	//make new save if one doesn't exist
+	if(!updatestates(i,0,PALETTE))
+		writeerror();
+	cls(2);
+}
+
+void paletteclear() {
+	stateheader *sh;
+	int i;
+
+	if(!using_flashcart())
+		return;
+
+	i=findstate(checksum((u8*)romstart),PALETTE,&sh);
+	if (i>=0)
+		updatestates(i,1,PALETTE);
+	memcpy(&custompal,&((&GBPalettes)[48]),48);
 }
 
 void backup_gb_sram() {
@@ -631,30 +686,3 @@ void readconfig() {
 		gammavalue = (i & 0xE0)>>5;				//restore current gamma setting
 	}
 }
-void clean_gb_sram() {
-	int i;
-	u8 *gb_sram_ptr = MEM_SRAM+0xe000;
-	configdata *cfg;
-
-	if(!using_flashcart())
-		return;
-
-	for(i=0;i<0x2000;i++) *gb_sram_ptr++ = 0;
-
-	i=findstate(0,CONFIGSAVE,(stateheader**)&cfg);
-	if(i<0) {//make new config
-		memcpy(BUFFER3,&configtemplate,sizeof(configdata));
-		cfg=(configdata*)BUFFER3;
-	}
-	cfg->bordercolor=bcolor;					//store current border type
-	cfg->palettebank=palettebank;				//store current DMG palette
-	cfg->misc = stime & 0x3;					//store current autosleep time
-	cfg->misc |= (autostate & 0x1)<<4;			//store current autostate setting
-	cfg->sram_checksum=0;						// we don't want to save the empty sram
-	if(i<0) {	//create new config
-		updatestates(0,0,CONFIGSAVE);
-	} else {		//config already exists, update sram directly (faster)
-		bytecopy((u8*)cfg-BUFFER1+MEM_SRAM,(u8*)cfg,sizeof(configdata));
-	}
-}
-

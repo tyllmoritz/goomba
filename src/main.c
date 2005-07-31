@@ -26,7 +26,6 @@ void GFX_init(void);			//lcd.s
 void resetSIO(u32);				//io.s
 void vbaprint(char *text);		//io.s
 void LZ77UnCompVram(u32 *source,u16 *destination);		//io.s
-void LZ77UnCompWram(u32 *source,u8 *destination);		//io.s
 void waitframe(void);			//io.s
 int CheckGBAVersion(void);		//io.s
 
@@ -43,11 +42,12 @@ void readconfig(void);			//sram.c
 void quickload(void);
 void backup_gb_sram(void);
 void get_saved_sram(void);		//sram.c
-void write_byte(u8 *address, u8 data);
+void paletteload(); //from sram.c
 
 const unsigned __fp_status_arm=0x40070000;
 u8 *textstart;//points to first GB rom (initialized by boot.s)
 int roms;//total number of roms
+int selectedrom=0;
 
 char pogoshell_romname[32];	//keep track of rom name (for state saving, etc)
 char rtc=0;
@@ -112,15 +112,14 @@ void C_entry() {
 	lzo_init();	//init compression lib for savestates
 
 	//load font+palette
-	LZ77UnCompVram(&font,(u16*)0x6002400);
+	LZ77UnCompVram(&font,(u16*)0x6002300);
 	memcpy((void*)0x5000080,&fontpal,64);
 	// Load new border 
-	LZ77UnCompWram(&bfont,&Image$$RO$$Limit);
-        for (i=0; i<2720; i++)
-	{
-	  write_byte((u8 *) (0x6000800+i),*((&Image$$RO$$Limit)+i));
-	}
+	LZ77UnCompVram(&bfont,(u16*)0x6000800);
 	memcpy((void*)0x50001C0,&bfontpal,32);
+	// Set two top palette entries white
+	*((u16*)0x500019E) = 0x7fff;
+	*((u16*)0x50001BE) = 0x7fff;
 	readconfig();
 	rommenu();
 }
@@ -162,7 +161,6 @@ void rommenu(void) {
 	}
 	else
 	{
-		static int selectedrom=0;
 		int i,lastselected=-1;
 		int key;
 
@@ -219,6 +217,7 @@ void rommenu(void) {
 			run(0);
 		}
 	}
+	paletteload();
 	if(autostate)quickload();
 	run(1);
 }
@@ -320,24 +319,5 @@ void setdarknessgs(int dark) {
 void setbrightnessall(int light) {
 	REG_BLDCNT=0x00bf;				//brightness increase all
 	REG_BLDY=light;
-}
-
-void write_byte(u8 *address, u8 data)
-{
-
-        u16 *addr2;
-        //if not hw aligned
-        if ( (int)address & 1)
-        {
-                addr2=(u16*)((int)address-1);
-                *addr2 &= 0xFF;
-                *addr2 |= (data << 8);
-        }
-        else
-        {
-                addr2=(u16*)address;
-                *addr2 &= 0xFF00;
-                *addr2 |= data;
-        }
 }
 

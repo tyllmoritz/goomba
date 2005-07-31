@@ -6,6 +6,7 @@
 //header files?  who needs 'em :P
 
 void cls(int);		//from main.c
+u8 *findrom(int n); //from main.c
 void rommenu(void);
 void drawtext(int,char*,int);
 void setdarknessgs(int dark);
@@ -13,7 +14,10 @@ void setbrightnessall(int light);
 extern char *textstart;
 
 int SendMBImageToClient(void);	//mbclient.c
+void loadcart(int,int);			//from cart.s
 
+void palettesave(void); //from sram.c
+void paletteclear(void); //from sram.c
 //----asm calls------
 void resetSIO(u32);			//io.s
 void doReset(void);			//io.s
@@ -22,6 +26,7 @@ void waitframe(void);		//io.s
 int gettime(void);			//io.s
 void debug_(int,int);		//lcd.s
 void paletteinit(void);		//lcd.s
+void palettepreview(void);	//lcd.s
 void PaletteTxAll(void);	//lcd.s
 void makeborder(void);		//lcd.s
 //-------------------
@@ -35,7 +40,16 @@ extern char fpsenabled;		//from lcd.s
 extern char gammavalue;		//from lcd.s
 extern u32 palettebank;		//from lcd.s palette bank
 extern u32 bcolor;			//from lcd.s ,border color, black, grey, blue
+// custom palette components
+extern u8 GBPalettes; 
+extern u8 custompal; 
 
+extern u8 Image$$RO$$Limit;
+extern u32 max_multiboot_size;
+
+extern u32 g_emuflags;  // from cart.s
+extern int roms;        // from main.c
+extern int selectedrom; // from main.c
 extern char rtc;
 extern char pogoshell;
 extern char gameboyplayer;
@@ -59,9 +73,11 @@ void scrollr(void);
 void drawui1(void);
 void drawui2(void);
 void drawui3(void);
+void drawui4(void);
 void subui(int menunr);
 void ui2(void);
 void ui3(void);
+void ui4(void);
 void drawclock(void);
 void sleep(void);
 void sleepset(void);
@@ -76,18 +92,29 @@ void chpalette(void);
 void border(void);
 void gbtype(void);
 void detect(void);
+void copypalette(void);
+void go_multiboot(void);
+char *hexn(unsigned int n, int digits);
+void inputhex(int row, int column, u8 *ptr, u32 digits);
+void draw_input_text(int row, int column, char* str, int hilitedigit);
 
 void writeconfig(void);	//sram.c
 void managesram(void);	//sram.c
 
 #define MENU2ITEMS 7			//othermenu items
-#define MENU3ITEMS 3			//displaymenu items
-#define CARTMENUITEMS 12 		//mainmenuitems when running from cart (not multiboot)
-#define MULTIBOOTMENUITEMS 8	//"" when running from multiboot
-const fptr multifnlist[]={autoBset,autoAset,controller,ui3,ui2,multiboot,sleep,restart};
-const fptr fnlist1[]={autoBset,autoAset,controller,ui3,ui2,multiboot,savestatemenu,loadstatemenu,managesram,sleep,restart,exit};
+#define MENU3ITEMS 5			//displaymenu items
+#define CARTMENUITEMS 13 		//mainmenuitems when running from cart (not multiboot)
+#define MULTIBOOTMENUITEMS 9	//"" when running from multiboot
+
+const char MENUXITEMS[]={CARTMENUITEMS,MULTIBOOTMENUITEMS,MENU2ITEMS,MENU3ITEMS};
+
+const fptr multifnlist[]={autoBset,autoAset,controller,ui3,ui2,multiboot,sleep,restart,exit};
+const fptr fnlist1[]={autoBset,autoAset,controller,ui3,ui2,multiboot,savestatemenu,loadstatemenu,managesram,sleep,go_multiboot,restart,exit};
 const fptr fnlist2[]={vblset,fpsset,sleepset,ewramset,swapAB,autostateset,detect,gbtype};
-const fptr fnlist3[]={chpalette,brightset,border};
+const fptr fnlist3[]={chpalette,copypalette,ui4,brightset,border};
+
+const fptr* fnlistX[]={fnlist1,multifnlist,fnlist2,fnlist3};
+const fptr drawuiX[]={drawui1,drawui1,drawui2,drawui3};
 
 int selected;//selected menuitem.  used by all menus.
 int mainmenuitems;//? or CARTMENUITEMS, depending on whether saving is allowed
@@ -122,6 +149,7 @@ u32 getmenuinput(int menuitems) {
 
 void ui() {
 	int key,soundvol,oldsel,tm0cnt,i;
+	int mb=(u32)textstart<0x8000000;
 	ewram=((REG_WRWAITCTL & 0x0F000000) == 0x0E000000)?1:0;
 
 	autoA=joycfg&A_BTN?0:1;
@@ -129,7 +157,8 @@ void ui() {
 	autoB=joycfg&B_BTN?0:1;
 	autoB|=joycfg&(B_BTN<<16)?0:2;
 
-	mainmenuitems=((u32)textstart>0x8000000?CARTMENUITEMS:MULTIBOOTMENUITEMS);//running from rom or multiboot?
+	mb = ((u32)textstart>0x8000000)?0:1;
+	mainmenuitems=MENUXITEMS[mb]-(1-pogoshell);//running from rom or multiboot?
 	FPSValue=0;					//Stop FPS meter
 
 	soundvol=REG_SGCNT0_L;
@@ -152,11 +181,13 @@ void ui() {
 		key=getmenuinput(mainmenuitems);
 		if(key&(A_BTN)) {
 			oldsel=selected;
-			if(mainmenuitems<CARTMENUITEMS)
-				multifnlist[selected]();
-			else
-				fnlist1[selected]();
+			fnlistX[mb][selected]();
 			selected=oldsel;
+			if (mb != (u32)textstart<0x8000000)
+			{
+				mb=1;
+				selected=0;
+			}
 		}
 		if(key&(A_BTN+UP+DOWN+LEFT+RIGHT))
 			drawui1();
@@ -180,22 +211,18 @@ void subui(int menunr) {
 	int key,oldsel;
 
 	selected=0;
-	if(menunr==2)drawui2();
-	if(menunr==3)drawui3();
+	drawuiX[menunr]();
 	scrolll(0);
 	oldkey=~REG_P1;			//reset key input
 	do {
-		if(menunr==2)key=getmenuinput(MENU2ITEMS);
-		if(menunr==3)key=getmenuinput(MENU3ITEMS);
+		key=getmenuinput(MENUXITEMS[menunr]);
 		if(key&(A_BTN)) {
 			oldsel=selected;
-			if(menunr==2)fnlist2[selected]();
-			if(menunr==3)fnlist3[selected]();
+			fnlistX[menunr][selected]();
 			selected=oldsel;
 		}
 		if(key&(A_BTN+UP+DOWN+LEFT+RIGHT)) {
-			if(menunr==2)drawui2();
-			if(menunr==3)drawui3();
+			drawuiX[menunr]();
 		}
 	} while(!(key&(B_BTN+R_BTN+L_BTN)));
 	scrollr();
@@ -211,12 +238,138 @@ void ui2() {
 void ui3() {
 	subui(3);
 }
+void ui4() {
+	int key,oldsel;
+
+	selected=0;
+	drawui4();
+	oldkey=~REG_P1;			//reset key input
+	do {
+		key=getmenuinput(17);
+		if(key&(A_BTN)) {
+			oldsel=selected;
+			if (selected == 16) {
+				paletteclear();
+			} else {
+				inputhex(selected,16,(&custompal)+selected*3,2);
+				drawui4();
+				inputhex(selected,18,(&custompal)+selected*3+1,2);
+				drawui4();
+				inputhex(selected,20,(&custompal)+selected*3+2,2);
+				palettesave();
+			}
+			if (palettebank == 16)
+			{
+				paletteinit();
+				PaletteTxAll();
+			}
+			selected=oldsel;
+		}
+		if(key&(A_BTN+UP+DOWN+LEFT+RIGHT)) {
+			drawui4();
+		}
+	} while(!(key&(B_BTN+R_BTN+L_BTN)));
+	while(key&(B_BTN)) {
+		waitframe();		//(polling REG_P1 too fast seems to cause problems)
+		key=~REG_P1;
+	}
+}
+
+
+char *hexn(unsigned int n, int digits)
+{
+        int i;
+
+        static char hexbuffer[9];
+        char hextable[]="0123456789ABCDEF";
+        hexbuffer[8]=0;
+        for (i=7;i>=8-digits;--i)
+        {
+                hexbuffer[i]=hextable[n&15];
+                n>>=4;
+        }
+        return hexbuffer+8-digits;
+}
+
+char *threehex(u8 *ptr, int index)
+{
+        int i,j;
+	u8 n;
+
+        static char hexbuffer[7];
+        char hextable[]="0123456789ABCDEF";
+        hexbuffer[6]=0;
+	i = 5;
+	for (j = 2; j > -1; j--)
+	{
+		n = ptr[index+j];	
+                hexbuffer[i--] = hextable[n&15];
+                n >>= 4;
+                hexbuffer[i--] = hextable[n&15];
+        }
+        return hexbuffer;
+}
+
+void draw_input_text(int row, int column, char* str, int hilitedigit)
+{
+	int i=0;
+	const int hilite=(1<<12)+0x4100,nohilite=0x4100;
+	u16 *here;
+	row+=35;
+	here=SCREENBASE+row*32+column+1;
+	while(str[i]>=' ') {
+		here[i]=str[i]|nohilite;
+		if (i==hilitedigit) {
+			if (str[i]==' ')
+			   here[i]='_'|hilite;
+			else
+			   here[i]=str[i]|hilite;
+		}
+		i++;
+	}
+}
+
+void inputhex(int row, int column, u8 *ptr, u32 digits)
+{
+	int key,tmp;
+	u32 digit,addthis;
+	digit=digits-1;
+	
+	draw_input_text(row,column,hexn(*ptr,digits),digit);
+	
+	oldkey=~REG_P1;			//reset key input
+	do {
+		waitframe();		//(polling REG_P1 too fast seems to cause problems)
+		tmp=~REG_P1;
+		key=(oldkey^tmp)&tmp;
+		oldkey=tmp;
+		if (key&(RIGHT)) ++digit;
+		if (key&(LEFT)) --digit;
+		digit%=digits;
+		addthis=1<<((digits-digit-1)<<2);
+		if (key&UP) *ptr+=addthis;
+		if (key&DOWN) *ptr-=addthis;
+
+		if(key&(UP+DOWN+LEFT+RIGHT))
+		{
+			draw_input_text(row,column,hexn(*ptr,digits),digit);
+			palettepreview();
+		}
+	} while(!(key&(A_BTN+B_BTN+R_BTN+L_BTN)));
+	while(key&(B_BTN|A_BTN)) {
+		waitframe();		//(polling REG_P1 too fast seems to cause problems)
+		key=~REG_P1;
+	}
+}
 
 void text(int row,char *str) {
-	drawtext(row+10-mainmenuitems/2,str,selected==row);
+	drawtext(row+9-mainmenuitems/2,str,selected==row);
 }
 void text2(int row,char *str) {
 	drawtext(35+row+2,str,selected==row);
+}
+void text3(int row,char *str) {
+	drawtext(35+row,str,selected==row);
 }
 
 
@@ -234,44 +387,45 @@ char *const brightxt[]={"I","II","III","IIII","IIIII"};
 char *const memtxt[]={"Normal","Turbo"};
 char *const hostname[]={"Crap","Prot","GBA","GBP","NDS"};
 char *const ctrltxt[]={"1P","2P","Link2P","Link3P","Link4P"};
-char *const bordtxt[]={"Black","Grey","Blue","Goomba","None"};
-char *const paltxt[16]={"Yellow","Grey","Multi1","Multi2","Zelda","Metroid",
+char *const bordtxt[]={"Goomba","Black","Grey","Blue","None"};
+char *const paltxt[17]={"Yellow","Grey","Multi1","Multi2","Zelda","Metroid",
 				"AdvIsland","AdvIsland2","BaloonKid","Batman","BatmanROTJ",
-				"BionicCom","CV Adv","Dr.Mario","Kirby","DK Land"};
+				"BionicCom","CV Adv","Dr.Mario","Kirby","DK Land","Custom"};
 char *const gbtxt[]={"DMG","MGB","SGB","CGB","AGB","Auto"};
 char *const emuname[]={"         Goomba ","       Pogoomba "};
 void drawui1() {
-	int i=0;
+	int i=0, row=0;
 	char str[30];
 
 	cls(1);
 	
 	drawtext(18,"Powered by XGFLASH2.com 2005",0);
 	if(pogoshell) i=1;
-	strmerge(str,emuname[i],"v2.21 on ");
+	strmerge(str,emuname[i],"v2.22 on ");
 	strmerge(str,str,hostname[gbaversion]);
 	drawtext(19,str,0);
 
 	strmerge(str,"B autofire: ",autotxt[autoB]);
-	text(0,str);
+	text(row++,str);
 	strmerge(str,"A autofire: ",autotxt[autoA]);
-	text(1,str);
+	text(row++,str);
 	strmerge(str,"Controller: ",ctrltxt[(joycfg>>29)-2]);
-	text(2,str);
-	text(3,"Display->");
-	text(4,"Other Settings->");
-	text(5,"Link Transfer");
+	text(row++,str);
+	text(row++,"Display->");
+	text(row++,"Other Settings->");
+	text(row++,"Link Transfer");
 	if(mainmenuitems==MULTIBOOTMENUITEMS) {
-		text(6,"Sleep");
-		text(7,"Restart");
+		text(row++,"Sleep");
 	} else {
-		text(6,"Save State->");
-		text(7,"Load State->");
-		text(8,"Manage SRAM->");
-		text(9,"Sleep");
-		text(10,"Restart");
-		text(11,"Exit");
+		text(row++,"Save State->");
+		text(row++,"Load State->");
+		text(row++,"Manage SRAM->");
+		text(row++,"Sleep");
+		text(row++,"Go Multiboot");
 	}
+	text(row++,"Restart");
+	if (pogoshell)
+		text(row++,"Exit");
 }
 
 void drawui2() {
@@ -304,10 +458,68 @@ void drawui3() {
 	drawtext(32,"      Display Settings",0);
 	strmerge(str,"Palette: ",paltxt[palettebank]);
 	text2(0,str);
+	text2(1,"Copy To Custom Palette");
+	text2(2,"Custom Palette->");
 	strmerge(str,"Gamma: ",brightxt[gammavalue]);
-	text2(1,str);
+	text2(3,str);
 	strmerge(str,"Border: ",bordtxt[bcolor]);
-	text2(2,str);
+	text2(4,str);
+}
+
+void drawui4() {
+	char str[30];
+	u16 *here;
+	u16 value;
+	int i,j;
+
+	cls(2);
+	drawtext(32,"        Custom Palette",0);
+	strmerge(str,"Background #0: #",threehex(&custompal,0));
+	text3(0,str);
+	strmerge(str,"Background #1: #",threehex(&custompal,3));
+	text3(1,str);
+	strmerge(str,"Background #2: #",threehex(&custompal,6));
+	text3(2,str);
+	strmerge(str,"Background #3: #",threehex(&custompal,9));
+	text3(3,str);
+	strmerge(str,"Window #0:     #",threehex(&custompal,12));
+	text3(4,str);
+	strmerge(str,"Window #1:     #",threehex(&custompal,15));
+	text3(5,str);
+	strmerge(str,"Window #2:     #",threehex(&custompal,18));
+	text3(6,str);
+	strmerge(str,"Window #3:     #",threehex(&custompal,21));
+	text3(7,str);
+	strmerge(str,"Object 1 #0:   #",threehex(&custompal,24));
+	text3(8,str);
+	strmerge(str,"Object 1 #1:   #",threehex(&custompal,27));
+	text3(9,str);
+	strmerge(str,"Object 1 #2:   #",threehex(&custompal,30));
+	text3(10,str);
+	strmerge(str,"Object 1 #3:   #",threehex(&custompal,33));
+	text3(11,str);
+	strmerge(str,"Object 2 #0:   #",threehex(&custompal,36));
+	text3(12,str);
+	strmerge(str,"Object 2 #1:   #",threehex(&custompal,39));
+	text3(13,str);
+	strmerge(str,"Object 2 #2:   #",threehex(&custompal,42));
+	text3(14,str);
+	strmerge(str,"Object 2 #3:   #",threehex(&custompal,45));
+	text3(15,str);
+	text3(16,"Clear Custom Palette");
+	
+	here = SCREENBASE+35*32+24;
+	for (j = 0; j < 2; j++)
+	{
+		value = 0xC118 + 0x1000*j;
+		for (i = 0; i < 8; i++)
+		{
+			*here = value;
+			value += 1;
+			here += 32;
+		}
+	}
+	palettepreview();
 }
 
 void drawclock() {
@@ -490,7 +702,7 @@ void autostateset() {
 
 void chpalette() {
 	palettebank++;
-	palettebank&=15;
+	palettebank%=17;
 	paletteinit();
 	PaletteTxAll();
 }
@@ -504,5 +716,49 @@ void detect(void) {
 	gbadetect^=1;
 }
 void gbtype() {
+}
+
+void copypalette(void)
+{
+  if (palettebank != 16)
+  {
+     memcpy(&custompal,(&GBPalettes)+palettebank*48,48);
+     palettesave();
+  }
+}
+
+void go_multiboot()
+{
+	char *src, *dest;
+	int size;
+	int key;
+	int romsize;
+
+	src=(char*)findrom(selectedrom);
+	dest=(char *)&Image$$RO$$Limit;
+	romsize = (0x8000 << (*(src+0x148)));
+	
+	size=max_multiboot_size-((int) dest-0x02000000);
+	if (romsize>size)
+	{
+		cls(1);
+		drawtext(8, "Game is too big to multiboot",0);
+		drawtext(9,"      Attempt anyway?",0);
+		drawtext(10,"        A=YES, B=NO",0);
+		oldkey=~REG_P1;			//reset key input
+		do {
+			key=getmenuinput(10);
+			if(key&(B_BTN + R_BTN + L_BTN ))
+				return;
+		} while(!(key&(A_BTN)));
+		oldkey=~REG_P1;			//reset key input
+	}
+
+	memcpy (dest,src,size);
+	textstart=dest;	
+	selectedrom=0;
+	loadcart(selectedrom,g_emuflags&0x300);
+	mainmenuitems=MENUXITEMS[1];
+	roms=1;
 }
 

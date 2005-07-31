@@ -22,7 +22,6 @@
 	EXPORT vbaprint
 	EXPORT waitframe
 	EXPORT LZ77UnCompVram
-	EXPORT LZ77UnCompWram
 	EXPORT CheckGBAVersion
 	EXPORT gbpadress
 	EXPORT OAMfinish
@@ -32,9 +31,6 @@
 
 vbaprint
 	swi 0xFF0000		;!!!!!!! Doesn't work on hardware !!!!!!!
-	bx lr
-LZ77UnCompWram
-	swi 0x110000
 	bx lr
 LZ77UnCompVram
 	swi 0x120000

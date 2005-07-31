@@ -1,6 +1,18 @@
 Goomba revision history
 -=-=-=-=-=-=-=-=-=-=-=-
 
+v2.22 - 2005-07-31 (Kuwanger)
+   Fix to work with multiboot
+   Add "Go Multiboot"
+
+v2.22 - 2005-07-28 (Kuwanger)
+   Include Preview
+   Tweak Metroid Palette more
+
+v2.22 - 2005-07-25 (Kuwanger)
+   Include Palette Editing
+   Make Goomba Border default
+
 V2.21 - 2005-07-23 (Kuwanger)
    Fiddled with Metroid Palette
    Added a new Border
