@@ -1,6 +1,10 @@
 Goomba revision history
 -=-=-=-=-=-=-=-=-=-=-=-
 
+v2.23 - 2005-08-03 (Kuwanger)
+   Customizable Border
+   Reworked sram.c to avoid going past END_OF_EXRAM
+
 v2.22 - 2005-07-31 (Kuwanger)
    Fix to work with multiboot
    Add "Go Multiboot"

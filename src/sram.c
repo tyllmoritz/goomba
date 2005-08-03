@@ -1,6 +1,7 @@
 #include <string.h>
 #include "gba.h"
 #include "minilzo.107/minilzo.h"
+#include "stateheader.h"
 
 #define STATEID 0x57a731d8
 
@@ -44,20 +45,13 @@ extern char pogoshell_romname[32];	//main.c
 //----asm stuff------
 int savestate(void*);		//cart.s
 void loadstate(int,void*);		//cart.s
+void paletteinit(void);		//lcd.s
+void PaletteTxAll(void);	//lcd.s
 
 extern u8 *romstart;	//from cart.s
 extern u32 romnum;	//from cart.s
 extern u32 frametotal;	//from gb-z80.s
 //-------------------
-
-typedef struct {
-	u16 size;	//header+data
-	u16 type;	//=STATESAVE or SRAMSAVE
-	u32 compressedsize;
-	u32 framecount;
-	u32 checksum;
-	char title[32];
-} stateheader;
 
 typedef struct {		//(modified stateheader)
 	u16 size;
@@ -72,9 +66,9 @@ typedef struct {		//(modified stateheader)
 } configdata;
 
 //we have a big chunk of memory starting at Image$$RO$$Limit free to use
-#define BUFFER1 (&Image$$RO$$Limit)
-#define BUFFER2 (&Image$$RO$$Limit+0x10000)
-#define BUFFER3 (&Image$$RO$$Limit+0x20000)
+u8 *buffer1;
+u8 *buffer2;
+u8 *buffer3;
 
 void bytecopy(u8 *dst,u8 *src,int count) {
 	int i=0;
@@ -95,14 +89,14 @@ void errmsg(char *s) {
 	drawtext(32+9,"                     ",0);
 }*/
 
-void getsram() {		//copy GBA sram to BUFFER1
+void getsram() {		//copy GBA sram to buffer1
 	u8 *sram=MEM_SRAM;
-	u8 *buff1=BUFFER1;
+	u8 *buff1=buffer1;
 	u32 *p;
 
 	p=(u32*)buff1;
 	if(*p!=STATEID) {	//if sram hasn't been copied already
-		bytecopy(buff1,sram,0xe000);	//copy everything to BUFFER1
+		bytecopy(buff1,sram,0xe000);	//copy everything to buffer1
 		if(*p!=STATEID) {	//valid savestate data?
 			*p=STATEID;	//nope.  initialize
 			*(p+1)=0;
@@ -130,20 +124,22 @@ void writeerror() {
 		waitframe();
 }
 
-//(BUFFER1=copy of GBA SRAM, BUFFER3=new data)
-//overwrite:  index=state#, erase=0
-//new:  index=big number (anything >=total saves), erase=0
-//erase:  index=state#, erase=1
-//returns TRUE if successful
-//IMPORTANT!!! totalstatesize is assumed to be current
+/* (buffer1=copy of GBA SRAM, buffer3=new data)
+   overwrite:  index=state#, erase=0
+   new:  index=big number (anything >=total saves), erase=0
+   erase:  index=state#, erase=1
+   returns TRUE if successful
+   IMPORTANT!!! totalstatesize is assumed to be current
+   */
+/* Update: inplace alteration through append */
 int updatestates(int index,int erase,int type) {
 	int i;
 	int srcsize;
 	int total=totalstatesize;
-	u8 *src=BUFFER1;
+	u8 *src=buffer1;
 	u8 *dst;
 	u8 *newdst;
-	stateheader *newdata=(stateheader*)BUFFER3;
+	stateheader *newdata=(stateheader*)buffer3;
 
 	src+=4;//skip STATEID
 
@@ -161,38 +157,29 @@ int updatestates(int index,int erase,int type) {
 	dst=src;
 	src+=srcsize;
 	total-=srcsize;
-	if(!erase) {
-		i=newdata->size;
-		total+=i;
-		if(total>0xe000) //**OUT OF MEMORY**
-			return 0;
-		newdst=(u8*)newdata + i;
-		srcsize=((stateheader*)src)->size;
-		while(srcsize) {		//copy trailing old data to after new data.
-			memcpy(newdst,src,srcsize);
-			newdst+=srcsize;
-			src+=srcsize;
-			srcsize=((stateheader*)src)->size;
-		}
-		*(u32*)newdst=0;	//terminate
-		*(u32*)(newdst+4)=0xffffffff;	//terminate
-		src=(u8*)newdata;
-	}
-
+	
 	srcsize=((stateheader*)src)->size;
-
-	//copy everything back to BUFFER1
+	
+	//copy everything past i to buffer1
 	while(srcsize) {
 		memcpy(dst,src,srcsize);
 		dst+=srcsize;
 		src+=srcsize;
 		srcsize=((stateheader*)src)->size;
 	}
+	
+	// Append, if appropriate
+	if(!erase) {
+		srcsize = newdata->size;
+		total += i;
+		if(total > 0xe000) //**OUT OF MEMORY**
+			return 0;
+		memcpy(dst, newdata, srcsize);
+		dst += srcsize;
+	}
 
 	*(u32*)dst=0;	//terminate
-	*(u32*)(dst+4)=0xffffffff;	//terminate
-	dst+=8;
-	total+=8;
+	dst+=4;
 
 	//copy everything to GBA sram
 
@@ -202,7 +189,7 @@ int updatestates(int index,int erase,int type) {
 		*dst++=0;
 		total++;
 	}
-	bytecopy(MEM_SRAM,BUFFER1,total);	//copy to sram
+	bytecopy(MEM_SRAM,buffer1,total);	//copy to sram
 	return 1;
 }
 
@@ -234,7 +221,7 @@ void getstatetimeandsize(char *s,int time,u32 size,u32 totalsize) {
 #define FIRSTLINE 2
 #define LASTLINE 16
 
-//BUFFER1 holds copy of SRAM
+//buffer1 holds copy of SRAM
 //draw save/loadstate menu and update global totalstatesize
 //returns a pointer to current selected state
 //update *states on exit
@@ -250,7 +237,7 @@ stateheader* drawstates(int menutype,int *menuitems,int *menuoffset) {
 	stateheader *selectedstate;
 	int time;
 	int selectedstatesize;
-	stateheader *sh=(stateheader*)(BUFFER1+4);
+	stateheader *sh=(stateheader*)(buffer1+4);
 
 	type=(menutype==SRAMMENU)?SRAMSAVE:STATESAVE;
 
@@ -309,20 +296,20 @@ stateheader* drawstates(int menutype,int *menuitems,int *menuoffset) {
 	return selectedstate;
 }
 
-//compress src into BUFFER3 (adding header), using 64k of workspace
+//compress src into buffer3 (adding header), using 64k of workspace
 void compressstate(lzo_uint size,u16 type,u8 *src,void *workspace) {
 	lzo_uint compressedsize;
 	stateheader *sh;
 
 	if (workspace == NULL) {
-		memcpy(BUFFER3+sizeof(stateheader),src,size);
+		memcpy(buffer3+sizeof(stateheader),src,size);
 		compressedsize=size;
 	} else {
-		lzo1x_1_compress(src,size,BUFFER3+sizeof(stateheader),&compressedsize,workspace);	//workspace needs to be 64k
+		lzo1x_1_compress(src,size,buffer3+sizeof(stateheader),&compressedsize,workspace);	//workspace needs to be 64k
 	}
 
 	//setup header:
-	sh=(stateheader*)BUFFER3;
+	sh=(stateheader*)buffer3;
 	sh->size=(compressedsize+sizeof(stateheader)+3)&~3;	//size of compressed state+header, word aligned
 	sh->type=type;
 	sh->compressedsize=compressedsize;	//size of compressed state
@@ -368,8 +355,8 @@ void savestatemenu() {
 	int menuitems;
 	int offset=0;
 
-	i=savestate(BUFFER2);
-	compressstate(i,STATESAVE,BUFFER2,BUFFER1);
+	i=savestate(buffer2);
+	compressstate(i,STATESAVE,buffer2,buffer1);
 
 	getsram();
 
@@ -398,7 +385,7 @@ int findstate(u32 checksum,int type,stateheader **stateptr) {
 	stateheader *sh;
 
 	getsram();
-	sh=(stateheader*)(BUFFER1+4);
+	sh=(stateheader*)(buffer1+4);
 
 	state=-1;
 	foundstate=-1;
@@ -422,8 +409,8 @@ int findstate(u32 checksum,int type,stateheader **stateptr) {
 
 void uncompressstate(int rom,stateheader *sh) {
 	lzo_uint statesize=sh->compressedsize;
-	lzo1x_decompress((u8*)(sh+1),statesize,BUFFER2,&statesize,NULL);
-	loadstate(rom,BUFFER2);
+	lzo1x_decompress((u8*)(sh+1),statesize,buffer2,&statesize,NULL);
+	loadstate(rom,buffer2);
 	frametotal=sh->framecount;		//restore global frame counter
 	setup_sram_after_loadstate();		//handle sram packing
 }
@@ -454,8 +441,8 @@ void quicksave() {
 	setdarknessgs(7);	//darken
 	drawtext(32+9,"           Saving.",0);
 
-	i=savestate(BUFFER2);
-	compressstate(i,STATESAVE,BUFFER2,BUFFER1);
+	i=savestate(buffer2);
+	compressstate(i,STATESAVE,buffer2,buffer1);
 	i=findstate(checksum((u8*)romstart),STATESAVE,&sh);
 	if(i<0) i=65536;	//make new save if one doesn't exist
 	if(!updatestates(i,0,STATESAVE))
@@ -467,8 +454,12 @@ void paletteload() {
 	stateheader *sh;
 	int i;
 
-	if(!using_flashcart())
+	if(!using_flashcart()) {
+		memcpy(&custompal,&((&GBPalettes)[48]),48);
+		paletteinit();
+		PaletteTxAll();
 		return;
+	}
 
 	i=findstate(checksum((u8*)romstart),PALETTE,&sh);
 	if (i>=0) {
@@ -477,6 +468,8 @@ void paletteload() {
 		//Clean palette.
 		memcpy(&custompal,&((&GBPalettes)[48]),48);
 	}
+	paletteinit();
+	PaletteTxAll();
 }
 
 void palettesave() {
@@ -523,9 +516,9 @@ void backup_gb_sram() {
 	if(i>=0 && cfg->sram_checksum) {	//SRAM is occupied?
 		i=findstate(cfg->sram_checksum,SRAMSAVE,&sh);//find out where to save
 		if(i>=0) {
-			memcpy(BUFFER3,sh,sizeof(stateheader));//use old info, in case the rom for this sram is gone and we can't look up its name.
-			lzo1x_1_compress(MEM_SRAM+0xe000,0x2000,BUFFER3+sizeof(stateheader),&compressedsize,BUFFER2);	//workspace needs to be 64k
-			sh=(stateheader*)BUFFER3;
+			memcpy(buffer3,sh,sizeof(stateheader));//use old info, in case the rom for this sram is gone and we can't look up its name.
+			lzo1x_1_compress(MEM_SRAM+0xe000,0x2000,buffer3+sizeof(stateheader),&compressedsize,buffer2);	//workspace needs to be 64k
+			sh=(stateheader*)buffer3;
 			sh->size=(compressedsize+sizeof(stateheader)+3)&~3;	//size of compressed state+header, word aligned
 			sh->compressedsize=compressedsize;	//size of compressed state
 			updatestates(i,0,SRAMSAVE);
@@ -536,7 +529,7 @@ void backup_gb_sram() {
 //make new saved sram (using XGB_SRAM contents)
 //this is to ensure that we have all info for this rom and can save it even after this rom is removed
 void save_new_sram() {
-	compressstate(0x2000,SRAMSAVE,XGB_SRAM,BUFFER2);
+	compressstate(0x2000,SRAMSAVE,XGB_SRAM,buffer2);
 	updatestates(65536,0,SRAMSAVE);
 }
 
@@ -649,8 +642,8 @@ void writeconfig() {
 
 	i=findstate(0,CONFIGSAVE,(stateheader**)&cfg);
 	if(i<0) {//make new config
-		memcpy(BUFFER3,&configtemplate,sizeof(configdata));
-		cfg=(configdata*)BUFFER3;
+		memcpy(buffer3,&configtemplate,sizeof(configdata));
+		cfg=(configdata*)buffer3;
 	}
 	cfg->bordercolor=bcolor;					//store current border type
 	cfg->palettebank=palettebank;				//store current DMG palette
@@ -665,7 +658,7 @@ void writeconfig() {
 	if(i<0) {	//create new config
 		updatestates(0,0,CONFIGSAVE);
 	} else {		//config already exists, update sram directly (faster)
-		bytecopy((u8*)cfg-BUFFER1+MEM_SRAM,(u8*)cfg,sizeof(configdata));
+		bytecopy((u8*)cfg-buffer1+MEM_SRAM,(u8*)cfg,sizeof(configdata));
 	}
 }
 

@@ -2,14 +2,20 @@
 #include <string.h>
 #include "gba.h"
 #include "minilzo.107/minilzo.h"
+#include "stateheader.h"
 
+extern u8 *buffer1;	// from sram.c
+extern u8 *buffer2;
+extern u8 *buffer3;
+extern u8 Image$$RO$$Base;
+extern u8 Image$$RW$$Base;
 extern u8 Image$$RO$$Limit;
+extern u8 Image$$RW$$Limit;
+extern u32 max_multiboot_size;
 extern u32 g_emuflags;			//from cart.s
 extern u32 joycfg;				//from io.s
 extern u32 font;				//from boot.s
 extern u32 fontpal;				//from boot.s
-extern u32 bfont;				//from boot.s
-extern u32 bfontpal;				//from boot.s
 extern u32 *vblankfptr;			//from lcd.s
 extern u32 vbldummy;			//from lcd.s
 extern u32 vblankinterrupt;		//from lcd.s
@@ -18,6 +24,7 @@ extern u32 EMUinput;
        u32 oldinput;
 extern u8 autostate;			//from ui.c
 extern u32 SerialIn;			//from rumble.c
+extern u32 bcolor;			//from lcd.s ,border color, black, grey, blue
 
 //asm calls
 void loadcart(int,int);			//from cart.s
@@ -33,6 +40,7 @@ void cls(int);
 void rommenu(void);
 int drawmenu(int);
 int getinput(void);
+u8 *add_borders(u8 *textstart);
 void splash(void);
 void drawtext(int,char*,int);
 void drawtextl(int,char*,int,int);
@@ -42,12 +50,15 @@ void readconfig(void);			//sram.c
 void quickload(void);
 void backup_gb_sram(void);
 void get_saved_sram(void);		//sram.c
-void paletteload(); //from sram.c
+void paletteload(void); //from sram.c
 
 const unsigned __fp_status_arm=0x40070000;
 u8 *textstart;//points to first GB rom (initialized by boot.s)
 int roms;//total number of roms
 int selectedrom=0;
+
+u32 borders;
+char *border_titles[256];
 
 char pogoshell_romname[32];	//keep track of rom name (for state saving, etc)
 char rtc=0;
@@ -55,9 +66,17 @@ char pogoshell=0;
 char gameboyplayer=0;
 char gbaversion;
 
+extern struct stateheader;
+
+/* 50K is an upper bound on the save state size
+ * The formula is an upper bound LZO estimate on worst case compression
+ */
+#define WORSTCASE ((50*1024)+(50*1024)/64+16+4+sizeof(stateheader))
+
 void C_entry() {
 	int i;
 	vu16 *timeregs=(u16*)0x080000c8;
+	u32 border_id=0x789b4987, baseborders;
 	u32 temp=(u32)(*(u8**)0x0203FBFC);
 	pogoshell=((temp & 0xFE000000) == 0x08000000)?1:0;
 	*timeregs=1;
@@ -67,6 +86,12 @@ void C_entry() {
 	SerialIn = 0;
 	GFX_init();
 
+	borders=baseborders=0;
+	// The maximal space
+	buffer1=(&Image$$RO$$Limit);
+	buffer2=(&Image$$RO$$Limit+0x10000);
+	buffer3=(&Image$$RO$$Limit+0x10000+WORSTCASE);
+
 	if(pogoshell){
 		char *d=(char*)0x203fc08;
 		do d++; while(*d);
@@ -74,15 +99,49 @@ void C_entry() {
 		do d--; while(*d!='/');
 		d++;			//d=GB rom name
 
+		if(*(u32*)(&Image$$RO$$Limit) == border_id) {
+			buffer1 = add_borders(&Image$$RO$$Limit+4);
+			/* Using max_multiboot_size to indirectly use END_OF_EXRAM
+			 * to see if we're using too much RAM for this. */
+			if ((u32) buffer1 + 0x10000 + WORSTCASE*2 > max_multiboot_size+0x2000000) {
+				borders = 0;
+				buffer1=(&Image$$RO$$Limit);
+				baseborders = 0xFFFFFFF;
+			} else if (borders > 0) {
+				buffer2 = buffer1 + 0x10000;
+				buffer3 = buffer1 + 0x10000 + WORSTCASE;
+				bcolor = 4;
+			}
+		}
+		
 		roms=1;
 		textstart=(*(u8**)0x0203FBFC);
+		if(*(u32*)textstart==border_id) {
+			if (baseborders != 0xFFFFFFFF)
+				baseborders = borders;
+			textstart = add_borders(textstart+4);
+			// Set to first custom
+			if (baseborders == 0xFFFFFFFF) {
+				if (borders > 0)
+					bcolor = 4;
+			} else	if (borders > baseborders) {
+				bcolor = 4 + baseborders;
+			}
+		}
+		
 		memcpy(pogoshell_romname,d,32);
 	}
 	else
 	{
-		int gbx_id=0x6666edce;
+		u32 gbx_id=0x6666edce;
 		u8 *p;
 
+		if(*(u32*)textstart==border_id) {
+			textstart = add_borders(textstart+4);
+			if (borders > 0)
+				bcolor = 4;
+		}
+		
 		//splash screen present?
 		if(*(u32*)(textstart+0x104)!=gbx_id) {
 			splash();
@@ -114,14 +173,28 @@ void C_entry() {
 	//load font+palette
 	LZ77UnCompVram(&font,(u16*)0x6002300);
 	memcpy((void*)0x5000080,&fontpal,64);
-	// Load new border 
-	LZ77UnCompVram(&bfont,(u16*)0x6000800);
-	memcpy((void*)0x50001C0,&bfontpal,32);
 	// Set two top palette entries white
 	*((u16*)0x500019E) = 0x7fff;
 	*((u16*)0x50001BE) = 0x7fff;
 	readconfig();
 	rommenu();
+}
+
+u8 *add_borders(u8 *textstart)
+{
+   u8 i, tmp;
+  
+   tmp = *(u32 *)textstart;
+   textstart+=4;
+   
+   for (i = 0; i < tmp; i++)
+   {
+	if (borders < 256)
+		border_titles[borders++] = (char *) (textstart+4);
+	textstart += *(u32 *)textstart;
+   }
+
+   return textstart;
 }
 
 //show splash screen
