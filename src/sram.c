@@ -124,7 +124,7 @@ void writeerror() {
 		waitframe();
 }
 
-/* (buffer1=copy of GBA SRAM, buffer3=new data)
+/* (buffer1=copy of GBA SRAM, buffer2=new data)
    overwrite:  index=state#, erase=0
    new:  index=big number (anything >=total saves), erase=0
    erase:  index=state#, erase=1
@@ -139,7 +139,7 @@ int updatestates(int index,int erase,int type) {
 	u8 *src=buffer1;
 	u8 *dst;
 	u8 *newdst;
-	stateheader *newdata=(stateheader*)buffer3;
+	stateheader *newdata=(stateheader*)buffer2;
 
 	src+=4;//skip STATEID
 
@@ -296,20 +296,20 @@ stateheader* drawstates(int menutype,int *menuitems,int *menuoffset) {
 	return selectedstate;
 }
 
-//compress src into buffer3 (adding header), using 64k of workspace
+//compress src into buffer2 (adding header), using 64k of workspace
 void compressstate(lzo_uint size,u16 type,u8 *src,void *workspace) {
 	lzo_uint compressedsize;
 	stateheader *sh;
 
 	if (workspace == NULL) {
-		memcpy(buffer3+sizeof(stateheader),src,size);
+		memcpy(buffer2+sizeof(stateheader),src,size);
 		compressedsize=size;
 	} else {
-		lzo1x_1_compress(src,size,buffer3+sizeof(stateheader),&compressedsize,workspace);	//workspace needs to be 64k
+		lzo1x_1_compress(src,size,buffer2+sizeof(stateheader),&compressedsize,workspace);	//workspace needs to be 64k
 	}
 
 	//setup header:
-	sh=(stateheader*)buffer3;
+	sh=(stateheader*)buffer2;
 	sh->size=(compressedsize+sizeof(stateheader)+3)&~3;	//size of compressed state+header, word aligned
 	sh->type=type;
 	sh->compressedsize=compressedsize;	//size of compressed state
@@ -355,8 +355,8 @@ void savestatemenu() {
 	int menuitems;
 	int offset=0;
 
-	i=savestate(buffer2);
-	compressstate(i,STATESAVE,buffer2,buffer1);
+	i=savestate(buffer3);
+	compressstate(i,STATESAVE,buffer3,buffer1);
 
 	getsram();
 
@@ -409,8 +409,8 @@ int findstate(u32 checksum,int type,stateheader **stateptr) {
 
 void uncompressstate(int rom,stateheader *sh) {
 	lzo_uint statesize=sh->compressedsize;
-	lzo1x_decompress((u8*)(sh+1),statesize,buffer2,&statesize,NULL);
-	loadstate(rom,buffer2);
+	lzo1x_decompress((u8*)(sh+1),statesize,buffer3,&statesize,NULL);
+	loadstate(rom,buffer3);
 	frametotal=sh->framecount;		//restore global frame counter
 	setup_sram_after_loadstate();		//handle sram packing
 }
@@ -441,8 +441,8 @@ void quicksave() {
 	setdarknessgs(7);	//darken
 	drawtext(32+9,"           Saving.",0);
 
-	i=savestate(buffer2);
-	compressstate(i,STATESAVE,buffer2,buffer1);
+	i=savestate(buffer3);
+	compressstate(i,STATESAVE,buffer3,buffer1);
 	i=findstate(checksum((u8*)romstart),STATESAVE,&sh);
 	if(i<0) i=65536;	//make new save if one doesn't exist
 	if(!updatestates(i,0,STATESAVE))
@@ -516,9 +516,9 @@ void backup_gb_sram() {
 	if(i>=0 && cfg->sram_checksum) {	//SRAM is occupied?
 		i=findstate(cfg->sram_checksum,SRAMSAVE,&sh);//find out where to save
 		if(i>=0) {
-			memcpy(buffer3,sh,sizeof(stateheader));//use old info, in case the rom for this sram is gone and we can't look up its name.
-			lzo1x_1_compress(MEM_SRAM+0xe000,0x2000,buffer3+sizeof(stateheader),&compressedsize,buffer2);	//workspace needs to be 64k
-			sh=(stateheader*)buffer3;
+			memcpy(buffer2,sh,sizeof(stateheader));//use old info, in case the rom for this sram is gone and we can't look up its name.
+			lzo1x_1_compress(MEM_SRAM+0xe000,0x2000,buffer2+sizeof(stateheader),&compressedsize,buffer2);	//workspace needs to be 64k
+			sh=(stateheader*)buffer2;
 			sh->size=(compressedsize+sizeof(stateheader)+3)&~3;	//size of compressed state+header, word aligned
 			sh->compressedsize=compressedsize;	//size of compressed state
 			updatestates(i,0,SRAMSAVE);
@@ -529,7 +529,8 @@ void backup_gb_sram() {
 //make new saved sram (using XGB_SRAM contents)
 //this is to ensure that we have all info for this rom and can save it even after this rom is removed
 void save_new_sram() {
-	compressstate(0x2000,SRAMSAVE,XGB_SRAM,buffer2);
+	compressstate(0x2000,SRAMSAVE,XGB_SRAM,buffer1);
+	getsram();
 	updatestates(65536,0,SRAMSAVE);
 }
 
@@ -642,8 +643,8 @@ void writeconfig() {
 
 	i=findstate(0,CONFIGSAVE,(stateheader**)&cfg);
 	if(i<0) {//make new config
-		memcpy(buffer3,&configtemplate,sizeof(configdata));
-		cfg=(configdata*)buffer3;
+		memcpy(buffer2,&configtemplate,sizeof(configdata));
+		cfg=(configdata*)buffer2;
 	}
 	cfg->bordercolor=bcolor;					//store current border type
 	cfg->palettebank=palettebank;				//store current DMG palette

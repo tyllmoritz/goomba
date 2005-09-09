@@ -277,6 +277,7 @@ ss0	ldr r5,[r2],#4
 
 savelst	DCD rominfo,4,XGB_RAM,0x2080,XGB_VRAM,0x2000,XGB_SRAM,0x8000,GBOAM_BUFFER,0xA0,agb_pal,96
 	DCD vram_map,64,agb_nt_map,16,mapperstate,32,rommap,16,cpustate,52,lcdstate,16
+	DCD soundstate,4
 lstend
 
 fixromptrs	;add r2 to some things
@@ -333,6 +334,14 @@ ls3	ldrb r0,[r3],#1
 	tst r4,#0x2000
 	beq ls3
 
+	mov addy,#REG_BASE
+	ldrb r0,sgcnt0_l_l
+	strb r0,[addy,#REG_SGCNT_L]
+	ldrb r0,sgcnt0_l_h
+	strb r0,[addy,#REG_SGCNT_L+1]
+	ldrb r0,sgcnt0_h_l
+	strb r0,[addy,#REG_SGCNT_X]
+	
 	bl resetlcdregs
 
 	ldmfd sp!,{r4-r7,globalptr,gb_zpage,lr}
@@ -417,6 +426,11 @@ mapAB_
 ;----------------------------------------------------------------------------
  AREA wram_globals2, CODE, READWRITE
 
+soundstate
+	DCB 0   ;soundcnt_l_l
+	DCB 0	;soundcnt_l_h
+	DCB 0	;soundcnt_h_l
+	DCB 0	;soundcnt_h_h
 mapperstate
 	% 32	;mapperdata
 

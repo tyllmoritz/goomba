@@ -58,7 +58,7 @@ int roms;//total number of roms
 int selectedrom=0;
 
 u32 borders;
-char *border_titles[256];
+char *border_titles[384];
 
 char pogoshell_romname[32];	//keep track of rom name (for state saving, etc)
 char rtc=0;
@@ -71,7 +71,9 @@ extern struct stateheader;
 /* 50K is an upper bound on the save state size
  * The formula is an upper bound LZO estimate on worst case compression
  */
-#define WORSTCASE ((50*1024)+(50*1024)/64+16+4+sizeof(stateheader))
+#define STATESIZE (50*1024)
+#define OVERHEAD ((STATESIZE/64+16+4+sizeof(stateheader)+3)&~3)
+#define WORSTCASE (STATESIZE+OVERHEAD)
 
 void C_entry() {
 	int i;
@@ -90,7 +92,7 @@ void C_entry() {
 	// The maximal space
 	buffer1=(&Image$$RO$$Limit);
 	buffer2=(&Image$$RO$$Limit+0x10000);
-	buffer3=(&Image$$RO$$Limit+0x10000+WORSTCASE);
+	buffer3=(&Image$$RO$$Limit+0x10000+OVERHEAD);
 
 	if(pogoshell){
 		char *d=(char*)0x203fc08;
@@ -103,13 +105,13 @@ void C_entry() {
 			buffer1 = add_borders(&Image$$RO$$Limit+4);
 			/* Using max_multiboot_size to indirectly use END_OF_EXRAM
 			 * to see if we're using too much RAM for this. */
-			if ((u32) buffer1 + 0x10000 + WORSTCASE*2 > max_multiboot_size+0x2000000) {
+			if ((u32) buffer1 + 0x10000 + WORSTCASE > max_multiboot_size+0x2000000) {
 				borders = 0;
 				buffer1=(&Image$$RO$$Limit);
 				baseborders = 0xFFFFFFF;
 			} else if (borders > 0) {
 				buffer2 = buffer1 + 0x10000;
-				buffer3 = buffer1 + 0x10000 + WORSTCASE;
+				buffer3 = buffer1 + 0x10000 + OVERHEAD;
 				bcolor = 4;
 			}
 		}
@@ -189,7 +191,11 @@ u8 *add_borders(u8 *textstart)
    
    for (i = 0; i < tmp; i++)
    {
-	if (borders < 256)
+	/* Optimial border size is ~214 bytes, so 384*214 > 59KB
+	 * which means we won't run out of space at least in the
+	 * wholly memory resident borders case.
+	 */
+	if (borders < 384)
 		border_titles[borders++] = (char *) (textstart+4);
 	textstart += *(u32 *)textstart;
    }

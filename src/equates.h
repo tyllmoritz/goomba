@@ -181,6 +181,10 @@ ob0palette # 1
 ob1palette # 1
  # 3 ;align
 			;cart.s (wram_globals2)
+sgcnt0_l_l # 1
+sgcnt0_l_h # 1
+sgcnt0_h_l # 1
+sgcnt0_h_h # 1
 mapperdata # 32
 sramwptr # 4
 

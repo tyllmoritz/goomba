@@ -404,9 +404,9 @@ void drawui1() {
 
 	cls(1);
 	
-	drawtext(18,"Powered by XGFLASH2.com 2005",0);
+	drawtext(18,"Powered by Sugar",0);
 	if(pogoshell) i=1;
-	strmerge(str,emuname[i],"v2.23 on ");
+	strmerge(str,emuname[i],"v2.24 on ");
 	strmerge(str,str,hostname[gbaversion]);
 	drawtext(19,str,0);
 
@@ -429,8 +429,7 @@ void drawui1() {
 		text(row++,"Go Multiboot");
 	}
 	text(row++,"Restart");
-	if (pogoshell)
-		text(row++,"Exit");
+	text(row++,"Exit");
 }
 
 void drawui2() {

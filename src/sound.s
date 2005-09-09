@@ -204,18 +204,21 @@ _FF23W;		NR44 - Channel 4 Counter/consecutive; Inital
 _FF24W;		NR50 - Channel control / ON-OFF / Volume
 ;----------------------------------------------------------------------------
 	mov addy,#REG_BASE
+	strb r0,sgcnt0_l_l
 	strb r0,[addy,#REG_SGCNT_L]
 	mov pc,lr
 ;----------------------------------------------------------------------------
 _FF25W;		NR51 - Selection of Sound output terminal
 ;----------------------------------------------------------------------------
 	mov addy,#REG_BASE
+	strb r0,sgcnt0_l_h
 	strb r0,[addy,#REG_SGCNT_L+1]
 	mov pc,lr
 ;----------------------------------------------------------------------------
 _FF26W;		NR52 - Sound on/off
 ;----------------------------------------------------------------------------
 	mov addy,#REG_BASE
+	strb r0,sgcnt0_h_l
 	strb r0,[addy,#REG_SGCNT_X]
 	mov pc,lr
 
