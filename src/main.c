@@ -16,6 +16,7 @@ extern u32 g_emuflags;			//from cart.s
 extern u32 joycfg;				//from io.s
 extern u32 font;				//from boot.s
 extern u32 fontpal;				//from boot.s
+extern u32 standard_borders;			//from boot.s
 extern u32 *vblankfptr;			//from lcd.s
 extern u32 vbldummy;			//from lcd.s
 extern u32 vblankinterrupt;		//from lcd.s
@@ -58,7 +59,8 @@ int roms;//total number of roms
 int selectedrom=0;
 
 u32 borders;
-char *border_titles[384];
+u32 bborders;
+char *border_titles[388];
 
 char pogoshell_romname[32];	//keep track of rom name (for state saving, etc)
 char rtc=0;
@@ -78,7 +80,7 @@ extern struct stateheader;
 void C_entry() {
 	int i;
 	vu16 *timeregs=(u16*)0x080000c8;
-	u32 border_id=0x789b4987, baseborders;
+	u32 border_id = BORDERTAG, baseborders;
 	u32 temp=(u32)(*(u8**)0x0203FBFC);
 	pogoshell=((temp & 0xFE000000) == 0x08000000)?1:0;
 	*timeregs=1;
@@ -88,12 +90,16 @@ void C_entry() {
 	SerialIn = 0;
 	GFX_init();
 
-	borders=baseborders=0;
+	borders=0;
 	// The maximal space
 	buffer1=(&Image$$RO$$Limit);
 	buffer2=(&Image$$RO$$Limit+0x10000);
 	buffer3=(&Image$$RO$$Limit+0x10000+OVERHEAD);
 
+	add_borders((u8 *)(&standard_borders+1));
+
+	bborders = baseborders = borders;
+	
 	if(pogoshell){
 		char *d=(char*)0x203fc08;
 		do d++; while(*d);
@@ -106,29 +112,23 @@ void C_entry() {
 			/* Using max_multiboot_size to indirectly use END_OF_EXRAM
 			 * to see if we're using too much RAM for this. */
 			if ((u32) buffer1 + 0x10000 + WORSTCASE > max_multiboot_size+0x2000000) {
-				borders = 0;
+				borders = baseborders;
 				buffer1=(&Image$$RO$$Limit);
-				baseborders = 0xFFFFFFF;
-			} else if (borders > 0) {
+			} else if (borders > baseborders) {
 				buffer2 = buffer1 + 0x10000;
 				buffer3 = buffer1 + 0x10000 + OVERHEAD;
-				bcolor = 4;
+				bcolor = baseborders;
+				baseborders = borders;
 			}
 		}
 		
 		roms=1;
 		textstart=(*(u8**)0x0203FBFC);
 		if(*(u32*)textstart==border_id) {
-			if (baseborders != 0xFFFFFFFF)
-				baseborders = borders;
 			textstart = add_borders(textstart+4);
 			// Set to first custom
-			if (baseborders == 0xFFFFFFFF) {
-				if (borders > 0)
-					bcolor = 4;
-			} else	if (borders > baseborders) {
-				bcolor = 4 + baseborders;
-			}
+			if (borders > baseborders)
+				bcolor = baseborders;
 		}
 		
 		memcpy(pogoshell_romname,d,32);
@@ -141,7 +141,7 @@ void C_entry() {
 		if(*(u32*)textstart==border_id) {
 			textstart = add_borders(textstart+4);
 			if (borders > 0)
-				bcolor = 4;
+				bcolor = baseborders;
 		}
 		
 		//splash screen present?
@@ -195,7 +195,7 @@ u8 *add_borders(u8 *textstart)
 	 * which means we won't run out of space at least in the
 	 * wholly memory resident borders case.
 	 */
-	if (borders < 384)
+	if (borders < 388) // 4 more for standard borders
 		border_titles[borders++] = (char *) (textstart+4);
 	textstart += *(u32 *)textstart;
    }

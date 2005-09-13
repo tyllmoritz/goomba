@@ -20,6 +20,7 @@
 
 	EXPORT font
 	EXPORT fontpal
+	EXPORT standard_borders
 ;------------------------------------------------------------
  	b __main
 
@@ -101,8 +102,11 @@ _1	CMP	r3, r1 ; Zero init
 ;---------------------------------------- MB test ----------
 	tst lr,#0x8000000
 	bne _4					;running from cart?
+;shift gb rom to right past emulator in ewram
 	ldr r0,=|Image$$RO$$Limit|
-	mov r3,#0x20000			;up to 128kbyte
+	;mov r3,#0x20000		;up to 128kbyte
+	mov r3,#0x2b000		;up to (128+58)kbyte
+	add r3,r3,#0x800
 	mov r1,r0
 _loop
 	ldr r2,[r6],#4			;old textstart
@@ -165,4 +169,6 @@ font
 ;	INCBIN font.bin
 fontpal
 	INCBIN fontpal.bin
+standard_borders
+	INCBIN borders.bin
 	END

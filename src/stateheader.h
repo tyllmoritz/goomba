@@ -1,4 +1,6 @@
 
+#define BORDERTAG 0x789b4987
+
 typedef struct {
 	u16 size;	//header+data
 	u16 type;	//=STATESAVE or SRAMSAVE

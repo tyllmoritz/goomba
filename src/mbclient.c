@@ -3,8 +3,12 @@
 
 #include <stdio.h>
 #include "gba.h"
+#include "stateheader.h" // includes BORDERTAG
 
+void cls(int);		//from main.c
 u8 *findrom(int);
+void drawtext(int,char*,int);
+u32 getmenuinput(int);
 
 extern u8 Image$$RO$$Limit;
 extern u8 Image$$ZI$$Base;
@@ -12,6 +16,10 @@ extern u32 romnum;	//from cart.s
 extern u8 *textstart;	//from main.c
 
 extern int pogoshell;
+extern u32 borders;
+extern u32 bborders;
+extern u32 oldkey;//init this before using getmenuinput
+extern char *border_titles[388];
 
 u32 max_multiboot_size;		//largest possible multiboot transfer (init'd by boot.s)
 
@@ -93,13 +101,46 @@ int SendMBImageToClient(void) {
 	u16 *p;
 	u16 ie;
 	u32 emusize1,emusize2,romsize;
+	int borderssize = 0;
+	int borders_to_use = borders;
+	u32 borders_header[2] = { BORDERTAG, 0 };
 
 	emusize1=((u32)(&Image$$RO$$Limit)&0x3ffff);
 	emusize2=((u32)(&Image$$ZI$$Base)&0x7fff);
 //	if(pogoshell) romsize=48+16+(*(u8*)(findrom(romnum)+48+4))*16*1024+(*(u8*)(findrom(romnum)+48+5))*8*1024;  //need to read this from ROM
 //	else romsize=48+*(u32*)(findrom(romnum)+32);
 	romsize = (0x8000 << (*(findrom(romnum)+0x148)));
-	if(emusize1+romsize>max_multiboot_size) return 3;
+	if(emusize1+emusize2+romsize>max_multiboot_size) return 3;
+
+	for (i = bborders; i < borders; i++)
+	{
+		borderssize += *(u32 *)(border_titles[i]-4);
+	}
+	
+	if (emusize1+emusize2+romsize+borderssize>max_multiboot_size) {
+		cls(1);
+		drawtext(8, "The size of all borders is too large",0);
+		drawtext(9,"      Truncate and send anyway?",0);
+		drawtext(10,"        A=YES, B=NO",0);
+		oldkey=~REG_P1;			//reset key input
+		do {
+			key=getmenuinput(10);
+			if(key&(B_BTN + R_BTN + L_BTN ))
+				return 0;
+		} while(!(key&(A_BTN)));
+		oldkey=~REG_P1;			//reset key input
+		
+		j = i = 0;
+		borderssize = max_multiboot_size - romsize - emusize2 - emusize1;
+		for (borders_to_use = bborders; borderssize >= 0; borders_to_use++)
+		{
+			i = *(u32 *)(border_titles[borders_to_use]-4);
+			borderssize -= i;
+			j += i;
+		}
+		borderssize = j - i;
+		borders_to_use--;
+	}
 
 #if 0
     //this check frequently causes hangs, and is not necessary
@@ -182,8 +223,8 @@ int SendMBImageToClient(void) {
 		i=2;
 		goto transferEnd;
 	}
-	xfer(emusize1+emusize2+romsize);		//transmission size..
-	xfer((emusize1+emusize2+romsize)>>16);
+	xfer(emusize1+emusize2+romsize+borderssize);		//transmission size..
+	xfer((emusize1+emusize2+romsize+borderssize)>>16);
 
 	p=(u16*)((u32)0x2000000);	//(from ewram.)
 	for(;emusize1;emusize1-=2)		//send first part of emu
@@ -192,6 +233,22 @@ int SendMBImageToClient(void) {
 	for(;emusize2;emusize2-=2)		//send second part of emu
 		xfer(*(p++));
 
+	// Only send if greater than 0
+	if (borders_to_use > bborders) {
+		borders_header[1] = borders_to_use - bborders;
+		p=(u16*)borders_header;
+		for(i = 0; i < 4; i++)	//send borders header
+			xfer(*(p++));
+
+		// then send borders
+		for (i = bborders; i < borders_to_use; i++)
+		{
+			j = *(u32 *)(border_titles[i]-4);
+			p = (u16*)(border_titles[i]-4);
+			for (;j;j-=4)
+				xfer(*(p++));
+		}
+	}
 	p=(u16*)findrom(romnum);	//send ROM
 	for(;romsize;romsize-=2)
 		xfer(*(p++));

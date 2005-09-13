@@ -55,7 +55,8 @@ extern char pogoshell;
 extern char gameboyplayer;
 extern char gbaversion;
 extern u32 borders;
-extern char *border_titles[256];
+extern u32 bborders;
+extern char *border_titles[388];
 
 u8 autoA,autoB;				//0=off, 1=on, 2=R
 u8 stime=0;
@@ -92,6 +93,7 @@ void savestatemenu(void);
 void autostateset(void);
 void incpalette(void);
 void decpalette(void);
+void decborder(void);
 void border(void);
 void gbtype(void);
 void detect(void);
@@ -159,7 +161,7 @@ void ui() {
 	autoB|=joycfg&(B_BTN<<16)?0:2;
 
 	mb = ((u32)textstart>0x8000000)?0:1;
-	mainmenuitems=MENUXITEMS[mb]-(1-pogoshell);//running from rom or multiboot?
+	mainmenuitems=MENUXITEMS[mb];//running from rom or multiboot?
 	FPSValue=0;					//Stop FPS meter
 
 	soundvol=REG_SGCNT0_L;
@@ -209,7 +211,7 @@ void ui() {
 }
 
 void subui(int menunr) {
-	int key,oldsel, special;
+	int key,oldsel, special, special2;
 
 	selected=0;
 	drawuiX[menunr]();
@@ -218,9 +220,12 @@ void subui(int menunr) {
 	do {
 		key=getmenuinput(MENUXITEMS[menunr]);
 		special=(menunr == 3 && selected == 0);
+		special2=(menunr == 3 && selected == 4);
 		if (special && key&(L_BTN))
 			decpalette();
-		if(key&(A_BTN) || (special && key&(R_BTN))) {
+		if (special2 && key&(L_BTN))
+			decborder();
+		if(key&(A_BTN) || ((special || special2) && key&(R_BTN))) {
 			oldsel=selected;
 			fnlistX[menunr][selected]();
 			selected=oldsel;
@@ -228,7 +233,7 @@ void subui(int menunr) {
 		if(key&(A_BTN+UP+DOWN+LEFT+RIGHT+L_BTN+R_BTN)) {
 			drawuiX[menunr]();
 		}
-	} while(!(key&(B_BTN)) && (special || !(key&(R_BTN+L_BTN))));
+	} while(!(key&(B_BTN)) && (special || special2 || !(key&(R_BTN+L_BTN))));
 	scrollr();
 	while(key&(B_BTN+L_BTN+R_BTN)) {
 		waitframe();		//(polling REG_P1 too fast seems to cause problems)
@@ -466,10 +471,7 @@ void drawui3() {
 	text2(2,"Custom Palette->");
 	strmerge(str,"Gamma: ",brightxt[gammavalue]);
 	text2(3,str);
-	if (bcolor > 3)
-		strmerge(str,"Border: ",border_titles[bcolor-4]);
-	else
-		strmerge(str,"Border: ",bordtxt[bcolor]);
+	strmerge(str,"Border: ",border_titles[bcolor]);
 	text2(4,str);
 }
 
@@ -721,8 +723,13 @@ void decpalette() {
 	PaletteTxAll();
 }
 
+void decborder() {
+	bcolor = (bcolor+borders-1)%(borders);
+	makeborder();
+}
+
 void border() {
-	bcolor = (bcolor+1)%(4+borders);
+	bcolor = (bcolor+1)%(borders);
 	makeborder();
 }
 
@@ -744,15 +751,24 @@ void copypalette(void)
 void go_multiboot()
 {
 	char *src, *dest;
-	int size;
-	int key;
-	int romsize;
+	int size, key, romsize;
+	int i, j;
+	int borderssize;
+	int borders_to_use;
+	
+	borderssize = 0;
+	borders_to_use = borders;
 
+	for (i = bborders; i < borders; i++)
+	{
+		borderssize += *(u32 *)(border_titles[i]-4);
+	}
 	src=(char*)findrom(selectedrom);
 	dest=(char *)&Image$$RO$$Limit;
 	romsize = (0x8000 << (*(src+0x148)));
 	
 	size=max_multiboot_size-((int) dest-0x02000000);
+	
 	if (romsize>size)
 	{
 		cls(1);
@@ -766,21 +782,48 @@ void go_multiboot()
 				return;
 		} while(!(key&(A_BTN)));
 		oldkey=~REG_P1;			//reset key input
+		borders_to_use = bborders;
+	} else if (romsize+borderssize>size) {
+		cls(1);
+		drawtext(8, "The size of all borders is too large",0);
+		drawtext(9,"   Truncate and go multiboot anyway?",0);
+		drawtext(10,"        A=YES, B=NO",0);
+		oldkey=~REG_P1;			//reset key input
+		do {
+			key=getmenuinput(10);
+			if(key&(B_BTN + R_BTN + L_BTN ))
+				return;
+		} while(!(key&(A_BTN)));
+		oldkey=~REG_P1;			//reset key input
+		borderssize = size - romsize;
+		for (borders_to_use = bborders; borderssize >= 0; borders_to_use++)
+		{
+			borderssize -= *(u32 *)(border_titles[borders_to_use]-4);
+		}
+		borders_to_use--;
 	}
 
-	memcpy (dest,src,size);
+	for (i = bborders; i < borders_to_use; i++)
+	{
+		j = *(u32 *)(border_titles[i]-4);
+		memmove(dest, border_titles[i]-4, j);
+		border_titles[i] = dest+4;
+		dest += j;
+	}
+	memcpy (dest,src,romsize);
 	textstart=dest;	
 	selectedrom=0;
-	borders=0;
-	if (bcolor>3) {
-		bcolor = 0;
-		makeborder();
-	}
-	memcpy(&custompal,&((&GBPalettes)[48]),48);
-	paletteinit();
-	PaletteTxAll();
-	loadcart(selectedrom,g_emuflags&0x300);
-	mainmenuitems=MENUXITEMS[1];
 	roms=1;
+	mainmenuitems=MENUXITEMS[1];
+	borders=borders_to_use;
+	if (bcolor>borders-1) {
+		bcolor = 0;
+		//makeborder(); // loadcart calls GFX_reset which reloads the border
+	}
+	// Blanking the custom palette seems silly
+	/*memcpy(&custompal,&((&GBPalettes)[48]),48);
+	paletteinit();
+	PaletteTxAll();*/
+	loadcart(selectedrom,g_emuflags&0x300);
 }
 

@@ -517,7 +517,8 @@ void backup_gb_sram() {
 		i=findstate(cfg->sram_checksum,SRAMSAVE,&sh);//find out where to save
 		if(i>=0) {
 			memcpy(buffer2,sh,sizeof(stateheader));//use old info, in case the rom for this sram is gone and we can't look up its name.
-			lzo1x_1_compress(MEM_SRAM+0xe000,0x2000,buffer2+sizeof(stateheader),&compressedsize,buffer2);	//workspace needs to be 64k
+			lzo1x_1_compress(MEM_SRAM+0xe000,0x2000,buffer2+sizeof(stateheader),&compressedsize,buffer1);	//workspace needs to be 64k
+			getsram();
 			sh=(stateheader*)buffer2;
 			sh->size=(compressedsize+sizeof(stateheader)+3)&~3;	//size of compressed state+header, word aligned
 			sh->compressedsize=compressedsize;	//size of compressed state
