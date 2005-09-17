@@ -1,9 +1,13 @@
-Goomba v2.0
+Goomba v2.3
 -=-=-=-=-=-=-
 
 It's a Gameboy emulator for the GameBoy Advance. 
 - Why? The GBA allready plays gameboy games.
 - Well, I don't really have a good excuse, see it as a programming experiment.
+
+It's not a Gameboy Color emulator.
+- Why? I want to play my Zolda Orifice DX!
+- Well, go buy the game, or even better learn ARM assembler and fix it. =)
 
 Getting Started
 -=-=-=-=-=-=-=-
@@ -39,6 +43,7 @@ Other Stuff
 Gameboy SRAM: Goomba automaticly takes care of games which use 8kByte SRAM,
   games which use 32kByte SRAM (most of the Pokemon games) must be saved
   by using savestates though.
+
 Link transfer:  Sends Goomba to another GBA.  The other GBA must be in
   multiboot receive mode (no cartridge inserted, powered on and waiting with
   the "GAME BOY" logo displayed).  Only one game can be sent at a time, and
@@ -46,10 +51,18 @@ Link transfer:  Sends Goomba to another GBA.  The other GBA must be in
   be sent to 1 (one) Gameboy at a time, disconnect all other gameboys during
   transfer.
 
+Use an original Nintendo cable!
+
 Multi player link play: NOT DONE YET.
 
 PoGoomba: If you wish to use Goomba with Pogoshell
   just rename goomba.gba to gb.bin and put it in the plugins directory.
+
+GameBoy Player:
+  To be able to check for the GameBoy Player one must display the
+  GameBoy Player logo, the easiest way to get it is by downloading it from my
+  homepage. Otherwise you can rip it from any other game that displays it
+  (SMA4 & Pokemon Pinball). This is a must if you want rumble to work.
 
 -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 Big thanks to www.XGFlash2.com for support, go there for all your GBA/SP flash card needs.

@@ -1,7 +1,7 @@
 	INCLUDE equates.h
 	INCLUDE lcd.h
 
-	EXPORT sound_reset_
+	EXPORT Sound_reset
 	EXPORT _FF10W
 	EXPORT _FF11W
 	EXPORT _FF12W
@@ -50,7 +50,7 @@
  AREA rom_code, CODE, READONLY ;-- - - - - - - - - - - - - - - - - - - - - -
 
 ;----------------------------------------------------------------------------
-sound_reset_
+Sound_reset
 ;----------------------------------------------------------------------------
 	mov r1,#REG_BASE
 
@@ -60,9 +60,8 @@ sound_reset_
 	strh r0,[r1,#REG_SGCNT_X]	;sound master enable. NR52
 
 
-	mov r0,#0x80
-	strh r0,[r1,#REG_SG1CNT_L]	;NR10
 	mov r0,#0x0000
+	strh r0,[r1,#REG_SG1CNT_L]	;NR10
 	strh r0,[r1,#REG_SG1CNT_H]	;NR11,NR12, should read 0xF3BF
 	strh r0,[r1,#REG_SG1CNT_X]	;(NR13),NR14, should read 0xBF00
 

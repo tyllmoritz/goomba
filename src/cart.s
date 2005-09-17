@@ -1,14 +1,15 @@
 	INCLUDE equates.h
 	INCLUDE mappers.h
 	INCLUDE memory.h
-	INCLUDE gb-z80mac.h
-	INCLUDE gb-z80.h
+	INCLUDE gbz80mac.h
+	INCLUDE gbz80.h
 	INCLUDE lcd.h
 	INCLUDE io.h
 
 	IMPORT findrom ;from main.c
 
 	EXPORT loadcart
+;	EXPORT mapBIOS_
 	EXPORT map0123_
 	EXPORT map4567_
 	EXPORT map01234567_
@@ -108,10 +109,11 @@ loadcart ;called from C:  r0=rom number, r1=emuflags
 	mov r3,r0		;r0 now points to rom image
 	str r3,rombase		;set rom base
 				;r3=rombase til end of loadcart so DON'T FUCK IT UP
+
 	mov r0,#0
 	ldr r1,=XGB_VRAM
 	mov r2,#0xA000/4
-	bl filler_		;clear nes SRAM+VRAM
+	bl filler_		;clear GB SRAM+VRAM
 
 	ldr r1,=AGB_VRAM+0x4000	;clear AGB Tiles
 	mov r2,#0x8000/4
@@ -142,6 +144,9 @@ loadcart ;called from C:  r0=rom number, r1=emuflags
 	bl map0123_		;0123=1st 16k
 	mov r0,#1
 	bl map4567_		;4567=2nd 16k
+
+;	bl FixRealBios
+;	bl mapBIOS_		;01=BIOS
 
 	ldrb r0,[r3,#0x147]	;get mbc#
 	cmp r0,#0xFF		;HuC-1
@@ -214,7 +219,7 @@ lc1				;call mapper*init
 0
 	bl mirror1_		;(call after mapperinit to allow mappers to set up cartflags first)
 
-	bl gb_reset		;reset everything else
+	bl emu_reset		;reset everything else
 	ldmfd sp!,{r4-r11,lr}
 	bx lr
 
@@ -224,7 +229,19 @@ rammasktbl
 	DCD 0x07FF
 	DCD 0x1FFF
 	DCD 0x7FFF
-
+;----------------------------------------------------------------------------
+FixRealBios;		r3=rombase
+;----------------------------------------------------------------------------
+	adr r2,DMGBIOS
+	str r2,biosbase
+	mov r1,#0x100
+biosloop
+	ldr r0,[r3,r1]
+	str r0,[r2,r1]
+	add r1,r1,#4
+	cmp r1,#0x200
+	bne biosloop
+	bx lr
 ;----------------------------------------------------------------------------
 savestate	;called from ui.c.
 ;int savestate(void *here): copy state to <here>, return size
@@ -322,7 +339,13 @@ ls3	ldrb r0,[r3],#1
 	bx lr
 ;----------------------------------------------------------------------------
 m0000	DCD 0x1a02,XGB_VRAM+0x1800,XGB_VRAM+0x1800,XGB_VRAM+0x1800,XGB_VRAM+0x1800
-	DCD AGB_BG+0x0000,AGB_BG+0x0000,AGB_BG+0x0000,AGB_BG+0x0000
+		DCD AGB_BG+0x0000,AGB_BG+0x0000,AGB_BG+0x0000,AGB_BG+0x0000
+
+;----------------------------------------------------------------------------
+DMGBIOS
+;	INCBIN DMGBIOS.ROM
+;	% 256
+
 ;----------------------------------------------------------------------------
  AREA wram_code4, CODE, READWRITE
 ;----------------------------------------------------------------------------
@@ -340,6 +363,12 @@ mirror1_
 	ldmia r0!,{r2-r5}
 	stmia r1,{r2-r5}
 	ldmfd sp!,{r3-r5,pc}
+;----------------------------------------------------------------------------
+mapBIOS_
+;----------------------------------------------------------------------------
+	ldr r0,biosbase
+	str r0,memmap_tbl
+	b flush
 ;----------------------------------------------------------------------------
 map0123_
 ;----------------------------------------------------------------------------
@@ -391,7 +420,9 @@ mapAB_
 mapperstate
 	% 32	;mapperdata
 
-	DCD 0		;sramwptr
+	DCD 0	;sramwptr
+biosstart
+	DCD 0	;biosbase
 romstart
 	DCD 0	;rombase
 romnum

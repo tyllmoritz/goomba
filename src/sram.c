@@ -11,21 +11,23 @@
 
 extern u8 Image$$RO$$Limit;
 extern u8 g_cartflags;	//(from GB header)
-extern int bcolor;	//Border Color
+extern int bcolor;		//Border Color
 extern int palettebank;	//Palette for DMG games
-extern u32 gammavalue;		//from lcd.s
+extern u8 gammavalue;	//from lcd.s
+extern u8 gbadetect;	//from gb-z80.s
 extern u8 stime;		//from ui.c
 extern u8 autostate;	//from ui.c
 extern u8 *textstart;	//from main.c
 
-extern char pogoshell;
+extern char pogoshell;	//main.c
 
-int totalstatesize;	//how much SRAM is used
+int totalstatesize;		//how much SRAM is used
 
 //-------------------
 u8 *findrom(int);
 void cls(int);		//main.c
 void drawtext(int,char*,int);
+void setdarknessgs(int dark);
 void scrolll(int f);
 void scrollr(void);
 void waitframe(void);
@@ -441,8 +443,7 @@ void quicksave() {
 	if(!using_flashcart())
 		return;
 
-	REG_BLDCNT=0x00fb;	//darken
-	REG_COLY=7;
+	setdarknessgs(7);	//darken
 	drawtext(32+9,"           Saving.",0);
 
 	i=savestate(BUFFER2);
@@ -598,9 +599,10 @@ void writeconfig() {
 	}
 	cfg->bordercolor=bcolor;					//store current border type
 	cfg->palettebank=palettebank;				//store current DMG palette
-	j = stime & 0xf;							//store current autosleep time
-	j |= (autostate & 0x1)<<5;					//store current autostate setting
-	j |= (gammavalue & 0x7)<<6;					//store current gamma setting
+	j = stime & 0x3;							//store current autosleep time
+	j |= (gbadetect & 0x1)<<3;					//store current gbadetect setting
+	j |= (autostate & 0x1)<<4;					//store current autostate setting
+	j |= (gammavalue & 0x7)<<5;					//store current gamma setting
 	cfg->misc = j;
 	if(g_cartflags&MBC_SAV) {					//update sram owner
 			cfg->sram_checksum=checksum(romstart);
@@ -622,10 +624,11 @@ void readconfig() {
 	if(i>=0) {
 		bcolor=cfg->bordercolor;
 		palettebank=cfg->palettebank;
-		i = cfg->misc;							//restore current autosleep time
-		stime = i & 0xf;						//restore current autosleep time
-		autostate = (i & 0x20)>>5;				//restore current autostate setting
-		gammavalue = (i & 0xE0)>>6;				//restore current gamma setting
+		i = cfg->misc;
+		stime = i & 0x3;						//restore current autosleep time
+		gbadetect = (i & 0x08)>>3;				//restore current gbadetect setting
+		autostate = (i & 0x10)>>4;				//restore current autostate setting
+		gammavalue = (i & 0xE0)>>5;				//restore current gamma setting
 	}
 }
 void clean_gb_sram() {
@@ -645,8 +648,8 @@ void clean_gb_sram() {
 	}
 	cfg->bordercolor=bcolor;					//store current border type
 	cfg->palettebank=palettebank;				//store current DMG palette
-	cfg->misc = stime & 0xf;					//store current autosleep time
-	cfg->misc |= (autostate & 0x1)<<5;			//store current autostate setting
+	cfg->misc = stime & 0x3;					//store current autosleep time
+	cfg->misc |= (autostate & 0x1)<<4;			//store current autostate setting
 	cfg->sram_checksum=0;						// we don't want to save the empty sram
 	if(i<0) {	//create new config
 		updatestates(0,0,CONFIGSAVE);

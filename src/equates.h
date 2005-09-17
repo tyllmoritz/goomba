@@ -31,6 +31,7 @@ AGB_IRQVECT		EQU 0x3007FFC
 AGB_PALETTE		EQU 0x5000000
 AGB_VRAM		EQU 0x6000000
 AGB_OAM			EQU 0x7000000
+AGB_SRAM		EQU 0xE000000
 AGB_BG			EQU AGB_VRAM+0xc000
 DEBUGSCREEN		EQU AGB_VRAM+0x3800
 
@@ -39,9 +40,9 @@ REG_DISPCNT		EQU 0x00
 REG_DISPSTAT	EQU 0x04
 REG_VCOUNT		EQU 0x06
 REG_BG0CNT		EQU 0x08
-REG_BG1CNT		EQU 0x0a
-REG_BG2CNT		EQU 0x0c
-REG_BG3CNT		EQU 0x0e
+REG_BG1CNT		EQU 0x0A
+REG_BG2CNT		EQU 0x0C
+REG_BG3CNT		EQU 0x0E
 REG_BG0HOFS		EQU 0x10
 REG_BG0VOFS		EQU 0x12
 REG_BG1HOFS		EQU 0x14
@@ -51,12 +52,14 @@ REG_BG2VOFS		EQU 0x1A
 REG_BG3HOFS		EQU 0x1C
 REG_BG3VOFS		EQU 0x1E
 REG_WIN0H		EQU 0x40
+REG_WIN1H		EQU 0x42
 REG_WIN0V		EQU 0x44
+REG_WIN1V		EQU 0x46
 REG_WININ		EQU 0x48
-REG_WINOUT		EQU 0x4a
+REG_WINOUT		EQU 0x4A
 REG_BLDCNT		EQU 0x50
-REG_COLEV		EQU 0x52
-REG_COLY		EQU 0x54
+REG_BLDALPHA	EQU 0x52
+REG_BLDY		EQU 0x54
 REG_SG1CNT_L	EQU 0x60
 REG_SG1CNT_H	EQU 0x62
 REG_SG1CNT_X	EQU 0x64
@@ -181,6 +184,7 @@ ob1palette # 1
 mapperdata # 32
 sramwptr # 4
 
+biosbase # 4
 rombase # 4
 romnumber # 4
 emuflags # 4
@@ -208,19 +212,21 @@ NOCPUHACK	EQU 2	;don't use JMP hack
 ;?		EQU 16
 ;FOLLOWMEM       EQU 32  ;0=follow sprite, 1=follow mem
 
-			;bits 8-5=scale type
+				;bits 8-5=scale type
 
-		;bits 16-31=sprite follow val
+				;bits 16-31=sprite follow val
 
 ;----------------------------------------------------------------------------
-CYCLE		EQU 16 ;one cycle (456*CYCLE cycles per scanline)
+CYC_SHIFT		EQU 4
+CYCLE			EQU 1<<CYC_SHIFT ;one cycle (455*CYCLE cycles per scanline)
 
 ;cycle flags- (stored in cycles reg for speed)
 
-BRANCH		EQU 0x01 ;branch instruction encountered
-;		EQU 0x02
-;		EQU 0x04
-;		EQU 0x08
+BRANCH			EQU 0x01 ;branch instruction encountered
+;				EQU 0x02
+;				EQU 0x04
+;				EQU 0x08
+CYC_MASK		EQU CYCLE-1	;Mask
 ;----------------------------------------------------------------------------
 
 		END

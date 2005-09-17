@@ -1,5 +1,5 @@
-	IMPORT lcd_init
-	IMPORT lcd_reset
+	IMPORT GFX_init
+	IMPORT GFX_reset
 	IMPORT FF40_R
 	IMPORT FF40_W
 	IMPORT FF41_R
