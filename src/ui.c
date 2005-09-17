@@ -161,6 +161,7 @@ void ui() {
 		if(key&(A_BTN+UP+DOWN+LEFT+RIGHT))
 			drawui1();
 	} while(!(key&(B_BTN+R_BTN+L_BTN)));
+	writeconfig();			//save any changes
 	for(i=1;i<9;i++)
 	{
 		waitframe();
@@ -245,10 +246,9 @@ void drawui1() {
 	char str[30];
 
 	cls(1);
-	
 	drawtext(18,"Powered by XGFLASH2.com 2005",0);
 	if(pogoshell) i=1;
-	strmerge(str,emuname[i],"v2.20 on ");
+	strmerge(str,emuname[i],"v2.30 on ");
 	strmerge(str,str,hostname[gbaversion]);
 	drawtext(19,str,0);
 
@@ -496,7 +496,9 @@ void chpalette() {
 }
 
 void border() {
-	bcolor = (bcolor+1)%5;
+	bcolor++;
+	if(bcolor>=4)
+		bcolor=0;
 	makeborder();
 }
 

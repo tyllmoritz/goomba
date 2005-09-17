@@ -292,8 +292,7 @@ PaletteTxAll;		also called from UI.c
 ;----------------------------------------------------------------------------
 makeborder;		also called from UI.c
 ;----------------------------------------------------------------------------
-	str r4,[sp,#-4]!
-	ldr r1,=0x06000000
+	mov r1,#0x06000000
 	adr r2,SGBorder
 	mov r3,#32*20
 	ldr r0,bcolor
@@ -303,18 +302,16 @@ makeborder;		also called from UI.c
 	mov r0,r0,lsl#12
 	add r0,r0,#0x3100
 bordloop
-	ldrb r4,[r2],#1
-	orr r4,r4,r0
-	strh r4,[r1],#2
+	ldrb addy,[r2],#1
+	orr addy,addy,r0
+	strh addy,[r1],#2
 	subs r3,r3,#1
 	bne bordloop
-	ldr r4,[sp],#4
 	bx lr
 bordloopt
 	strh r0,[r1],#2
 	subs r3,r3,#1
 	bne bordloopt
-	ldr r4,[sp],#4
 	bx lr
 ;----------------------------------------------------------------------------
 bcolor

@@ -3,7 +3,6 @@
 #include "gba.h"
 #include "minilzo.107/minilzo.h"
 
-extern u8 Image$$RO$$Limit;
 extern u32 g_emuflags;			//from cart.s
 extern u32 joycfg;				//from io.s
 extern u32 font;				//from boot.s
@@ -24,7 +23,6 @@ void GFX_init(void);			//lcd.s
 void resetSIO(u32);				//io.s
 void vbaprint(char *text);		//io.s
 void LZ77UnCompVram(u32 *source,u16 *destination);		//io.s
-void LZ77UnCompWram(u32 *source,u8 *destination);		//io.s
 void waitframe(void);			//io.s
 int CheckGBAVersion(void);		//io.s
 
@@ -41,7 +39,6 @@ void readconfig(void);			//sram.c
 void quickload(void);
 void backup_gb_sram(void);
 void get_saved_sram(void);		//sram.c
-void write_byte(u8 *address, u8 data);
 
 const unsigned __fp_status_arm=0x40070000;
 u8 *textstart;//points to first GB rom (initialized by boot.s)
@@ -313,22 +310,4 @@ void setbrightnessall(int light) {
 	REG_BLDY=light;
 }
 
-void write_byte(u8 *address, u8 data)
-{
-
-        u16 *addr2;
-        //if not hw aligned
-        if ( (int)address & 1)
-        {
-                addr2=(u16*)((int)address-1);
-                *addr2 &= 0xFF;
-                *addr2 |= (data << 8);
-        }
-        else
-        {
-                addr2=(u16*)address;
-                *addr2 &= 0xFF00;
-                *addr2 |= data;
-        }
-}
 

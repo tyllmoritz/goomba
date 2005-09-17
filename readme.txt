@@ -1,9 +1,13 @@
-Goomba v2.2
+Goomba v2.3
 -=-=-=-=-=-=-
 
 It's a Gameboy emulator for the GameBoy Advance. 
 - Why? The GBA allready plays gameboy games.
 - Well, I don't really have a good excuse, see it as a programming experiment.
+
+It's not a Gameboy Color emulator.
+- Why? I want to play my Zolda Orifice DX!
+- Well, go buy the game, or even better learn ARM assembler and fix it. =)
 
 Getting Started
 -=-=-=-=-=-=-=-
@@ -39,6 +43,7 @@ Other Stuff
 Gameboy SRAM: Goomba automaticly takes care of games which use 8kByte SRAM,
   games which use 32kByte SRAM (most of the Pokemon games) must be saved
   by using savestates though.
+
 Link transfer:  Sends Goomba to another GBA.  The other GBA must be in
   multiboot receive mode (no cartridge inserted, powered on and waiting with
   the "GAME BOY" logo displayed).  Only one game can be sent at a time, and
