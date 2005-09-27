@@ -1,6 +1,14 @@
 Goomba revision history
 -=-=-=-=-=-=-=-=-=-=-=-
 
+v2.31 - 2005-09-27 (Kuwanger)
+   Incorporate changes from FluBBa's v2.30
+    FluBBa's changes from v2.2 to v2.3
+    - Fixed MultiBoot transfer.
+    - Fixed a bug in the sound init.
+    - Fixed the RTC a bit.
+    - Changed some small things in the cpu core (DK and Kirby faster).
+
 v2.23 - 2005-08-03 (Kuwanger)
    Customizable Border
    Reworked sram.c to avoid going past END_OF_EXRAM

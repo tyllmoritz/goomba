@@ -110,14 +110,14 @@ int SendMBImageToClient(void) {
 //	if(pogoshell) romsize=48+16+(*(u8*)(findrom(romnum)+48+4))*16*1024+(*(u8*)(findrom(romnum)+48+5))*8*1024;  //need to read this from ROM
 //	else romsize=48+*(u32*)(findrom(romnum)+32);
 	romsize = (0x8000 << (*(findrom(romnum)+0x148)));
-	if(emusize1+emusize2+romsize>max_multiboot_size) return 3;
+	if(emusize1+emusize2+romsize>0x40000 || emusize1+romsize>max_multiboot_size) return 3;
 
 	for (i = bborders; i < borders; i++)
 	{
 		borderssize += *(u32 *)(border_titles[i]-4);
 	}
 	
-	if (emusize1+emusize2+romsize+borderssize>max_multiboot_size) {
+	if (emusize1+romsize+borderssize>max_multiboot_size) {
 		cls(1);
 		drawtext(8, "The size of all borders is too large",0);
 		drawtext(9,"      Truncate and send anyway?",0);

@@ -1,9 +1,13 @@
-Goomba v2.2
+Goomba v2.31
 -=-=-=-=-=-=-
 
 It's a Gameboy emulator for the GameBoy Advance. 
 - Why? The GBA allready plays gameboy games.
 - Well, I don't really have a good excuse, see it as a programming experiment.
+
+It's not a Gameboy Color emulator.
+- Why? I want to play my Zolda Orifice DX!
+- Well, go buy the game, or even better learn ARM assembler and fix it. =)
 
 Getting Started
 -=-=-=-=-=-=-=-

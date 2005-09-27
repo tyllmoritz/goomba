@@ -24,7 +24,7 @@ C EQU 2_00010000	;carry
 	and r0,gb_flg,#0xA0000000	;nC
 	and r1,gb_flg,#0x50000000	;Zh
 	mov r1,r1,lsr#23
-	orr r0,r1,r0,lsr#25
+	orr r0,r1,r0,lsr#25			;N
 	MEND
 
 	MACRO		;unpack GB-Z80 flags from r0
@@ -32,7 +32,7 @@ C EQU 2_00010000	;carry
 	and gb_flg,r0,#0xA0			;Zh
 	and r0,r0,#0x50				;nC
 	mov r0,r0,lsl#25
-	orr gb_flg,r0,gb_flg,lsl#23
+	orr gb_flg,r0,gb_flg,lsl#23	;N
 	MEND
 
 
@@ -388,9 +388,9 @@ C EQU 2_00010000	;carry
 	orr gb_flg,gb_flg,#PSR_n	;set n
 	tst r0,#0x0f				;h
 	orreq gb_flg,gb_flg,#PSR_h
-	sub r0,r0,#0x01
-	ands r0,r0,#0xff				;Z
-	orreq gb_flg,gb_flg,#PSR_Z
+	subs r0,r0,#0x01
+;	ands r0,r0,#0xff			;Not needed!?!
+	orreq gb_flg,gb_flg,#PSR_Z	;Z
 	MEND
 
 	MACRO
@@ -443,7 +443,6 @@ C EQU 2_00010000	;carry
 	tst r0,#0x0f				;h
 	orreq gb_flg,gb_flg,#PSR_h
 	MEND
-
 
 	MACRO
 	opINC16 $x
@@ -643,6 +642,13 @@ C EQU 2_00010000	;carry
 	MEND
 
 	MACRO
+	opRRCA
+	opRRC gb_a,25
+	mov gb_a,gb_a,lsl#24
+	fetch 8
+	MEND
+
+	MACRO
 	opRRCH $x
 	and r0,$x,#0xFF000000
 	opRRC r0,25
@@ -682,14 +688,11 @@ C EQU 2_00010000	;carry
 
 	MACRO
 	opSBCA
-	eor gb_flg,gb_flg,#PSR_C		;invert C.
-	movs gb_flg,gb_flg,lsr#30		;get C, clear flags.
-	sbcs gb_a,gb_a,gb_a
-	and gb_flg,gb_a,#PSR_h			;h
-	orr gb_flg,gb_flg,#PSR_n		;n
-	orrcc gb_flg,gb_flg,#PSR_C		;C
-	ands gb_a,gb_a,#0xFF000000
-	orreq gb_flg,gb_flg,#PSR_Z		;Z
+	movs gb_flg,gb_flg,lsr#30		;get C.
+	movcc gb_a,#0x00000000
+	movcs gb_a,#0xFF000000
+	movcc gb_flg,#PSR_n+PSR_Z
+	movcs gb_flg,#PSR_n+PSR_C+PSR_h
 	fetch 4
 	MEND
 
@@ -879,6 +882,7 @@ C EQU 2_00010000	;carry
 	fetch 8
 	MEND
 ;---------------------------------------
+
 	MACRO
 	opSWAP $x
 	mov $x,$x,ror#28
