@@ -143,6 +143,7 @@ u32 checksum(u8 *p) {
 }
 
 void writeerror() {
+//need to check this
 	int i;
 	cls(2);
 	make_ui_visible();

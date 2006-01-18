@@ -52,7 +52,7 @@ extern char gammavalue;		//from lcd.s
 extern u32 palettebank;		//from lcd.s palette bank
 //extern u32 bcolor;			//from lcd.s ,border color, black, grey, blue
 
-int backup_gb_sram(int called_from);
+void backup_gb_sram(int called_from);
 void get_saved_sram(void);		//sram.c
 
 
@@ -171,7 +171,7 @@ void ui()
 {
 	int key,soundvol,oldsel,tm0cnt,i;
 	int mb=(u32)textstart<0x8000000;
-	int savesuccess=1;
+	int savesuccess;
 
 	make_ui_visible();
 
@@ -197,12 +197,6 @@ void ui()
 		ui_x=224-i*32; move_ui();
 	}
 	savesuccess=backup_gb_sram(1);
-	if (!savesuccess)
-	{
-		drawui1();
-		ui_x=0;
-		move_ui();
-	}
 	
 
 	oldkey=~REG_P1;			//reset key input

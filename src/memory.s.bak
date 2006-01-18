@@ -93,7 +93,7 @@ mem_RC0_2	;ram read ($D000-$DFFF)
 	ldrb r0,[r1,addy]
 	mov pc,lr
 ;----------------------------------------------------------------------------
-sram_W2	;write to real sram ($A000-$BFFF)  AND emulated sram
+sram_W2	;write to real sram ($A000-$BFFF)
 ;----------------------------------------------------------------------------
 	orr r1,addy,#0xe000000	;r1=e00A000+
 	add r1,r1,#0x4000		;r1=e00e000+

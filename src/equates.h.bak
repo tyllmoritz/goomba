@@ -28,10 +28,8 @@ MAPPED_RGB		EQU speedhacks-16*4	;mapped GB palette.
 	|
 MAPPED_RGB		EQU GBC_EXRAM-16*4	;mapped GB palette.
 	]
-;palbuff			EQU MAPPED_RGB - 512
-
-;10664 bytes for these:
-DISPCNTBUFF		EQU MAPPED_RGB-164*2
+palbuff			EQU MAPPED_RGB - 512
+DISPCNTBUFF		EQU palbuff-164*4
 BG0CNTBUFF		EQU DISPCNTBUFF-164*8
 SCROLLBUFF1		EQU BG0CNTBUFF-160*16
 SCROLLBUFF2		EQU SCROLLBUFF1-160*16
@@ -178,8 +176,8 @@ timerctrl # 1
 stctrl # 1
 debugstop # 1 ;align
 nexttimeout # 4
-scanlinehook # 4
 scanline # 4
+scanlinehook # 4
 frame # 4
 cyclesperscanline # 4
  [ SPEEDHACKS
@@ -269,10 +267,6 @@ BRANCH			EQU 0x01 ;branch instruction encountered
 ;				EQU 0x04
 ;				EQU 0x08
 CYC_MASK		EQU CYCLE-1	;Mask
-
-SINGLE_SPEED EQU 456*CYCLE
-DOUBLE_SPEED EQU 912*CYCLE
-
 ;----------------------------------------------------------------------------
 
 		END

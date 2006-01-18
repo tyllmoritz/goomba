@@ -12,9 +12,9 @@ C EQU 2_00010000	;carry
 
 	MACRO		;translate gb_pc from GB-Z80 PC to rom offset
 	encodePC
-	and r1,gb_pc,#0xe000
+	and r1,gb_pc,#0xF000
 	adr r2,memmap_tbl
-	ldr r0,[r2,r1,lsr#11]
+	ldr r0,[r2,r1,lsr#10]
 	str r0,lastbank
 	add gb_pc,gb_pc,r0
 	MEND
@@ -38,6 +38,9 @@ C EQU 2_00010000	;carry
 
 	MACRO
 	fetch $count
+ [ PROFILE
+	bl profile_it
+ ]
 	subs cycles,cycles,#$count*CYCLE
 	ldrplb r0,[gb_pc],#1
 	ldrpl pc,[gb_optbl,r0,lsl#2]
@@ -52,10 +55,10 @@ C EQU 2_00010000	;carry
 
 	MACRO
 	readmem
-	and r1,addy,#0xE000
+	and r1,addy,#0xF000
 	adr r2,readmem_tbl
 	adr lr,%F0
-	ldr pc,[r2,r1,lsr#11]	;in: addy,r1=addy&0xE000 (for rom_R)
+	ldr pc,[r2,r1,lsr#10]	;in: addy,r1=addy&0xE000 (for rom_R)
 0				;out: r0=val (bits 8-31=0 ), addy preserved for RMW instructions
 	MEND
 
@@ -67,10 +70,10 @@ C EQU 2_00010000	;carry
 
 	MACRO
 	writemem
-	and r1,addy,#0xE000
+	and r1,addy,#0xF000
 	adr r2,writemem_tbl
 	adr lr,%F0
-	ldr pc,[r2,r1,lsr#11]	;in: addy,r0=val(bits 8-31=?)
+	ldr pc,[r2,r1,lsr#10]	;in: addy,r0=val(bits 8-31=?)
 0				;out: r0,r1,r2,addy=?
 	MEND
 
@@ -83,21 +86,21 @@ C EQU 2_00010000	;carry
 ;	sub addy,addy,#0x00020000
 ;	str addy,gb_sp
 ;	mov addy,addy,lsr#16
-;	and r1,addy,#0xE000
+;	and r1,addy,#0xF000
 ;	adr r2,writemem_tbl
 ;	adr lr,%F0
 ;	and r0,r0,#0xff
-;	ldr pc,[r2,r1,lsr#11]
+;	ldr pc,[r2,r1,lsr#10]
 ;0
 ;	ldr r0,[sp],#4
 ;	ldr addy,gb_sp
 ;	add addy,addy,#0x00010000
 ;	mov addy,addy,lsr#16
-;	and r1,addy,#0xE000
+;	and r1,addy,#0xF000
 ;	adr r2,writemem_tbl
 ;	adr lr,%F1
 ;	mov r0,r0,lsr#8
-;	ldr pc,[r2,r1,lsr#11]
+;	ldr pc,[r2,r1,lsr#10]
 ;1
 ;	MEND		;r1,r2=?
 
@@ -106,9 +109,9 @@ C EQU 2_00010000	;carry
 	ldr addy,gb_sp
 	sub addy,addy,#0x00020000
 	str addy,gb_sp
-	and r1,addy,#0xE0000000
+	and r1,addy,#0xF0000000
 	adr r2,memmap_tbl
-	ldr r2,[r2,r1,lsr#27]
+	ldr r2,[r2,r1,lsr#26]
 	strb r0,[r2,addy,lsr#16]
 	add addy,addy,#0x00010000
 	mov r0,r0,lsr#8
@@ -121,9 +124,9 @@ C EQU 2_00010000	;carry
 	MACRO
 	pop16 $x		;pop BC,DE,HL,PC
 	ldr addy,gb_sp
-	and r1,addy,#0xE0000000
+	and r1,addy,#0xF0000000
 	adr r2,memmap_tbl
-	ldr r1,[r2,r1,lsr#27]
+	ldr r1,[r2,r1,lsr#26]
 	ldrb $x,[r1,addy,lsr#16]
 	add addy,addy,#0x00010000
 	ldrb r0,[r1,addy,lsr#16]
@@ -135,9 +138,9 @@ C EQU 2_00010000	;carry
 	MACRO
 	popAF			;pop AF
 	ldr addy,gb_sp
-	and r1,addy,#0xE0000000
+	and r1,addy,#0xF0000000
 	adr r2,memmap_tbl
-	ldr r1,[r2,r1,lsr#27]
+	ldr r1,[r2,r1,lsr#26]
 	ldrb r0,[r1,addy,lsr#16]
 	add addy,addy,#0x00010000
 	ldrb gb_a,[r1,addy,lsr#16]

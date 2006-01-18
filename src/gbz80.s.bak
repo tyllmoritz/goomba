@@ -2552,10 +2552,10 @@ cpustate
 	;group these together for save/loadstate
 	% 7*4 ;cpuregs (flg,a,bc,de,hl,cycles,pc)
 	DCD 0 ;gb_sp:
-	DCB 0 ;gb_ime:	(interrupt master enable)
-	DCB 0 ;gb_ie:	(interrupt enable, adr $FFFF)
-	DCB 0 ;gb_if:	(interrupt flags, adr $FF0F)
-	DCB 0 ;gb_ic:	(interrupt confirm, HALT)
+	DCB 0 ;gb_ime:	(interrput master enable)
+	DCB 0 ;gb_ie:	(interrput enable, adr $FFFF)
+	DCB 0 ;gb_if:	(interrput flags, adr $FF0F)
+	DCB 0 ;gb_ic:	(interrput confirm, HALT)
 	DCD 0 ;lastbank: last memmap added to PC (used to calculate current PC)
 
 	DCD 0 ;dividereg

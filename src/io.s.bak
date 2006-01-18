@@ -1039,7 +1039,7 @@ stage1		;other GBA wants to reset
 	tst r4,#0x4		;who are we?
 	beq sg1
 	ldrb r3,received0	;slaves uses master's timing flags
-	bic r1,r1,#USEPPUHACK+CPUHACK
+	bic r1,r1,#USEPPUHACK+NOCPUHACK
 	orr r1,r1,r3
 sg1	bl loadcart		;game reset
 
@@ -1058,7 +1058,7 @@ sendreset       ;exits with r1=emuflags, r4=REG_SIOCNT, Z=1 if send was OK
 	add r5,r5,#0x100
 
         ldr r1,emuflags
-	and r0,r1,#USEPPUHACK+CPUHACK
+	and r0,r1,#USEPPUHACK+NOCPUHACK
 	orr r0,r0,#0xaa00		;$AAxx, xx=timing flags
 
 	ldrh r4,[r5,#REG_SIOCNT]
@@ -1159,17 +1159,8 @@ FF54_W	;HDMA4  Dest Low
 	mov pc,lr
 FF55_W	;HDMA5
 	tst r0,#0x80
-;	bxne lr
-	bic r0,r0,#0x80
-	
-	beq hdma
-	ldr r1,cyclesperscanline
-	cmp r1,#DOUBLE_SPEED
-	add r1,r0,#1
-	moveq r1,r1,lsl#1
-	mov r1,r1,lsl#7
-	sub cycles,cycles,r1
-hdma	
+	bxne lr
+;	bic r0,r0,#0x80
 	
 	stmfd sp!,{r0-addy,lr}
 	
