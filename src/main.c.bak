@@ -13,9 +13,60 @@ char pogoshell=0;
 char gameboyplayer=0;
 char gbaversion;
 
+/*
+extern u8 *buffer1;	// from sram.c
+extern u8 *buffer2;
+extern u8 *buffer3;
+extern u32 g_emuflags;			//from cart.s
+extern u32 joycfg;				//from io.s
+extern u32 font;				//from boot.s
+extern u32 fontpal;				//from boot.s
+extern u32 *vblankfptr;			//from lcd.s
+//extern u32 *vcountfptr;			//from lcd.s
+extern u32 vbldummy;			//from lcd.s
+extern u32 vblankinterrupt;		//from lcd.s
+//extern u32 vcountinterrupt;		//from lcd.s
+extern u32 AGBinput;			//from lcd.s
+extern u32 EMUinput;
+extern u8 autostate;			//from ui.c
+extern u32 SerialIn;			//from rumble.c
+
+//asm calls
+void loadcart(int,int);			//from cart.s
+void run(int);
+void GFX_init(void);			//lcd.s
+void resetSIO(u32);				//io.s
+void vbaprint(char *text);		//io.s
+void LZ77UnCompVram(u32 *source,u16 *destination);		//io.s
+void waitframe(void);			//io.s
+int CheckGBAVersion(void);		//io.s
+
+void cls(int);
+void rommenu(void);
+int drawmenu(int);
+int getinput(void);
+void splash(void);
+void drawtext(int,char*,int);
+void drawtextl(int,char*,int,int);
+void setdarknessgs(int dark);
+void setbrightnessall(int light);
+void readconfig(void);			//sram.c
+void quickload(void);
+void backup_gb_sram(int);
+void get_saved_sram(int);		//sram.c
+
+
+
+
+void make_ui_visible();
+void make_ui_invisible();
+void move_ui();
+
 //82048 is an upper bound on the save state size
 //The formula is an upper bound LZO estimate on worst case compression
 //#define WORSTCASE ((82048)+(82048)/64+16+4+64)
+
+*/
 
 void C_entry()
 {
@@ -143,7 +194,6 @@ void rommenu(void)
 	{
 		ui();
 		make_ui_visible();
-		backup_gb_sram(0);
 	}
 
 	if(pogoshell)

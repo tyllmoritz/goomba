@@ -168,18 +168,14 @@ loadcart ;called from C:  r0=rom number, r1=emuflags
 	moveq r0,#3
 	adr r1,mbcflagstbl
 	ldrb r0,[r1,r0]		;get mbc flags.
+	tst r3,#0x08000000
+	biceq r0,r0,#MBC_SAV	;don't use true SRAM if not running from a flash cart
 	strb r0,cartflags	;set cartflags
 	ldr r1,=empty_W
 	tst r0,#MBC_RAM
 	ldrne r1,=sram_W
 	tst r0,#MBC_SAV
-	beq dont_use_true_sram
-	tst r3,#0x08000000
-	beq dont_use_true_sram
-	ldrb r0,sramsize
-	cmp r0,#3
 	ldrne r1,=sram_W2
-dont_use_true_sram
 	str r1,sramwptr
 
 	ldr r0,=default_scanlinehook

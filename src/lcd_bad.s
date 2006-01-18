@@ -23,7 +23,6 @@
 	EXPORT FF43_R
 	EXPORT FF43_W
 	EXPORT FF44_R
-	EXPORT FF44_W
 	EXPORT FF45_R
 	EXPORT FF45_W
 	EXPORT FF47_R
@@ -51,14 +50,18 @@
 
 	EXPORT vram_W
 	EXPORT vram_W2
+;	EXPORT agb_nt_map
+;	EXPORT vram_map
+;	EXPORT VRAM_chr
 	EXPORT debug_
 	EXPORT AGBinput
 	EXPORT EMUinput
 	EXPORT paletteinit
 	EXPORT PaletteTxAll
-	EXPORT transfer_palette
 	EXPORT newframe
+	EXPORT agb_pal
 	EXPORT lcdstate
+;	EXPORT writeBG
 	EXPORT gammavalue
 	EXPORT oambuffer
 	EXPORT makeborder
@@ -69,21 +72,12 @@
 	EXPORT FPSValue
 	EXPORT vbldummy
 	EXPORT vblankfptr
-;	EXPORT vcountfptr
 	EXPORT vblankinterrupt
 	EXPORT gbc_palette
-;	EXPORT vcountinterrupt
 	
 	EXPORT move_ui
 	
 	EXPORT WINBUFF
-
-	EXPORT DISPCNTBUFF
-	EXPORT BG0CNTBUFF
-	EXPORT SCROLLBUFF1
-	EXPORT SCROLLBUFF2
-	EXPORT DMA0BUFF
-
 
  AREA rom_code, CODE, READONLY
 
@@ -116,10 +110,10 @@ GBPalettes; RGB 24bit.
 	DCB 0xFF,0xB0,0x7F, 0x5A,0x8C,0xE7, 0x18,0x4A,0x9C, 0x00,0x00,0x00
 	DCB 0xFF,0xEF,0xEF, 0xEF,0x5A,0x63, 0xAD,0x10,0x18, 0x00,0x00,0x00
 ;Metroid
-	DCB 0xDF,0xDF,0x7F, 0x00,0x5F,0xAF, 0x1F,0x3F,0x1F, 0x00,0x00,0x00
-	DCB 0xFF,0xDF,0x00, 0x80,0xFF,0xFF, 0x00,0x80,0x80, 0x00,0x00,0x00
-	DCB 0xFF,0xDF,0x00, 0xFF,0x00,0x00, 0x3F,0x37,0x00, 0x00,0x00,0x00
-	DCB 0xFF,0xFF,0xFF, 0xC0,0xC0,0xC0, 0x80,0x80,0x80, 0x00,0x00,0x00
+	DCB 0xEF,0xFF,0xDE, 0xA2,0xAD,0xB2, 0x84,0x42,0x01, 0x00,0x00,0x00
+	DCB 0xF7,0xCE,0xFF, 0xCE,0x6B,0xFF, 0x7B,0x00,0x9C, 0x00,0x00,0x00
+	DCB 0xFF,0xEF,0x55, 0xFF,0x52,0x13, 0x85,0x14,0x00, 0x00,0x00,0x00
+	DCB 0xEF,0xEF,0xFF, 0x5A,0x8C,0xE7, 0x18,0x4A,0x9C, 0x00,0x00,0x21
 ;Adventure Island
 	DCB 0xFF,0xFF,0xFF, 0x9C,0xB5,0xFF, 0x31,0x94,0x00, 0x00,0x00,0x00
 	DCB 0xFF,0xFF,0xFF, 0xF7,0xCE,0x73, 0x8C,0x4A,0x08, 0x21,0x21,0x9C
@@ -228,7 +222,6 @@ fill_win_loop
 
 	mov r1,#REG_BASE
 	mov r0,#0x0008
-;	mov r0,#0x0028
 	strh r0,[r1,#REG_DISPSTAT]	;vblank en
 
 	mov r0,#8
@@ -255,8 +248,6 @@ fill_win_loop
 	strh r0,[r2,#2]		;stop pending interrupts
 	ldr r0,=0x1081
 	strh r0,[r2]		;key,vblank,serial interrupt enable
-;	ldr r0,=0x1085
-;	strh r0,[r2]		;key,vcount,vblank,serial interrupt enable
 	mov r0,#1
 	strh r0,[r2,#8]		;master irq enable
 
@@ -278,10 +269,14 @@ GFX_reset	;called with CPU reset
 	mov r2,#0x14000/4
 	bl filler_
 
-	ldr r1,=AGB_BG		;clear most of the GB VRAM
+	ldr r1,=AGB_BG1		;clear most of the GB VRAM
 	mov r2,#0x2000/4
 	bl filler_
 
+	ldr r1,=AGB_BG2		;clear most of the GB VRAM
+	mov r2,#0x2000/4
+	bl filler_
+	
 	mov r0,#0
 	bl FF4F_W
 
@@ -319,36 +314,6 @@ GFX_reset	;called with CPU reset
 	ldmfd sp!,{addy,lr}
 
 	mov pc,lr
-
-;----------------------------------------------------------------------------
-move_ui
-;----------------------------------------------------------------------------
-	stmfd sp!,{r0-addy,lr}
-	ldr r0,=ui_x
-	ldr r0,[r0]
-	ldr r3,=ui_y
-	ldr r3,[r3]
-	orr r0,r0,r3,lsl#16
-	ldr r3,=BG0CNTBUFF+6
-	ldr r4,=DISPCNTBUFF
-	mov r1,#160
-	ldr r2,=DMA0BUFF
-	ldr r6,=dmascrollbuff
-	str r2,[r6]
-	ldr r2,=DMA0BUFF+12
-	mov r6,#0x4600
-move_ui_loop
-	str r0,[r2],#16
-	ldrh r5,[r4]
-	orr r5,r5,#0x0800
-	strh r5,[r4],#2
-	strh r6,[r3],#8
-	subs r1,r1,#1
-	bne move_ui_loop
-
-	ldmfd sp!,{r0-addy,lr}
-	bx lr
-
 ;----------------------------------------------------------------------------
 resetlcdregs
 ;----------------------------------------------------------------------------
@@ -472,36 +437,6 @@ nomap					;map rrrrrrrrggggggggbbbbbbbb  ->  0bbbbbgggggrrrrr
 	bx lr
 
 ;----------------------------------------------------------------------------
-transfer_palette
-;----------------------------------------------------------------------------
-	stmfd sp!,{r0-r5}
-	mov r0,#AGB_PALETTE
-	;transfer first 15 colors for solid blocks
-	ldr r1,=gbc_palette
-;	ldrh r2,[r1]
-;	strh r2,[r0],#2
-	mov r3,#16
-pal_loop1
-	ldrh r2,[r1],#8
-	strh r2,[r0],#2
-	subs r3,r3,#1
-	bne pal_loop1
-
-	mov r3,#16
-	ldr r1,=gbc_palette
-	ldr r0,=AGB_PALETTE+256
-pal_loop2
-	ldmia r1!,{r4,r5}
-	stmia r0,{r4,r5}
-	add r0,r0,#32
-	subs r3,r3,#1
-	bne pal_loop2
-	ldmfd sp!,{r0-r5}
-	bx lr
-
-
-
-;----------------------------------------------------------------------------
 gammaconvert;	takes value in r0(0-0xFF), gamma in r1(0-4),returns new value in r0=0x1F
 ;----------------------------------------------------------------------------
 	rsb r2,r0,#0x100
@@ -512,6 +447,7 @@ gammaconvert;	takes value in r0(0-0xFF), gamma in r1(0-4),returns new value in r
 	mul r2,r1,r2
 	mla r0,r3,r0,r2
 	mov r0,r0,lsr#13
+
 	bx lr
 ;----------------------------------------------------------------------------
 showfps_		;fps output, r0-r3=used.
@@ -612,11 +548,6 @@ irqhandler	;r0-r3,r12 are safe to use
 		;---this CAN be interrupted
 		ands r0,r1,#0x01
 		ldrne r12,vblankfptr
-;		bne jmpintr
-;		ands r0,r1,#0x04
-;		ldrne r12,vcountfptr
-;		bne jmpintr
-		
 		;----
 		moveq r0,r1				;if unknown interrupt occured clear it.
 jmpintr
@@ -648,7 +579,6 @@ vbldummy
 vblankfptr DCD vbldummy			;later switched to vblankinterrupt
 ;serialfptr DCD serialinterrupt
 serialfptr DCD RumbleInterrupt
-;vcountfptr DCD vblankinterrupt
 twitch DCD 0
 vblankinterrupt;
 ;----------------------------------------------------------------------------
@@ -730,61 +660,39 @@ vbl6
 	ldmfd sp!,{r4-r7,globalptr,pc}
 
 totalblend	DCD 0
-;palrptr	DCD 0
-;palwptr	DCD 0
-;
-;;----------------------------------------------------------------------------
-;vcountinterrupt; for palette changes
-;;----------------------------------------------------------------------------
-;	stmfd sp!,{r4-r7}
-;	ldr r4,=AGB_PALETTE
-;	adr r0,palrptr
-;	ldr r1,[r0]
-;	ldr r6,[r0,#4]
-;	cmp r1,r6
-;	beq vci_return
-;	
-;	ldr r2,=palbuff
-;	ldr r12,[r1,r2]
-;vci_loop1
-;	mov r5,r12,lsr#16
-;	;bg color?
-;	tst r12,#0x00000600
-;	and r3,r12,#0x00007800
-;	moveq r7,r3,lsr#10
-;	streqh r5,[r4,r7]
-;	mov r3,r3,lsr#6
-;	and r7,r12,#0x00000600
-;	mov r7,r7,lsr#8
-;	orr r3,r3,r7
-;	add r3,r3,#256
-;	strh r5,[r4,r3]
-;	add r1,r1,#4
-;	bic r1,r1,#0x200
-;	str r1,[r0]
-;	cmp r1,r6
-;	beq vci_return
-;	and r3,r12,#0x000000FF
-;	ldr r12,[r1,r2]
-;	and r5,r12,#0x000000FF
-;	cmp r3,r5
-;	beq vci_loop1
-;	ldr r7,=REG_BASE+REG_DISPSTAT
-;	ldrh r0,[r7]
-;	bic r0,r0,#0xFF00
-;	orr r0,r0,r12,lsl#8
-;	strh r0,[r7]	
-;vci_return	
-;	ldmfd sp!,{r4-r7}
-;	bx lr
-	
-	
+
+move_ui
+	stmfd sp!,{r0-addy,lr}
+	ldr r0,=ui_x
+	ldr r0,[r0]
+	ldr r3,=ui_y
+	ldr r3,[r3]
+	orr r0,r0,r3,lsl#16
+	ldr r3,=BG0CNTBUFF+6
+	ldr r4,=DISPCNTBUFF
+	mov r1,#160
+	ldr r2,=DMA0BUFF
+	str r2,dmascrollbuff
+	ldr r2,=DMA0BUFF+12
+	mov r6,#0x4600
+move_ui_loop
+	str r0,[r2],#16
+	ldrh r5,[r4]
+	orr r5,r5,#0x0800
+	strh r5,[r4],#2
+	strh r6,[r3],#8
+	subs r1,r1,#1
+	bne move_ui_loop
+
+	ldmfd sp!,{r0-addy,lr}
+	bx lr
+
 
 ;----------------------------------------------------------------------------
 newframe	;called at line 0	(r0-r9 safe to use)
 ;----------------------------------------------------------------------------
 	str lr,[sp,#-4]!
-
+	
 	bl OAMfinish
 ;-----------------------
 	ldr r0,ctrl1old
@@ -833,8 +741,33 @@ newframe	;called at line 0	(r0-r9 safe to use)
 	ldr r0,oambuffer
 	str r0,dmaoambuffer
 
-	bl transfer_palette
 
+;palette transfer
+	mov r0,#AGB_PALETTE
+	;transfer first 15 colors for solid blocks
+	ldr r1,=gbc_palette
+;	ldrh r2,[r1]
+;	strh r2,[r0],#2
+	mov r3,#16
+pal_loop1
+	ldrh r2,[r1],#8
+	strh r2,[r0],#2
+	subs r3,r3,#1
+	bne pal_loop1
+
+	mov r3,#16
+	ldr r1,=gbc_palette
+	ldr r0,=AGB_PALETTE+256
+pal_loop2
+	ldmia r1!,{r4,r5}
+	stmia r0,{r4,r5}
+	add r0,r0,#32
+	subs r3,r3,#1
+	bne pal_loop2
+	
+	bl transfer_tiles
+	bl transfer_maps
+	
 	ldr pc,[sp],#4
 
 ;----------------------------------------------------------------------------
@@ -872,7 +805,7 @@ FF40_W;		LCD Control
 	adr r2,chrold2
 	swp r5,r5,[r2]		;r3=lastval
 
-	ldr r1,=0x4040		;1d sprites, WIN1 enable
+	ldr r1,=0x4440		;1d sprites, BG2   enable. DISPCNTBUFF startvalue. 0x0440
 
 	tst r0,#0x80		;LCD en?
 	beq nodisp
@@ -934,17 +867,12 @@ FF41_R;		LCD Status
 	orreq r0,r0,#4		;scanline=LYC
 	tst r0,#0x01		;in VBlank.
 	movne pc,lr
-	
-	ldr r2,cyclesperscanline
-	cmp r2,#DOUBLE_SPEED
-	movne r1,cycles
-	moveq r1,cycles,lsr#1
-	
-	cmp r1,#376*CYCLE
+
+	cmp cycles,#376*CYCLE
 	orrpl r0,r0,#2		;in OAM access
 	movpl pc,lr
 
-	cmp r1,#204*CYCLE
+	cmp cycles,#204*CYCLE
 	orrpl r0,r0,#3		;in VRAM access
 	mov pc,lr
 ;----------------------------------------------------------------------------
@@ -985,7 +913,7 @@ sy1
 	strh r0,[r2,#-8]!	;fill backwards from scanline to lastline
 	strh r0,[r2,#-8]!	;fill backwards from scanline to lastline
 	cmp r2,r1
-	bgt sy1
+	bpl sy1
 	mov pc,lr
 
 scrollYold DCD 0 ;last write
@@ -1019,36 +947,17 @@ scrollXfinish			;newframe jumps here
 sx1	strh r0,[r2,#-8]!	;fill backwards from scanline to lastline
 	strh r0,[r2,#-8]!	;fill backwards from scanline to lastline
 	cmp r2,r1
-	bgt sx1
+	bpl sx1
 	mov pc,lr
 
 scrollXold DCD 0 ;last write
 scrollXline DCD 0 ;..was when?
 ;----------------------------------------------------------------------------
-FF44_R;      LCD Scanline
+FF44_R;		LCD Scanline
 ;----------------------------------------------------------------------------
-   ldrb r0,lcdctrl
-   ands r0,r0,#0x80
-   ldrne r0,scanline
-;   ldr r0,scanline
-   mov pc,lr
-;;----------------------------------------------------------------------------
-;FF44_R;		LCD Scanline
-;;----------------------------------------------------------------------------
-;
-;
-;	ldr r0,scanline
-;;	cmp r0,#153
-;;	moveq r0,#0
-;	
-;	
-;;	sub cycles,cycles,#23*CYCLE	;LCD hack?
-;	mov pc,lr
-;----------------------------------------------------------------------------
-FF44_W;		LCD Scanline
-;----------------------------------------------------------------------------
+	ldr r0,scanline
+;	sub cycles,cycles,#23*CYCLE	;LCD hack?
 	mov pc,lr
-
 ;----------------------------------------------------------------------------
 FF45_R;		LCD Y Compare
 ;----------------------------------------------------------------------------
@@ -1058,8 +967,8 @@ FF45_R;		LCD Y Compare
 FF45_W;		LCD Y Compare
 ;----------------------------------------------------------------------------
 	strb r0,lcdyc_r
-;	cmp r0,#0
-;	moveq r0,#153
+	cmp r0,#0
+	moveq r0,#153
 	strb r0,lcdyc
 	mov pc,lr
 ;----------------------------------------------------------------------------
@@ -1068,10 +977,9 @@ FF47_R;		BGP - BG Palette Data
 	ldrb r0,gbpalette
 	mov pc,lr
 ;----------------------------------------------------------------------------
-FF47_W;		BGP - BG Palette Data  (GB MODE ONLY)
+FF47_W;		BGP - BG Palette Data
 ;----------------------------------------------------------------------------
 	strb r0,gbpalette
-	
 	ldr r2,=gbc_palette
 	ldr addy,=MAPPED_RGB
 	str lr,[sp,#-4]!
@@ -1081,10 +989,6 @@ FF47_W;		BGP - BG Palette Data  (GB MODE ONLY)
 	ldr r2,=gbc_palette+4*2
 	ldr addy,=MAPPED_RGB+16
 dopalette
-	ldrb r1,gbmode
-	cmp r1,#0
-	bxne lr
-
 	and r1,r0,#0x03
 	ldr r1,[addy,r1,lsl#2]
 	strh r1,[r2]		;store in agb palette
@@ -1187,9 +1091,9 @@ FF4F_W;		VBK - VRAM Bank - CGB Mode Only
 	ldr addy,=XGB_VRAM-0x8000
 	add addy,addy,r0,lsl#13	
 	str addy,memmap_tbl+32
-	mov addy,#AGB_VRAM
-	add addy,addy,r0,lsl#13
-	str addy,agb_vrambank
+;	mov addy,#AGB_VRAM
+;	add addy,addy,r0,lsl#13
+;	str addy,agb_vrambank
 	mov pc,lr
 ;----------------------------------------------------------------------------
 FF4F_R;		VBK - VRAM Bank - CGB Mode Only
@@ -1251,150 +1155,317 @@ wx1
 	strb r4,[r3,#-8]!	;fill backwards from scanline to lastline
 	
 	cmp r2,r1
-	bgt wx1
+	bpl wx1
 	mov pc,lr
 
 windowXold DCD 0 ;last write
 windowXline DCD 0 ;..was when?
 
-;----------------------------------------------------------------------------
-vram_W2
-;----------------------------------------------------------------------------
-	mov addy,addy,lsr#16
-	cmp addy,#0x9800
-	bpl VRAM_nameD
-;----------------------------------------------------------------------------
-vram_W
-;----------------------------------------------------------------------------
-	ldr r2,memmap_tbl+32
-	strb r0,[r2,addy]
-	cmp addy,#0x9800
-	bpl VRAM_name0
-;----------------------------------------------------------------------------
-;VRAM_chr;	8000-97FF
-;----------------------------------------------------------------------------
-	bic addy,addy,#1
-	ldrb r0,[r2,addy]!	;read 1st plane
-	ldrb r1,[r2,#1]		;read 2nd plane
-	sub addy,addy,#0x8000
 
-	adr r2,chr_decode
-	ldr r0,[r2,r0,lsl#2]
-	ldr r1,[r2,r1,lsl#2]
-	orr r0,r0,r1,lsl#1
+transfer_maps
+	ldr addy,=XGB_VRAM+0x1800
+	add r4,addy,#0x800 ;r4 = stop value
+	ldr r5,=AGB_VRAM+0x1000
+	mov r6,#0x2000
+	mov r7,#0x1000
+transfer_maps_loop
+	ldrb r1,[addy,r6]
+	ldrb r0,[addy],#1
 
-	add addy,addy,addy
-
-;f(2x) =
-;{
-;	0...FFF: sprite 0, bg 4000
-;	1000...1FFF: sprite 1000, bg 5000, bg D000
-;       2000...2FFF: bg C000
-;}
-
-	ldr r2,agb_vrambank		;AGB BG tileset
-	tst addy,#0x2000
-	addeq r1,r2,#0x10000	;0x06010000=OBJ
-	streq r0,[r1,addy]		;OBJ
-	addne r2,r2,#0x6000
-	addeq r2,r2,#0x4000		;0x06004000/8000=BG
-	str r0,[r2,addy]		;BG
-
-	add r2,r2,#0x2000
-	tst addy,#0x1000
-	addne r2,r2,#0x2000
-	strne r0,[r2,addy]		;BG
-
-	mov pc,lr
-;----------------------------------------------------------------------------
-VRAM_name0	;(9800-9FFF)
-;----------------------------------------------------------------------------
-	ldr r2,=XGB_VRAM
-	sub addy,addy,#0x8000
-	ldrb r0,[r2,addy]
-	add r2,r2,#0x2000
-	ldrb r1,[r2,addy]
-	and r2,r1,#0x7
-	mov r2,r2,lsl#12
+	;color number to r3 and r0
+	and r3,r1,#0x7
+	mov r2,r3,lsl#12
 	orr r0,r0,r2
-;	and r2,r1,#0x8
-;	mov r2,r2,lsl#5
-;	orr r0,r0,r2
-;	and r2,r1,#0x60
-;	mov r2,r2,lsl#5
-;	orr r0,r0,r2
+	;bank number and flips
 	and r2,r1,#0x68
 	mov r2,r2,lsl#5
 	orr r0,r0,r2
+	;palette and tile+512
 	orr r0,r0,#0x00008200
 
-;gbc byte 2
-;  Bit 0-2  Background Palette number  (BGP0-7)
-;  Bit 3    Tile VRAM Bank number      (0=Bank 0, 1=Bank 1)
-;  Bit 4    Not used
-;  Bit 5    Horizontal Flip            (0=Normal, 1=Mirror horizontally)
-;  Bit 6    Vertical Flip              (0=Normal, 1=Mirror vertically)
-;  Bit 7    BG-to-OAM Priority         (0=Use OAM priority bit, 1=BG Priority)
-
-;gba format
-;  0-9   Tile Number     (0-1023)
-;  10    Horizontal Flip (0=Normal, 1=Mirrored)
-;  11    Vertical Flip   (0=Normal, 1=Mirrored)
-;  12-15 Palette Number  (0-15)    (Not used in 256 color/1 palette mode)
+	;store solid block tile, then tile
+	strh r3,[r5,r7]
+	strh r0,[r5],#2
 	
-;	ldrb r1,vrambank
-;	tst r1,#1
-;	movne pc,lr  ;hack for GBC mode...
-
-	ldr r2,=AGB_BG
-	and r1,r1,#0x07
-;	add r1,r1,#0x01
+	cmp addy,r4
+	blt transfer_maps_loop
 	
-	bic addy,addy,#0xf800	;AND $07ff
-	add addy,addy,addy	;lsl#1
+transfer_tiles
+	stmfd sp!,{lr}
+	;transfer tiles
+	ldr addy,=XGB_VRAM
+	mov r9,#0
+	adr r2,chr_decode
+	ldr r5,=DIRTYTILES
+	ldr r6,=AGB_VRAM+0x4000
+	ldr r7,=AGB_VRAM+0x10000
+	bl transfer_tiles_2
+	add addy,addy,#0x800
+	add r5,r5,#128
+	ldr r6,=AGB_VRAM+0x4000+0x2000
+	ldr r7,=AGB_VRAM+0x10000+0x2000
+	b inside_transfer_tiles_2
+transfer_tiles_2
+	stmfd sp!,{lr}
+inside_transfer_tiles_2
+	mov r4,#128
+nexttile1
+	ldrb r0,[r5]
+	strb r9,[r5],#1 ;clean tile
+	cmp r0,#0
+	;if tile is not dirty, skip
+	addeq addy,addy,#0x10
+	addeq r6,r6,#0x20
+	addeq r7,r7,#0x20
+	;otherwise copy
+	blne copytile2
+	subs r4,r4,#1
+	bne nexttile1
 
-	strh r0,[r2,addy]	;write tile#
-	add addy,addy,#0x1000
-	strh r1,[r2,addy]	;write background tile#
+	mov r4,#128
+	add r8,r6,#0x4000
+nexttile2
+	ldrb r0,[r5]
+	strb r9,[r5],#1 ;clean tile
+	cmp r0,#0
+	addeq addy,addy,#0x10
+	;if tile is not dirty, skip
+	addeq r6,r6,#0x20
+	addeq r7,r7,#0x20
+	addeq r8,r8,#0x20
+	;otherwise copy
+	blne copytile3
+	subs r4,r4,#1
+	bne nexttile2
+
+	mov r4,#128
+	sub r6,r8,#0x2000
+nexttile3
+	ldrb r0,[r5]
+	strb r9,[r5],#1 ;clean tile
+	cmp r0,#0
+	;if tile is not dirty, skip
+	addeq addy,addy,#0x10
+	addeq r6,r6,#0x20
+	;otherwise copy
+	blne copytile3
+	subs r4,r4,#1
+	bne nexttile3
 	
-	mov pc,lr
+	ldmfd sp!,{pc}
+
+copytile1
+	mov r3,#8
+copytile1loop
+	ldrb r0,[addy],#1
+	ldrb r1,[addy],#1
+	ldr r0,[r2,r0,lsl#2]
+	ldr r1,[r2,r1,lsl#2]
+	orr r0,r0,r1,lsl#1
+	str r0,[r6],#4
+	subs r3,r3,#1
+	bne copytile1loop
+	bx lr
+
+copytile2
+	mov r3,#8
+copytile2loop
+	ldrb r0,[addy],#1
+	ldrb r1,[addy],#1
+	ldr r0,[r2,r0,lsl#2]
+	ldr r1,[r2,r1,lsl#2]
+	orr r0,r0,r1,lsl#1
+	str r0,[r6],#4
+	str r0,[r7],#4
+	subs r3,r3,#1
+	bne copytile2loop
+	bx lr
+
+copytile3
+	mov r3,#8
+copytile3loop
+	ldrb r0,[addy],#1
+	ldrb r1,[addy],#1
+	ldr r0,[r2,r0,lsl#2]
+	ldr r1,[r2,r1,lsl#2]
+	orr r0,r0,r1,lsl#1
+	str r0,[r6],#4
+	str r0,[r7],#4
+	str r0,[r8],#4
+	subs r3,r3,#1
+	bne copytile3loop
+	bx lr
+
 
 ;----------------------------------------------------------------------------
-VRAM_nameD	;(9800-9FFF)    Bloody Hack for Push16.
+;vram_W2
 ;----------------------------------------------------------------------------
-	sub addy,addy,#0x8000
-	stmfd sp!,{addy,lr}
-	bl VRAM_name0
-	ldmfd sp!,{addy,lr}
-	add addy,addy,#1
-	b VRAM_name0
-;	
-;	ldr r2,memmap_tbl+32
-;	ldrb r1,vrambank
-;	tst r1,#1
-;	movne pc,lr  ;hack for GBC mode...
-;	
-;	
-;	sub addy,addy,#1
-;	ldrb r0,[r2,addy]!	;read 1st char
-;	ldrb r1,[r2,#1]		;read 2nd char
+;	mov addy,addy,lsr#16
+;	cmp addy,#0x9800
+;	bpl VRAM_nameD
+
+;----------------------------------------------------------------------------
+vram_W
+;----------------------------------------------------------------------------
+	ldr r1,memmap_tbl+32
+	strb r0,[r1,addy]
+vram_W2
+	;now mark the tile as dirty
+	ldrb r0,vrambank
+	mov addy,addy,lsr#4
+	add addy,addy,r0,lsl#9
+	ldr r0,=DIRTYTILES-0x800
+	strb r0,[r0,addy]
+	bx lr
+	
+;	sub addy,addy,#0x8000
+;	cmp addy,#0x1800
+;	bpl VRAM_name0
+;;----------------------------------------------------------------------------
+;;VRAM_chr;	8000-97FF
+;;----------------------------------------------------------------------------
+;	bic addy,addy,#1
+;	ldrb r0,[r2,addy]!	;read 1st plane
+;	ldrb r1,[r2,#1]		;read 2nd plane
 ;
-;	ldr r2,agb_nt0
+;	adr r2,chr_decode
+;	ldr r0,[r2,r0,lsl#2]
+;	ldr r1,[r2,r1,lsl#2]
+;	orr r0,r0,r1,lsl#1
+;
+;	add addy,addy,addy
+
+;;f(2x) =
+;;{
+;;	0...FFF: sprite 0, bg 4000
+;;	1000...1FFF: sprite 1000, bg 5000, bg D000
+;;       2000...2FFF: bg C000
+;;}
+;
+;	ldr r2,agb_vrambank		;AGB BG tileset
+;	tst addy,#0x2000
+;	addeq r1,r2,#0x10000	;0x06010000=OBJ
+;	streq r0,[r1,addy]		;OBJ
+;	addne r2,r2,#0xA000
+;	addeq r2,r2,#0x4000		;0x06004000/8000=BG
+;	str r0,[r2,addy]		;BG
+;
+;	add r2,r2,#0x2000
+;	tst addy,#0x1000
+;	addne r2,r2,#0x6000
+;	strne r0,[r2,addy]		;BG
+;
+;	mov pc,lr
+;;----------------------------------------------------------------------------
+;VRAM_name0	;(9800-9FFF)
+;;----------------------------------------------------------------------------
+;	ldr r2,=XGB_VRAM
+;	ldrb r0,[r2,addy]
+;	add r2,r2,#0x2000
+;	ldrb r1,[r2,addy]
+;	and r2,r1,#0x7
+;	mov r2,r2,lsl#12
+;	orr r0,r0,r2
+;;	and r2,r1,#0x8
+;;	mov r2,r2,lsl#5
+;;	orr r0,r0,r2
+;;	and r2,r1,#0x60
+;;	mov r2,r2,lsl#5
+;;	orr r0,r0,r2
+;	and r2,r1,#0x68
+;	mov r2,r2,lsl#5
+;	orr r0,r0,r2
+;	orr r0,r0,#0x00008200
+;
+;;gbc byte 2
+;;  Bit 0-2  Background Palette number  (BGP0-7)
+;;  Bit 3    Tile VRAM Bank number      (0=Bank 0, 1=Bank 1)
+;;  Bit 4    Not used
+;;  Bit 5    Horizontal Flip            (0=Normal, 1=Mirror horizontally)
+;;  Bit 6    Vertical Flip              (0=Normal, 1=Mirror vertically)
+;;  Bit 7    BG-to-OAM Priority         (0=Use OAM priority bit, 1=BG Priority)
+;
+;;gba format
+;;  0-9   Tile Number     (0-1023)
+;;  10    Horizontal Flip (0=Normal, 1=Mirrored)
+;;  11    Vertical Flip   (0=Normal, 1=Mirrored)
+;;  12-15 Palette Number  (0-15)    (Not used in 256 color/1 palette mode)
+;	
+;;	ldrb r1,vrambank
+;;	tst r1,#1
+;;	movne pc,lr  ;hack for GBC mode...
+;
+;
+;;bg nt1         0x06009000
+;;bg nt2         0x06009800
+;;bg col0 nt1    0x0600A000
+;;bg col0 nt2    0x0600A800
+;;
+;;win nt1        0x06001000
+;;win nt2        0x06001800
+;;win col0 nt1   0x06002000
+;;win col0 nt2   0x06002800
+;
+;	ldr r2,=AGB_BG1
+;	and r1,r1,#0x07
+;	add r1,r1,#0x01
+;	
 ;	bic addy,addy,#0xf800	;AND $07ff
 ;	add addy,addy,addy	;lsl#1
-;	tst addy,#0x0800	;for WIN color.
-;	addne addy,addy,#0x1800
-;	orr r0,r0,#0x300
-;	orr r1,r1,#0x300
-;	strh r0,[r2,addy]!	;write tile#
-;	strh r1,[r2,#2]		;write tile#
 ;
-;	bic r0,r0,#0x100	;for BG color.
-;	bic r1,r1,#0x100	;for BG color.
-;	add r2,r2,#0x1800
-;	strh r0,[r2]		;write tile#
-;	strh r1,[r2,#2]		;write tile#
+;	strh r0,[r2,addy]	;write tile#
+;	add addy,addy,#0x1000
+;	strh r1,[r2,addy]	;write background tile#
+;	
+;;	;window test - tile 00 is transparent?
+;;	tst r0,#0xFF
+;;	moveq r0,#0
+;;	moveq r1,#0
+;
+;	;for window
+;	sub addy,addy,#0x9000
+;	strh r0,[r2,addy]	;write tile#
+;	add addy,addy,#0x1000
+;	strh r1,[r2,addy]	;write background tile#
+;
 ;	mov pc,lr
+;
+;;----------------------------------------------------------------------------
+;VRAM_nameD	;(9800-9FFF)    Bloody Hack for Push16.
+;;----------------------------------------------------------------------------
+;;	sub addy,addy,#0x8000
+;	stmfd sp!,{addy,lr}
+;	bl VRAM_name0
+;	ldmfd sp!,{addy,lr}
+;	add addy,addy,#1
+;	b VRAM_name0
+;;	
+;;	ldr r2,memmap_tbl+32
+;;	ldrb r1,vrambank
+;;	tst r1,#1
+;;	movne pc,lr  ;hack for GBC mode...
+;;	
+;;	
+;;	sub addy,addy,#1
+;;	ldrb r0,[r2,addy]!	;read 1st char
+;;	ldrb r1,[r2,#1]		;read 2nd char
+;;
+;;	ldr r2,agb_nt0
+;;	bic addy,addy,#0xf800	;AND $07ff
+;;	add addy,addy,addy	;lsl#1
+;;	tst addy,#0x0800	;for WIN color.
+;;	addne addy,addy,#0x1800
+;;	orr r0,r0,#0x300
+;;	orr r1,r1,#0x300
+;;	strh r0,[r2,addy]!	;write tile#
+;;	strh r1,[r2,#2]		;write tile#
+;;
+;;	bic r0,r0,#0x100	;for BG color.
+;;	bic r1,r1,#0x100	;for BG color.
+;;	add r2,r2,#0x1800
+;;	strh r0,[r2]		;write tile#
+;;	strh r1,[r2,#2]		;write tile#
+;;	mov pc,lr
 
 ;----------------------------------------------------------------------------
 
@@ -1428,45 +1499,13 @@ FF69_W	;BCPD - BG Color Palette Data
 	tst r1,#0x80
 	addne r1,r1,#1
 	strneb r1,BCPS_index
+;	adr addy,agb_pal
+;	mov r1,r2,lsr#3
+;	mov r1,r1,lsl#5
+;	and r2,r2,#0x07
+;	add r2,r2,r1
+;	strb r0,[addy,r2]
 	bx lr
-;FF69_W	;BCPD - BG Color Palette Data
-;	ldrb r1,BCPS_index
-;	and r2,r1,#0x3F
-;	ldr addy,=gbc_palette
-;	add addy,addy,r2
-;	ldrb r2,[addy]
-;	strb r0,[addy]
-;	tst r1,#0x80
-;	addne r1,r1,#1
-;	strneb r1,BCPS_index
-;	and r1,r1,#0x3E
-;in_ff69
-;	cmp r2,r0
-;	bxeq lr
-;store_palette
-;	ldr addy,=gbc_palette
-;	ldr r0,scanline
-;	add r0,r0,#8
-;	orr r0,r0,r1,lsl#8
-;	ldrh r2,[addy,r1]
-;	orr r0,r0,r2,lsl#16
-;	ldr addy,=palrptr
-;	ldr r1,[addy],#4
-;	ldr r2,[addy]
-;	cmp r1,r2
-;	ldr r1,=palbuff
-;	str r0,[r1,r2]
-;	add r2,r2,#4
-;	bic r2,r2,#0x200
-;	str r2,[addy]
-;	bxne lr
-;	ldr r1,=REG_BASE+REG_DISPSTAT
-;	ldrh r2,[r1]
-;	bic r2,r2,#0xFF00
-;	and r0,r0,#0xFF
-;	orr r2,r2,r0,lsl#8
-;	strh r2,[r1]
-;	bx lr
 FF6A_W	;OCPS - OBJ Color Palette Specification
 	strb r0,OCPS_index
 	bx lr
@@ -1478,27 +1517,13 @@ FF6B_W	;OCPD - OBJ Color Palette Data
 	tst r1,#0x80
 	addne r1,r1,#1
 	strneb r1,OCPS_index
+;	adr addy,agb_pal+256
+;	mov r1,r2,lsr#3
+;	mov r1,r1,lsl#5
+;	and r2,r2,#0x07
+;	add r2,r2,r1
+;	strb r0,[addy,r2]
 	bx lr
-;FF6B_W	;OCPD - OBJ Color Palette Data
-;	ldrb r1,OCPS_index
-;	and r2,r1,#0x3F
-;	ldr addy,=gbc_palette+64
-;	add addy,addy,r2
-;	ldrb r2,[addy]
-;	strb r0,[addy]
-;	tst r1,#0x80
-;	addne r1,r1,#1
-;	strneb r1,OCPS_index
-;	and r1,r1,#0x3E
-;	add r1,r1,#0x40
-;	b in_ff69
-;;	adr addy,agb_pal+256
-;;	mov r1,r2,lsr#3
-;;	mov r1,r1,lsl#5
-;;	and r2,r2,#0x07
-;;	add r2,r2,r1
-;;	strb r0,[addy,r2]
-;;	bx lr
 
 oambuffer	DCD OAM_BUFFER1,OAM_BUFFER2
 dmaoambuffer	DCD OAM_BUFFER2
@@ -1528,6 +1553,7 @@ dmaoambuffer	DCD OAM_BUFFER2
 ;agb_nt2 DCD 0
 ;agb_nt3 DCD 0
 
+agb_pal		% 256*2	;copy this to real AGB palette every frame
 gbc_palette	% 128	;CGB $FF68-$FF6D???
 
 scrollbuff	DCD SCROLLBUFF1
@@ -1562,7 +1588,7 @@ lcdstate
 	DCB 0 ;palette_index
 	DCB 0
 	DCD 0 ;dma_src
-	DCD 0 ;agb_vrambank
+;	DCD 0 ;agb_vrambank
 ;...update load/savestate if you move things around in here
 ;----------------------------------------------------------------------------
 	END

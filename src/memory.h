@@ -8,8 +8,10 @@
 	IMPORT mem_R80
 	IMPORT mem_RA0
 	IMPORT mem_RC0
+	IMPORT mem_RC0_2
 	IMPORT sram_W
 	IMPORT sram_W2
 	IMPORT wram_W
+	IMPORT wram_W_2
 	IMPORT filler_
 	END

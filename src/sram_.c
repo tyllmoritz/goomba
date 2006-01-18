@@ -1,4 +1,6 @@
-#include "includes.h"
+#include <string.h>
+#include "gba.h"
+#include "minilzo.107/minilzo.h"
 
 #define STATEID 0x57a731d8
 
@@ -7,15 +9,6 @@
 #define CONFIGSAVE 2
 #define MBC_SAV 2
 
-int totalstatesize;		//how much SRAM is used
-u32 sram_owner=0;
-
-u8 *buffer1;
-u8 *buffer2;
-u8 *buffer3;
-
-
-/*
 extern u8 Image$$RO$$Limit;
 extern u8 g_cartflags;	//(from GB header)
 extern int bcolor;		//Border Color
@@ -26,8 +19,12 @@ extern u8 stime;		//from ui.c
 extern u8 autostate;	//from ui.c
 extern u8 *textstart;	//from main.c
 
+int buffer1_clean;
+
 extern char pogoshell;	//main.c
 
+int totalstatesize;		//how much SRAM is used
+u32 sram_owner=0;
 //-------------------
 u8 *findrom(int);
 void cls(int);		//main.c
@@ -74,8 +71,11 @@ typedef struct {		//(modified stateheader)
 	u32 zero;	//=0
 	char reserved4[32];  //="CFG"
 } configdata;
-*/
 
+//we have a big chunk of memory starting at Image$$RO$$Limit free to use
+u8 *buffer1;
+u8 *buffer2;
+u8 *buffer3;
 
 void bytecopy(u8 *dst,u8 *src,int count) {
 	int i=0;
@@ -115,10 +115,14 @@ void flush_xgb_sram()
 	}
 }
 
+u8* getbuffer1()
+{
+	buffer1_clean=0;
+	return buffer1;
+}
 
-void getsram() {		//copy GBA sram to BUFFER1
+void getsram_main(u8* buff1) {		//copy GBA sram to BUFFER1
 	u8 *sram=MEM_SRAM;
-	u8 *buff1=buffer1;
 	u32 *p;
 
 	p=(u32*)buff1;
@@ -130,6 +134,16 @@ void getsram() {		//copy GBA sram to BUFFER1
 		}
 	}
 }
+u8* getsram()
+{
+	if (!buffer1_clean)
+	{
+		getsram_main(buffer1);
+		buffer1_clean=1;
+	}
+	return buffer1;
+}
+
 
 //quick & dirty rom checksum
 u32 checksum(u8 *p) {
@@ -143,19 +157,13 @@ u32 checksum(u8 *p) {
 }
 
 void writeerror() {
+//need to check this
 	int i;
 	cls(2);
-	make_ui_visible();
-	ui_x=256;
-	ui_y=0;
-	move_ui();
 	drawtext(32+9,"  Write error! Memory full.",0);
-	drawtext(32+10,"     Delete some saves.",0);
+	drawtext(32+10,"     Delete some games.",0);
 	for(i=90;i;--i)
-	{
-		make_ui_visible();
 		waitframe();
-	}
 }
 
 //(BUFFER1=copy of GBA SRAM, BUFFER3=new data)
@@ -169,12 +177,14 @@ int updatestates(int index,int erase,int type) {
 	int i;
 	int srcsize;
 	int total=totalstatesize;
-	u8 *src=buffer1;
+	u8 *src;
 	u8 *dst;
 	u8 *newdst;
-//	u8 *mem_end=buffer1+0xE000;
 	stateheader *newdata=(stateheader*)buffer3;
 
+	get_sram_if_necessary();
+	src=buffer1;
+	
 	src+=4;//skip STATEID
 
 	//skip ahead to where we want to write
@@ -280,6 +290,8 @@ stateheader* drawstates(int menutype,int *menuitems,int *menuoffset) {
 	stateheader *selectedstate;
 	int time;
 	int selectedstatesize;
+	
+	get_sram_if_necessary();
 	stateheader *sh=(stateheader*)(buffer1+4);
 
 	type=(menutype==SRAMMENU)?SRAMSAVE:STATESAVE;
@@ -375,7 +387,7 @@ void managesram() {
 	int menuitems;
 	int offset=0;
 
-	getsram();
+	buffer1_clean=0;
 
 	selected=0;
 	drawstates(SRAMMENU,&menuitems,&offset);
@@ -400,11 +412,15 @@ void savestatemenu() {
 	int i;
 	int menuitems;
 	int offset=0;
+	u8* savebuf1;
+	
 	
 	SAVE_FORBIDDEN;
 
+	savebuf1=getbuffer1();
+
 	i=savestate(buffer2);
-	compressstate(i,STATESAVE,buffer2,buffer1);
+	compressstate(i,STATESAVE,buffer2,savebuf1);
 
 	getsram();
 
@@ -432,9 +448,10 @@ int findstate(u32 checksum,int type,stateheader **stateptr) {
 //need to check this
 	int state,size,foundstate,total;
 	stateheader *sh;
+	u8* buf1;
 
-	getsram();
-	sh=(stateheader*)(buffer1+4);
+	buf1=getsram();
+	sh=(stateheader*)(buf1+4);
 
 	state=-1;
 	foundstate=-1;
@@ -486,21 +503,19 @@ void quickload() {
 void quicksave() {
 	stateheader *sh;
 	int i;
+	u8* buf1;
+	buf1=getbuffer1();
 	
 	SAVE_FORBIDDEN;
 
 	if(!using_flashcart())
 		return;
 
-	make_ui_visible();
-	ui_y=0;
-	ui_x=256;
-	move_ui();
 	setdarknessgs(7);	//darken
 	drawtext(32+9,"           Saving.",0);
 
 	i=savestate(buffer2);
-	compressstate(i,STATESAVE,buffer2,buffer1);
+	compressstate(i,STATESAVE,buffer2,buf1);
 	i=findstate(checksum((u8*)romstart),STATESAVE,&sh);
 	if(i<0) i=65536;	//make new save if one doesn't exist
 	if(!updatestates(i,0,STATESAVE))
@@ -508,7 +523,7 @@ void quicksave() {
 	cls(2);
 }
 
-int backup_gb_sram(int called_from)
+void backup_gb_sram(int called_from)
 {
 //need to check this
 	int i=0;
@@ -516,13 +531,12 @@ int backup_gb_sram(int called_from)
 	stateheader *sh;
 	lzo_uint compressedsize;
 
-	u32 chk = checksum((u8*)romstart);
-	
 	if(!using_flashcart())
-		return 1;
+		return;
 	
 	if (called_from==1 && g_sramsize==3) //called from UI and 32K sram size
 	{
+		u32 chk = checksum((u8*)romstart);
 		i=findstate(chk,SRAMSAVE,&sh);//find out where to save
 		if(i>=0)
 		{
@@ -531,23 +545,13 @@ int backup_gb_sram(int called_from)
 			sh=(stateheader*)buffer3;
 			sh->size=(compressedsize+sizeof(stateheader)+3)&~3;	//size of compressed state+header, word aligned
 			sh->uncompressed_size=0x8000;	//size of compressed state
-			if (!updatestates(i,0,SRAMSAVE))
-			{
-				writeerror();
-				return 0;
-			}
+			updatestates(i,0,SRAMSAVE);
 		}
-		return 1;
+		return;
 	}
 	
 	i=findstate(0,CONFIGSAVE,(stateheader**)&cfg);	//find config
 	
-	
-	if (called_from==1 && chk==sram_owner)
-	{
-		//copy GBX_SRAM to MEM_SRAM, because some instructions don't properly modify GBA SRAM
-		bytecopy(MEM_SRAM+0xE000,XGB_SRAM,0x2000);
-	}
 	
 	if(i>=0 && cfg->sram_checksum) {	//SRAM is occupied?
 		i=findstate(cfg->sram_checksum,SRAMSAVE,&sh);//find out where to save
@@ -561,19 +565,11 @@ int backup_gb_sram(int called_from)
 			sh->size=(compressedsize+sizeof(stateheader)+3)&~3;	//size of compressed state+header, word aligned
 			
 			sh->uncompressed_size=save_size;	//size of compressed state
-			if (!updatestates(i,0,SRAMSAVE))
-			{
-				writeerror();
-				return 0;
-			}
-			else
-			{
-				i=findstate(0,CONFIGSAVE,(stateheader**)&cfg);	//find config
-				no_sram_owner();
-			}
+			updatestates(i,0,SRAMSAVE);
+			i=findstate(0,CONFIGSAVE,(stateheader**)&cfg);	//find config
+			no_sram_owner();
 		}
 	}
-	return 1;
 	
 }
 
@@ -588,7 +584,7 @@ void save_new_sram() {
 	updatestates(65536,0,SRAMSAVE);
 }
 
-void get_saved_sram(void)
+void get_saved_sram(int called_from)
 {
 	int i,j;
 	u32 chk;

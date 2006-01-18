@@ -31,10 +31,12 @@ RamEnable
 	cmp r0,#0x0A
 	adrne r1,empty_W
 	ldreq r1,sramwptr
-	str r1,writemem_tbl+20
+	str r1,writemem_tbl+40
+	str r1,writemem_tbl+44
 	adrne r1,empty_R
 	adreq r1,mem_RA0
-	str r1,readmem_tbl+20
+	str r1,readmem_tbl+40
+	str r1,readmem_tbl+44
 	ldrb r0,mapperdata+4		;rambank
 	b mapAB_
 
@@ -128,7 +130,8 @@ mbc3bank
 	tst r0,#8
 	beq RamSelect
 	adr r1,empty_W
-	str r1,writemem_tbl+20
+	str r1,writemem_tbl+40
+	str r1,writemem_tbl+44
 	adr r1,empty_R
 	cmp r0,#0x8
 	adreq r1,clk_sec
@@ -140,7 +143,8 @@ mbc3bank
 	adreq r1,clk_dayL
 	cmp r0,#0xC
 	adreq r1,clk_dayH
-	str r1,readmem_tbl+20
+	str r1,readmem_tbl+40
+	str r1,readmem_tbl+44
 	mov pc,lr
 
 ;------------------------------

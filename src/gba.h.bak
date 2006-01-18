@@ -3,15 +3,11 @@
 
 #define SAVE_FORBIDDEN return;
 
+
+
 typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned long u32;
-
-typedef int bool;
-
-typedef signed char s8;
-typedef signed short s16;
-typedef signed long s32;
 
 typedef volatile unsigned char vu8;
 typedef volatile unsigned short vu16;
@@ -19,15 +15,11 @@ typedef volatile unsigned long vu32;
 
 typedef void (*fptr)(void);
 
-extern u8 g_sramsize;
-
-
-
 #define MEM_PALETTE (u16*)0x5000000
 #define MEM_VRAM (u16*)0x6000000
 #define MEM_OAM (u32*)0x7000000
 #define MEM_SRAM (u8*)0xE000000
-extern u8 XGB_SRAM[32768];
+#define XGB_SRAM (u8*)0x2038000	//from equates.h
 #define INTR_VECT *(u32*)0x3007FFC
 #define SCREENBASE (u16*)0x6003000
 
