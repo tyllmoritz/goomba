@@ -17,9 +17,7 @@ void run(int dont_stop);
 extern u32 op_table[256];
 extern void default_scanlinehook(void);
 extern u32 cpustate[26];
-/*
-extern u8** g_instant_prg_banks;
-*/
+
 extern u8 *rommap[16];
 extern u8 *g_memmap_tbl[16];
 
@@ -51,6 +49,9 @@ extern u8 XGB_SRAM[0x8000];
 extern u8 XGB_VRAM[0x4000];
 extern u8 GBC_EXRAM[0x6000];
 
+extern u8 *XGB_sram, *XGB_vram, *GBC_exram, *END_of_exram;
+extern u32 XGB_sramsize,XGB_vramsize,GBC_exramsize;
+
 //apack.s
 void depack(u8 *source, u8 *destination);
 
@@ -59,6 +60,12 @@ extern u32 font;				//from boot.s
 extern u32 fontpal;				//from boot.s
 
 //cart.s
+
+extern u8* INSTANT_PAGES[256];
+
+extern u32 g_rammask;
+extern u8 g_banks[2];
+
 void loadcart(int rom_number,int emu_flags);			//from cart.s
 void map0123_(int page);
 void map4567_(int page);

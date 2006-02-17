@@ -1,4 +1,4 @@
-Goomba Color (Alpha 4)  01-18-2006
+Goomba Color (Alpha 6)  02-17-2006
 -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 By Dwedit (Dan Weiss)
 Based on Goomba 2.30 by Flubba
@@ -12,7 +12,7 @@ Alpha Version
 This is an alpha version of Goomba Color, based on Goomba 2.30.
 
 Stay tuned for updates that are coming soon!  If you downloaded this version
-after January 28, 2006, go get a new version!
+after March 17, 2006, go get a new version!
 http://www.pocketheaven.com/boards/viewforum.php?f=29
 
 Known Issues:

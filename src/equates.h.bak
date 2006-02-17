@@ -28,8 +28,16 @@ MAPPED_RGB		EQU speedhacks-16*4	;mapped GB palette.
 	|
 MAPPED_RGB		EQU GBC_EXRAM-16*4	;mapped GB palette.
 	]
-palbuff			EQU MAPPED_RGB - 512
-DISPCNTBUFF		EQU palbuff-164*4
+;palbuff			EQU MAPPED_RGB - 512
+
+INSTANT_PAGES EQU MAPPED_RGB-1024
+openFiles       EQU INSTANT_PAGES-1200
+lfnName			EQU openFiles-256
+fatWriteBuffer	EQU lfnName-512
+globalBuffer    EQU fatWriteBuffer-512
+
+;10664 bytes for these:
+DISPCNTBUFF		EQU INSTANT_PAGES-164*2
 BG0CNTBUFF		EQU DISPCNTBUFF-164*8
 SCROLLBUFF1		EQU BG0CNTBUFF-160*16
 SCROLLBUFF2		EQU SCROLLBUFF1-160*16
@@ -176,8 +184,8 @@ timerctrl # 1
 stctrl # 1
 debugstop # 1 ;align
 nexttimeout # 4
-scanline # 4
 scanlinehook # 4
+scanline # 4
 frame # 4
 cyclesperscanline # 4
  [ SPEEDHACKS
@@ -232,8 +240,9 @@ rammask # 4
 
 cartflags # 1
 sramsize # 1
+bank0 # 1
+bank1 # 1
 
- # 2 ;align
 
 ;----------------------------------------------------------------------------
 ;IRQ_VECTOR EQU 0xfffe ; IRQ/BRK interrupt vector address
@@ -267,6 +276,10 @@ BRANCH			EQU 0x01 ;branch instruction encountered
 ;				EQU 0x04
 ;				EQU 0x08
 CYC_MASK		EQU CYCLE-1	;Mask
+
+SINGLE_SPEED EQU 456*CYCLE
+DOUBLE_SPEED EQU 912*CYCLE
+
 ;----------------------------------------------------------------------------
 
 		END

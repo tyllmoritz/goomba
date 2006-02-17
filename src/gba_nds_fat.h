@@ -135,6 +135,7 @@ This idea is based on a modification by MoonShine
 u32 return OUT: the file size
 -----------------------------------------------------------------*/
 u32 FAT_GetFileSize (void);
+//u32 FAT_GetFileCluster (void);
 
 /*-----------------------------------------------------------------
 FAT_GetFileCluster

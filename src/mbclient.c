@@ -1,3 +1,5 @@
+#include "includes.h"
+
 //based on Jeff Frohwein's slave boot demo:
 //http://www.devrs.com/gba/files/mbclient.txt
 
@@ -11,9 +13,8 @@ extern u8 Image$$ZI$$Base;
 extern u32 romnum;	//from cart.s
 extern u8 *textstart;	//from main.c
 
-extern int pogoshell;
 
-u32 max_multiboot_size;		//largest possible multiboot transfer (init'd by boot.s)
+//extern char pogoshell;
 
 typedef struct {
   u32 reserve1[5];      //

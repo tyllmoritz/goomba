@@ -2287,6 +2287,7 @@ int FAT_fseek(int file, u32 offset, int origin)
    return position;
 }
 
+/*
 long int FAT_GetFileSize(int file)
 {
 	if ((file < 0) || (file >= MAX_FILES_OPEN) || (openFiles[file].inUse == false))	// invalid file
@@ -2295,7 +2296,23 @@ long int FAT_GetFileSize(int file)
 	}
 	return openFiles[file].length;
 }
-
+*/
+u32 FAT_GetFileSize (void)
+{
+	// Read in the last accessed directory entry
+	CF_ReadSector ((wrkDirCluster == FAT16_ROOT_DIR_CLUSTER ? discRootDir : FAT_ClustToSect(wrkDirCluster)) + wrkDirSector, globalBuffer);
+	
+	return 	((DIR_ENT*)globalBuffer)[wrkDirOffset].fileSize;
+}
+/*
+u32 FAT_GetFileCluster (void)
+{
+	// Read in the last accessed directory entry
+	CF_ReadSector ((wrkDirCluster == FAT16_ROOT_DIR_CLUSTER ? discRootDir : FAT_ClustToSect(wrkDirCluster)) + wrkDirSector, globalBuffer);
+	
+	return 	((DIR_ENT*)globalBuffer)[wrkDirOffset].startCluster | ((((DIR_ENT*)globalBuffer)[wrkDirOffset].startClusterHigh)<<16) ;
+}
+*/
 
 
 /*-----------------------------------------------------------------

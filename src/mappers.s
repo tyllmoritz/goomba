@@ -6,8 +6,9 @@
 	INCLUDE cart.h
 	INCLUDE io.h
 
+ [ RUMBLE
 	IMPORT DoRumble
-
+ ]
 	EXPORT mbc0init
 	EXPORT mbc1init
 	EXPORT mbc2init
@@ -195,9 +196,10 @@ MBC5RAMB
 	strb r0,mapperdata+4
 ;	tst r0,#0x08		;rumble motor.
 	and r0,r0,#0x8
+ [ RUMBLE
 	ldr r1,=DoRumble
 	str r0,[r1]
-
+ ]
 	b RamSelect
 
 ;----------------------------------------------------------------------------

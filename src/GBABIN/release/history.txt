@@ -1,5 +1,12 @@
 Goomba revision history
 -=-=-=-=-=-=-=-=-=-=-=-
+Alpha 6 - 2006-02-17 (Dwedit)
+   Fixed MBC2 SRAM bugs
+
+Alpha 5 - 2006-01-31 (Dwedit)
+   Supports roms trimmed bank by bank (in non-GBAMP version)
+   GBAMP version, with lots of aggressive memory management tweaks to increase performance
+
 Alpha 4 - 2006-01-18 (Dwedit)
    If the SRAM is full on bootup, the user can now delete files to
      avoid losing the latest save, or hit B to cancel.

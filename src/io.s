@@ -27,6 +27,9 @@
 	EXPORT gbpadress
 	EXPORT OAMfinish
 	EXPORT _FF70W
+ [ RESIZABLE
+	IMPORT add_exram
+ ]
 
 
  AREA rom_code, CODE, READONLY ;-- - - - - - - - - - - - - - - - - - - - - -
@@ -161,9 +164,9 @@ RTCLoop3
 ;----------------------------------------------------------------------------
 IO_R		;I/O read
 ;----------------------------------------------------------------------------
+	and r2,addy,#0xFF
 	cmp addy,#0xFF00
 	bmi OAM_R	;OAM, C000-DCFF mirror.
-	and r2,addy,#0xFF
 ;----------------------------------------------------------------------------
 IO_High_R	;I/O read
 ;----------------------------------------------------------------------------
@@ -322,16 +325,16 @@ OAM_W
 	movpl pc,lr
 	sub addy,addy,#0x2000		;C000-DCFF mirror.
 	b wram_W
-rtexten
-	DCB "Read from OAM.",0x0a,0x00
-wtexten
-	DCB "Wrote to OAM.",0x0a,0x00,0x00
+;rtexten
+;	DCB "Read from OAM.",0x0a,0x00
+;wtexten
+;	DCB "Wrote to OAM.",0x0a,0x00,0x00
 ;----------------------------------------------------------------------------
 IO_W		;I/O write
 ;----------------------------------------------------------------------------
+	and r2,addy,#0xFF
 	cmp addy,#0xFF00
 	bmi OAM_W	;OAM, C000-DCFF mirror.
-	and r2,addy,#0xFF
 ;----------------------------------------------------------------------------
 IO_High_W	;I/O write
 ;----------------------------------------------------------------------------
@@ -557,11 +560,29 @@ _FF70W;		SVBK - CGB Mode Only - WRAM Bank
 	str r1,memmap_tbl+52
 	mov pc,lr
 select_gbc_ram
+ [ RESIZABLE
+	ldr r1,gbc_exram
+	subs r1,r1,#0xD000+0x2000
+	bmi add_exram_
+ |	
 	ldr r1,=GBC_EXRAM-0xD000-0x2000
+ ]
 	add r1,r1,r0,lsl#12
 	;D000
 	str r1,memmap_tbl+52
 	mov pc,lr
+ [ RESIZABLE
+add_exram_
+	stmfd sp!,{r0-addy,lr}
+	ldr r1,=add_exram
+	bl thumbcall_r1
+	ldmfd sp!,{r0-addy,lr}
+	ldr r1,lastbank
+	sub gb_pc,gb_pc,r1
+	encodePC
+	b select_gbc_ram
+ ]
+
 ;----------------------------------------------------------------------------
 _FF70R;		SVBK - CGB Mode Only - WRAM Bank
 ;----------------------------------------------------------------------------

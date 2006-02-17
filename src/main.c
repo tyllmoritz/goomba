@@ -1,5 +1,12 @@
 #include "includes.h"
 
+#if MOVIEPLAYER
+int usinggbamp;
+int usingcache;
+File rom_file=NO_FILE;
+char save_slot;
+#endif
+
 u32 oldinput;
 u8 *textstart;//points to first GB rom (initialized by boot.s)
 int roms;//total number of roms
@@ -7,28 +14,45 @@ int selectedrom=0;
 int ui_visible=0;
 int ui_x=0;
 int ui_y=0;
+#if POGOSHELL
 char pogoshell_romname[32];	//keep track of rom name (for state saving, etc)
-char rtc=0;
 char pogoshell=0;
+#endif
+char rtc=0;
 char gameboyplayer=0;
 char gbaversion;
+u32 max_multiboot_size;		//largest possible multiboot transfer (init'd by boot.s)
+
+#define TRIM 0x4D495254
 
 //82048 is an upper bound on the save state size
 //The formula is an upper bound LZO estimate on worst case compression
 //#define WORSTCASE ((82048)+(82048)/64+16+4+64)
 
+void loadfont()
+{
+	LZ77UnCompVram(&font,(u16*)0x600C400);
+	
+	
+}
+
+
 void C_entry()
 {
 	int i,j;
 	vu16 *timeregs=(u16*)0x080000c8;
+#if POGOSHELL
 	u32 temp=(u32)(*(u8**)0x0203FBFC);
 	pogoshell=((temp & 0xFE000000) == 0x08000000)?1:0;
+#endif
 	*timeregs=1;
 	if(*timeregs & 1) rtc=1;
 	gbaversion=CheckGBAVersion();
 	vblankfptr=&vbldummy;
 //	vcountfptr=&vbldummy;
+#if RUMBLE
 	SerialIn = 0;
+#endif
 
 	//clear VRAM
 	memset((void*)0x06000000,0,0x18000);
@@ -37,10 +61,13 @@ void C_entry()
 	GFX_init();
 
 	// The maximal space
+#if CARTSRAM
 	buffer1=(&Image$$RO$$Limit);
 	buffer2=(&Image$$RO$$Limit+0x10000);
 	buffer3=(&Image$$RO$$Limit+0x20000);
+#endif
 
+#if POGOSHELL
 	if(pogoshell){
 		char *d=(char*)0x203fc08;
 		do d++; while(*d);
@@ -53,24 +80,51 @@ void C_entry()
 		memcpy(pogoshell_romname,d,32);
 	}
 	else
+#endif
 	{
 		int gbx_id=0x6666edce;
 		u8 *p;
+		u8 *q;
 
+#if MOVIEPLAYER
+		if (!disc_IsInserted())
+		{
+#endif
+#ifdef SPLASH
 		//splash screen present?
-		if(*(u32*)(textstart+0x104)!=gbx_id) {
+		p=textstart;
+#if USETRIM
+		if(*((u32*)p)==TRIM) p+=((u32*)p)[2];
+#endif
+		if(*(u32*)(p+0x104)!=gbx_id) {
 			splash();
 			textstart+=76800;
 		}
+#endif	
 
-		i=0;
+		i=-1;
 		p=textstart;
-		while(*(u32*)(p+0x104)==gbx_id) {	//count roms
-			p+=(0x8000<<(*(p+0x148)));
+		do
+		{
+#if USETRIM
+			if(*((u32*)p)==TRIM)
+			{
+				q=p+((u32*)p)[2];
+				p=p+((u32*)p)[1];
+			}
+			else
+#endif
+			{
+				q=p;
+				p+=(0x8000<<(*(p+0x148)));
+			}
 			i++;
-		}
+		} while (*(u32*)(q+0x104)==gbx_id);
 		if(!i)i=1;					//Stop Goomba from crashing if there are no ROMs
 		roms=i;
+#if MOVIEPLAYER
+		}
+#endif
 	}
 	//make 16 solid tiles
 	{
@@ -98,15 +152,20 @@ void C_entry()
 	REG_DISPCNT=0;					//screen ON, MODE0
 	vblankfptr=&vblankinterrupt;
 //	vcountfptr=&vcountinterrupt;
+#if CARTSRAM
 	lzo_init();	//init compression lib for savestates
+#endif
 
 	//load font+palette
-	LZ77UnCompVram(&font,(u16*)0x6000400);
+	loadfont();
 	memcpy((void*)0x5000080,&fontpal,64);
+#if CARTSRAM
 	readconfig();
+#endif
 	rommenu();
 }
 
+#if SPLASH
 //show splash screen
 void splash()
 {
@@ -123,35 +182,102 @@ void splash()
 	}
 	for(i=0;i<150;i++) {	//wait 2.5 seconds
 		waitframe();
-		if (REG_P1==0x030f){
+		if (REG_P1==0x030f)
+		{
 			gameboyplayer=1;
 			gbaversion=3;
 		}
 	}
 }
+#endif
+
+#if MOVIEPLAYER
+int get_saved_sram_CF(char* sramname)
+{
+	if(g_cartflags&2 && g_rammask!=0)
+	{	//if rom uses SRAM
+		File file;
+		file=FAT_fopen(sramname,"r");
+		if (file!=NO_FILE)
+		{
+			FAT_fread(XGB_sram,1,g_rammask+1,file);
+			FAT_fclose(file);
+		}
+		return 1;
+	}
+	return 0;
+}
+int save_sram_CF(char* sramname)
+{
+	if(g_cartflags&2 && g_rammask!=0)
+	{	//if rom uses SRAM
+		File file;
+		file=FAT_fopen(sramname,"r+");
+		if (file==NO_FILE)
+			file=FAT_fopen(sramname,"w");
+		if (file!=NO_FILE)
+		{
+			FAT_fwrite(XGB_sram,1,g_rammask+1,file);
+			FAT_fclose(file);
+		}
+		return 1;
+	}
+	return 0;
+}
+#endif
 
 void rommenu(void)
 {
 	cls(3);
 	ui_x=0x100;
-	move_ui();
+
 	setdarknessgs(16);
 	resetSIO((joycfg&~0xff000000) + 0x40000000);//back to 1P
 	
+#if MOVIEPLAYER
+	usingcache=MOVIEPLAYERDEBUG;
+	usinggbamp=0;
+#endif
+	
 	make_ui_visible();
+#if CARTSRAM
 	if (!backup_gb_sram(0))
 	{
 		ui();
 		make_ui_visible();
 		backup_gb_sram(0);
 	}
+#endif
 
+#if MOVIEPLAYER
+	if (disc_IsInserted())
+	{
+		File file;
+		usinggbamp=1;
+		if (rom_file!=NO_FILE)
+		{
+			FAT_fclose(rom_file);
+		}
+		file=cfmenu();
+		rom_file=file;
+		cls(3);
+		
+		loadcart(0,g_emuflags&0x300);
+		get_saved_sram_CF(SramName);
+	}
+	else
+#endif
+
+#if POGOSHELL
 	if(pogoshell)
 	{
 		loadcart(0,g_emuflags&0x300);
+#if CARTSRAM
 		get_saved_sram();
+#endif
 	}
 	else
+#endif
 	{
 		int i,lastselected=-1;
 		int key;
@@ -164,7 +290,9 @@ void rommenu(void)
 		if(romz>1){
 			i=drawmenu(sel);
 			loadcart(sel,i|(g_emuflags&0x300));  //(keep old gfxmode)
+#if CARTSRAM
 			get_saved_sram();
+#endif
 			lastselected=sel;
 			for(i=0;i<8;i++)
 			{
@@ -192,7 +320,9 @@ void rommenu(void)
 			if(lastselected!=sel) {
 				i=drawmenu(sel);
 				loadcart(sel,i|(g_emuflags&0x300));  //(keep old gfxmode)
+#if CARTSRAM
 				get_saved_sram();
+#endif
 				lastselected=sel;
 			}
 			run(0);
@@ -210,17 +340,46 @@ void rommenu(void)
 			run(0);
 		}
 	}
+#if CARTSRAM
 	if(autostate)quickload();
+#endif
 	make_ui_invisible();
 	run(1);
 }
 
-//return ptr to Nth ROM (including rominfo struct)
-u8 *findrom(int n)
+u8 *findrom2(int n)
 {
 	u8 *p=textstart;
+#if POGOSHELL
 	while(!pogoshell && n--)
+#else
+	while(n--)
+#endif
+	{
+#if USETRIM
+		if (*((u32*)p)==TRIM) //trimmed
+		{
+			p+=((u32*)p)[1];
+		}
+		else
+		{
+			p+=(0x8000<<(*(p+0x148)));
+		}
+#else
 		p+=(0x8000<<(*(p+0x148)));
+#endif
+	}
+	return p;
+}
+u8 *findrom(int n)
+{
+	u8 *p=findrom2(n);
+#if USETRIM
+	if (*((u32*)p)==TRIM) //trimmed
+	{
+		p+=((u32*)p)[2];
+	}
+#endif
 	return p;
 }
 
@@ -239,14 +398,15 @@ int drawmenu(int sel)
 		toprow=0;
 		j=roms;
 	}
-	p=findrom(toprow);
-	for(i=0;i<j;i++) {
+
+	for(i=0;i<j;i++)
+	{
+		p=findrom(toprow+i);
 		if(roms>1)drawtextl(i,(char*)p+0x134,i==(sel-toprow)?1:0,15);
 		if(i==sel-toprow) {
 			//ri=(romheader*)p;
 			//romflags=(*ri).flags|(*ri).spritefollow<<16;
 		}
-		p+=(0x8000<<(*(p+0x148)));
 	}
 	if(roms>20)
 	{
@@ -332,13 +492,19 @@ void setbrightnessall(int light)
 void make_ui_visible()
 {
 	ui_visible=1;
+	loadfont();
+	cls(3);
 	REG_WININ=0x3D3A;  //BG3 visible regardless of window
 	REG_WINOUT=0x3F28; //BG3 visible outside of window
 	move_ui();
 }
+
 void make_ui_invisible()
 {
 	ui_visible=0;
 	REG_WININ=0x353A;  //settings back to normal
 	REG_WINOUT=0x3F20; 
+#if MOVIEPLAYER
+	reload_vram_page1();
+#endif
 }
