@@ -131,6 +131,28 @@ void getsram() {		//copy GBA sram to BUFFER1
 	}
 }
 
+#if USETRIM
+//quick & dirty rom checksum
+u32 checksum(u8 *p) {
+	u32 sum=0;
+	int i;
+	u32 addthis;
+	u8* end=(u8*)INSTANT_PAGES[1];
+	u8 endchar=end[-1];
+	for(i=0;i<128;i++) {
+		if (p<end)
+		{
+			sum+=*p|(*(p+1)<<8)|(*(p+2)<<16)|(*(p+3)<<24);
+		}
+		else
+		{
+			sum+=endchar|(endchar<<8)|(endchar<<16)|(endchar<<24);
+		}
+		p+=128;
+	}
+	return sum;
+}
+#else
 //quick & dirty rom checksum
 u32 checksum(u8 *p) {
 	u32 sum=0;
@@ -141,6 +163,7 @@ u32 checksum(u8 *p) {
 	}
 	return sum;
 }
+#endif
 
 void writeerror() {
 	int i;
@@ -359,11 +382,13 @@ void compressstate(lzo_uint size,u16 type,u8 *src,void *workspace)
 	sh->uncompressed_size=size;	//size of compressed state
 	sh->framecount=frametotal;
 	sh->checksum=checksum((u8*)romstart);	//checksum
+#if POGOSHELL
     if(pogoshell)
     {
 		strcpy(sh->title,pogoshell_romname);
     }
     else
+#endif
     {
 		strncpy(sh->title,(char*)findrom(romnum)+0x134,15);
     }
@@ -466,6 +491,13 @@ void uncompressstate(int rom,stateheader *sh) {
 }
 
 int using_flashcart() {
+#if MOVIEPLAYER
+	if (usingcache)
+	{
+		return 0;
+	}
+#endif
+
 	return (u32)textstart&0x8000000;
 }
 

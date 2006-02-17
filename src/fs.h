@@ -1,7 +1,7 @@
 #ifndef __FS_H__
 #define __FS_H__
 
-#define using_new_driver 1
+#define using_new_driver 0
 
 #if !using_new_driver
 
@@ -10,8 +10,8 @@ typedef int File;
 #define FAT_chdir(xxxx) FAT_CWD(xxxx)
 #define NO_FILE -1
 #define disc_IsInserted() CF_IsInserted()
-#define FAT_FindNextFileLFN() FAT_FindNextFile()
-#define FAT_FindFirstFileLFN() FAT_FindFirstFile()
+#define FAT_FindNextFileLFN(xxxx) FAT_FindNextFile(xxxx)
+#define FAT_FindFirstFileLFN(xxxx) FAT_FindFirstFile(xxxx)
 
 typedef struct {
 	u32 firstCluster;

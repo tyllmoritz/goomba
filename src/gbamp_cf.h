@@ -165,7 +165,9 @@ int file: IN handle of an open file
 long int OUT: Current position
 -----------------------------------------------------------------*/
 long int FAT_ftell (int file);
-long int FAT_GetFileSize(int file);
+
+u32 FAT_GetFileSize(void);
+//u32 FAT_GetFileCluster (void);
 
 /*-----------------------------------------------------------------
 FAT_fseek(file, offset, origin)

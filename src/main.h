@@ -1,4 +1,17 @@
+#ifndef __MAIN_H__
+#define __MAIN_H__
+
 #include "includes.h"
+#if MOVIEPLAYER
+extern int usinggbamp;
+extern int usingcache;
+extern File rom_file;
+extern char save_slot;
+#endif
+
+#define TRIM 0x4D495254
+
+extern u32 max_multiboot_size;
 
 extern u32 oldinput;
 extern u8 *textstart;//points to first GB rom (initialized by boot.s)
@@ -7,9 +20,12 @@ extern int selectedrom;
 extern int ui_visible;
 extern int ui_x;
 extern int ui_y;
+extern u32 max_multiboot_size;
+#if POGOSHELL
 extern char pogoshell_romname[32];	//keep track of rom name (for state saving, etc)
-extern char rtc;
 extern char pogoshell;
+#endif
+extern char rtc;
 extern char gameboyplayer;
 extern char gbaversion;
 
@@ -17,6 +33,10 @@ extern char gbaversion;
 
 void C_entry(void);
 void splash(void);
+#if MOVIEPLAYER
+int get_saved_sram_CF(char* sramname);
+int save_sram_CF(char* sramname);
+#endif
 void rommenu(void);
 u8 *findrom(int n);
 int drawmenu(int sel);
@@ -28,3 +48,5 @@ void setdarknessgs(int dark);
 void setbrightnessall(int light);
 void make_ui_visible(void);
 void make_ui_invisible(void);
+
+#endif

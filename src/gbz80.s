@@ -15,9 +15,11 @@
 
 	EXPORT XGB_RAM
 	EXPORT XGB_HRAM
-	EXPORT XGB_SRAM
+ [ RESIZABLE
+ |
 	EXPORT XGB_VRAM
 	EXPORT GBC_EXRAM
+ ]
 	
 	EXPORT emu_reset
 	EXPORT run
@@ -25,6 +27,7 @@
 	EXPORT default_scanlinehook
 	EXPORT cpustate
 	EXPORT rommap
+	EXPORT g_memmap_tbl
 	EXPORT frametotal
 	EXPORT sleeptime
 	EXPORT novblankwait
@@ -43,6 +46,17 @@
 	
 	EXPORT g_readmem_tbl
 	EXPORT g_writemem_tbl
+
+	[ RESIZABLE
+	EXPORT XGB_sram
+	EXPORT XGB_sramsize
+	EXPORT XGB_vram
+	EXPORT XGB_vramsize
+	EXPORT GBC_exram
+	EXPORT GBC_exramsize
+	EXPORT END_of_exram
+	]
+
 
 ;----------------------------------------------------------------------------
 _GO;	Continue running
@@ -1727,14 +1741,14 @@ l03
 	ldrb r0,lcdstat		;
 	and r0,r0,#0x78		;reset lcd mode flags (vblank/hblank/oam/lcd)
 	strb r0,lcdstat		;
-
-	ldr r0,cyclesperscanline
-	add cycles,cycles,r0
+;	ldr r0,cyclesperscanline
+;	add cycles,cycles,r0
 	adr r0,line1_to_71
 	str r0,nexttimeout
-	mov r1,#0		;Scanline
+	mov r1,#-1		;Scanline
+	str r1,scanline      ;add
 
-	ldr pc,scanlinehook
+;	ldr pc,scanlinehook
 line1_to_71 ;------------------------
 	ldr r0,cyclesperscanline
 	add cycles,cycles,r0
@@ -2537,7 +2551,7 @@ g_writemem_tbl
 	DCD wram_W_2	;$D000
 	DCD IO_W	;$E000
 	DCD IO_W	;$F000
-   ;memmap_tbl
+g_memmap_tbl
 rommap	% 8*4		;$0000-7FFF (rommap only used for savestates)
 	DCD 0		;$8000
 	DCD 0		;$9000
@@ -2591,6 +2605,23 @@ g_doubletimer
 	DCB 0
 	DCB 0
 	DCB 0
+
+ [ RESIZABLE
+XGB_sram
+	DCD 0
+XGB_sramsize
+	DCD 0
+XGB_vram
+	DCD 0
+XGB_vramsize
+	DCD 0
+GBC_exram
+	DCD 0
+GBC_exramsize
+	DCD 0
+END_of_exram
+	DCD 0
+ ]
 ;----------------------------------------------------------------------------
 	END
 

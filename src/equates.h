@@ -2,10 +2,26 @@
 		GBLL SAFETY
 		GBLL PROFILE
 		GBLL SPEEDHACKS
+		GBLL MOVIEPLAYER
+		GBLL RESIZABLE
+		GBLL RUMBLE
+		GBLL SAVESTATES
 
 DEBUG		SETL {FALSE}
 PROFILE		SETL {FALSE}
 SPEEDHACKS		SETL {FALSE}
+
+ [ GBAMPVERSION
+MOVIEPLAYER		SETL {TRUE}
+RESIZABLE		SETL {TRUE}
+RUMBLE	SETL {FALSE}
+ |
+MOVIEPLAYER		SETL {FALSE}
+RESIZABLE		SETL {FALSE}
+RUMBLE	SETL {TRUE}
+ ]
+
+SAVESTATES	SETL {FALSE}
 
 ;BUILD		SETS "DEBUG"/"GBA"	(defined at cmdline)
 ;----------------------------------------------------------------------------
@@ -19,6 +35,48 @@ GBOAM_BUFFER	EQU OAM_BUFFER2+0x140	;must be on a 0x00 boundary.
 ;?				EQU GBOAM_BUFFER+0xA0
 
 				;This area can probably be overwritten when making a savestate.
+  [ RESIZABLE
+
+SCROLLBUFF1		EQU 0x06002000-160*16
+SCROLLBUFF2		EQU SCROLLBUFF1-160*16
+BG0CNTBUFF		EQU SCROLLBUFF2-164*8
+WINBUFF		EQU BG0CNTBUFF-160*8
+
+	[ SPEEDHACKS
+speedhacks  EQU 0x2040000-512
+MAPPED_RGB		EQU speedhacks-16*4	;mapped GB palette.
+	|
+MAPPED_RGB		EQU 0x2040000-16*4	;mapped GB palette.
+	]
+;palbuff			EQU MAPPED_RGB - 512
+
+INSTANT_PAGES EQU MAPPED_RGB-1024
+openFiles       EQU INSTANT_PAGES-1200
+lfnName			EQU openFiles-256
+;fatBuffer	EQU lfnName-512
+globalBuffer    EQU lfnName-512
+fatBuffer	EQU globalBuffer-512
+SramName		EQU fatBuffer-256
+
+
+;77552
+
+;10664 bytes for these:
+DISPCNTBUFF		EQU SramName-164*2
+
+END_OF_EXRAM	EQU DISPCNTBUFF-0000	;How much data is left for Multiboot to work.
+DMA1BUFF		EQU DISPCNTBUFF
+fatWriteBuffer EQU fatBuffer
+
+
+  
+  |
+
+SCROLLBUFF1		EQU 0x06002000-160*16
+SCROLLBUFF2		EQU SCROLLBUFF1-160*16
+BG0CNTBUFF		EQU SCROLLBUFF2-164*8
+WINBUFF		EQU BG0CNTBUFF-160*8
+
 XGB_SRAM		EQU 0x2040000-0x8000	;IMPORTANT!! XGB_SRAM in GBA.H points here.  keep it current if you fuck with this
 XGB_VRAM		EQU XGB_SRAM-0x4000
 GBC_EXRAM   EQU XGB_VRAM-0x6000
@@ -30,16 +88,28 @@ MAPPED_RGB		EQU GBC_EXRAM-16*4	;mapped GB palette.
 	]
 ;palbuff			EQU MAPPED_RGB - 512
 
-;10664 bytes for these:
-DISPCNTBUFF		EQU MAPPED_RGB-164*2
-BG0CNTBUFF		EQU DISPCNTBUFF-164*8
-SCROLLBUFF1		EQU BG0CNTBUFF-160*16
-SCROLLBUFF2		EQU SCROLLBUFF1-160*16
-DMA0BUFF		EQU SCROLLBUFF2-160*16
-WINBUFF		EQU DMA0BUFF-160*8
+INSTANT_PAGES EQU MAPPED_RGB-1024
+openFiles       EQU INSTANT_PAGES-1200
+lfnName			EQU openFiles-256
+;fatBuffer	EQU lfnName-512
+globalBuffer    EQU lfnName-512
+fatBuffer	EQU globalBuffer-512
+SramName		EQU fatBuffer-256
 
-END_OF_EXRAM	EQU WINBUFF-0000	;How much data is left for Multiboot to work.
+
+;77552
+
+;10664 bytes for these:
+DISPCNTBUFF		EQU SramName-164*2
+
+END_OF_EXRAM	EQU DISPCNTBUFF-0000	;How much data is left for Multiboot to work.
 DMA1BUFF		EQU DISPCNTBUFF
+fatWriteBuffer EQU fatBuffer
+  
+  
+  ]
+
+
 
 AGB_IRQVECT		EQU 0x3007FFC
 AGB_PALETTE		EQU 0x5000000
@@ -52,9 +122,10 @@ AGB_SRAM		EQU 0xE000000
 ;map1 blocks 0x06002000
 ;map2 blocks 0x06002800
 
-AGB_BG			EQU AGB_VRAM+0x1000
+AGB_BG			EQU AGB_VRAM+0xA000
+AGB_BG_GBMODE		EQU AGB_VRAM+0x4000
 
-DEBUGSCREEN		EQU AGB_VRAM+0x3800
+DEBUGSCREEN		EQU AGB_VRAM+0xD800
 
 REG_BASE		EQU 0x4000000
 REG_DISPCNT		EQU 0x00
@@ -195,6 +266,15 @@ gbmode # 1
 hackflags # 1
 doubletimer # 1
  # 3
+ [ RESIZABLE
+xgb_sram # 4
+xgb_sramsize # 4
+xgb_vram # 4
+xgb_vramsize # 4
+gbc_exram # 4
+gbc_exramsize # 4
+end_of_exram # 4
+ ]
 			;lcd.s (wram_globals1)
 fpsvalue # 4
 AGBjoypad # 4
@@ -234,8 +314,9 @@ rammask # 4
 
 cartflags # 1
 sramsize # 1
+bank0 # 1
+bank1 # 1
 
- # 2 ;align
 
 ;----------------------------------------------------------------------------
 ;IRQ_VECTOR EQU 0xfffe ; IRQ/BRK interrupt vector address

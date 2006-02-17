@@ -1,8 +1,6 @@
 #ifndef __UI_H__
 #define __UI_H__
 
-#define VERSION "alpha 4"
-
 extern u8 autoA,autoB;				//0=off, 1=on, 2=R
 extern u8 stime;
 extern u8 autostate;

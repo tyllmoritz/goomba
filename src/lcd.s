@@ -6,8 +6,10 @@
 	INCLUDE sound.h
 	INCLUDE mappers.h
 
+ [ RUMBLE
 	IMPORT RumbleInterrupt
 	IMPORT StartRumbleComs
+ ]
 	IMPORT ui_visible
 	IMPORT ui_y
 	IMPORT ui_x
@@ -82,7 +84,7 @@
 	EXPORT BG0CNTBUFF
 	EXPORT SCROLLBUFF1
 	EXPORT SCROLLBUFF2
-	EXPORT DMA0BUFF
+;	EXPORT DMA0BUFF
 
 
  AREA rom_code, CODE, READONLY
@@ -200,14 +202,6 @@ ppi0	mov r0,#0
 	bne ppi0
 
 	mov r0,#0
-	ldr r1,=AGB_VRAM+0x8000		;clear most of the AGB VRAM
-	mov r2,#0x8000/4
-	bl filler_
-
-;	ldr r1,=AGB_VRAM+0x2000		;clear tile 256
-;	mov r2,#0x8
-;	bl filler_
-
 	ldr r1,=AGB_PALETTE			;clear some of the AGB Palette
 	mov r2,#0x80/4
 	bl filler_
@@ -243,8 +237,8 @@ fill_win_loop
 	str r0,[r1,#REG_DM0DAD]
 	mov r0,#1					;1 word transfer
 	strh r0,[r1,#REG_DM0CNT_L]
-	ldr r0,=DMA0BUFF			;DMA0 src=
-	str r0,[r1,#REG_DM0SAD]
+;	ldr r0,=DMA0BUFF			;DMA0 src=
+;	str r0,[r1,#REG_DM0SAD]
 
 	str r1,[r1,#REG_DM1DAD]		;DMA1 goes here
 	mov r0,#1					;1 word transfer
@@ -270,17 +264,10 @@ GFX_reset	;called with CPU reset
 ;----------------------------------------------------------------------------
 	stmfd sp!,{addy,lr}
 	mov r0,#0
-	ldr r1,=XGB_VRAM		;clear most of the GB VRAM
-	mov r2,#0x4000/4
-	bl filler_
 
-	ldr r1,=0x06004000		;clear most of the GBA VRAM
-	mov r2,#0x14000/4
-	bl filler_
-
-	ldr r1,=AGB_BG		;clear most of the GB VRAM
-	mov r2,#0x2000/4
-	bl filler_
+;	ldr r1,=AGB_BG		;clear most of the GB VRAM
+;	mov r2,#0x2000/4
+;	bl filler_
 
 	mov r0,#0
 	bl FF4F_W
@@ -332,13 +319,24 @@ move_ui
 	ldr r3,=BG0CNTBUFF+6
 	ldr r4,=DISPCNTBUFF
 	mov r1,#160
-	ldr r2,=DMA0BUFF
-	ldr r6,=dmascrollbuff
-	str r2,[r6]
-	ldr r2,=DMA0BUFF+12
-	mov r6,#0x4600
+	ldr r2,=dmascrollbuff
+	ldr r2,[r2]
+	add r2,r2,#12
+;	ldr r7,=DMA0BUFF
+;	add r7,r7,#12
+	ldr r8,=scrollbuff
+	ldr r8,[r8]
+	add r8,r8,#12
+;	ldr r7,=
+;	ldr r2,=DMA0BUFF
+;	ldr r6,=dmascrollbuff
+;	str r2,[r6]
+;	ldr r2,=DMA0BUFF+12
+	ldr r6,=0x5A0C
 move_ui_loop
 	str r0,[r2],#16
+;	str r0,[r7],#16
+	str r0,[r8],#16
 	ldrh r5,[r4]
 	orr r5,r5,#0x0800
 	strh r5,[r4],#2
@@ -522,12 +520,14 @@ showfps_		;fps output, r0-r3=used.
 	strb r0,fpschk
 	bxpl lr					;End if not 60 frames has passed
 
+ [ RUMBLE
 	str lr,[sp,#-4]!
 	ldr r1,=StartRumbleComs
 	adr lr,ret_
 	bx r1
 ret_
 	ldr lr,[sp],#4
+ ]
 
 
 	ldrb r0,fpsenabled
@@ -647,7 +647,11 @@ vbldummy
 ;----------------------------------------------------------------------------
 vblankfptr DCD vbldummy			;later switched to vblankinterrupt
 ;serialfptr DCD serialinterrupt
+ [ RUMBLE
 serialfptr DCD RumbleInterrupt
+ |
+serialfptr DCD vbldummy
+ ]
 ;vcountfptr DCD vblankinterrupt
 twitch DCD 0
 vblankinterrupt;
@@ -658,14 +662,14 @@ vblankinterrupt;
 	bl showfps_
 
 
-	ldr r2,=DMA0BUFF			;setup DMA buffer for scrolling:
-	add r3,r2,#160*16			;For both background and window
-	ldr r1,dmascrollbuff
-vbl6
-	ldmia r1!,{r0,r4-r7}
-	stmia r2!,{r0,r4-r7}
-	cmp r2,r3
-	bmi vbl6
+;	ldr r2,=DMA0BUFF			;setup DMA buffer for scrolling:
+;	add r3,r2,#160*16			;For both background and window
+;	ldr r1,dmascrollbuff
+;vbl6
+;	ldmia r1!,{r0,r4-r7}
+;	stmia r2!,{r0,r4-r7}
+;	cmp r2,r3
+;	bmi vbl6
 
 	mov r1,#REG_BASE
 
@@ -701,7 +705,8 @@ vbl6
 	orr r0,r0,#0x50				;80 words=40sprites, was 128 words,512 bytes,64sprites.
 	str r0,[r1,#REG_DM3CNT_L]	;DMA go
 
-;	ldr r0,=DMA0BUFF			;setup HBLANK DMA for display scroll:
+	ldr r0,dmascrollbuff			;setup HBLANK DMA for display scroll:
+	str r0,[r1,#REG_DM0SAD]
 	ldr r0,=0xA6600004			;noIRQ hblank 32bit repeat incsrc inc_reloaddst 4 words
 	str r0,[r1,#REG_DM0CNT_L]	;DMA go
 								;setup HBLANK DMA for DISPCNT (BG/OBJ enable)
@@ -856,8 +861,12 @@ FF40_W;		LCD Control
 	movne r1,#152
 	strne r1,scanline
 	
-	ldr r1,=0x02010201   ;bg0, win
-	ldr r5,=0x04020403   ;bg0back, winback
+	ldrb r1,gbmode
+	cmp r1,#0
+	ldrne r1,=0x14011401   ;bg0, win
+	ldrne r5,=0x16021603   ;bg0back, winback
+	ldreq r1,=0x08010801   ;bg0, win
+	ldreq r5,=0x0A020A03   ;bg0back, winback
 	tst r0,#0x10		;Which charset?
 	addeq r1,r1,#0x00000004
 	addeq r1,r1,#0x00040000
@@ -904,7 +913,8 @@ ctrl1finish
 	orr r0,r0,#0x0800
 	bic r5,r5,#0xFF000000
 	bic r5,r5,#0x00FF0000
-	orr r5,r5,#0x46000000
+	orr r5,r5,#0x5A000000
+	orr r5,r5,#0x000C0000
 ctrl1finish_no_ui_visible
 	ldr r4,=BG0CNTBUFF
 	ldr r2,=DISPCNTBUFF
@@ -1153,6 +1163,9 @@ windowYfinish			;newframe jumps here
 	cmpge r4,#152
 	movgt r4,#152
 	
+	mov r4,r4,lsl#8
+	orr r4,r4,#0x98
+	
 	rsb r0,r0,#0
 	sub r0,r0,#8
 	mov r5,r0
@@ -1164,7 +1177,7 @@ windowYfinish			;newframe jumps here
 	ldrne r5,[r5]
 
 	ldr r2,scrollbuff
-	ldr r3,=WINBUFF+5+160*8
+	ldr r3,=WINBUFF+4+160*8
 	add r2,r2,#6		;r2+=6, win Y write
 
 	add r1,r2,r1,lsl#4	;r1=base
@@ -1173,7 +1186,7 @@ windowYfinish			;newframe jumps here
 wy1
 	strh r0,[r1],#8
 	strh r5,[r1],#8
-	strb r4,[r3,#-8]!	;fill backwards from scanline to lastline
+	strh r4,[r3,#-8]!	;fill backwards from scanline to lastline
 	cmp r1,r2
 	blo wy1
 	mov pc,lr
@@ -1182,13 +1195,26 @@ windowYline DCD 0 ;..was when?
 ;----------------------------------------------------------------------------
 FF4F_W;		VBK - VRAM Bank - CGB Mode Only
 ;----------------------------------------------------------------------------
+	ldrb r1,gbmode
+	cmp r1,#0
+	moveq r0,#0
+	
 	and r0,r0,#1
 	strb r0,vrambank
+	
+	
+	
+ [ RESIZABLE
+ 	ldr addy,xgb_vram
+ 	sub addy,addy,#0x8000
+ |
 	ldr addy,=XGB_VRAM-0x8000
+ ]
 	add addy,addy,r0,lsl#13	
 	str addy,memmap_tbl+32
 	mov addy,#AGB_VRAM
 	add addy,addy,r0,lsl#13
+	sub addy,addy,#0x2000
 	str addy,agb_vrambank
 	mov pc,lr
 ;----------------------------------------------------------------------------
@@ -1228,6 +1254,9 @@ windowXfinish			;newframe jumps here
 	cmpge r4,#200
 	movgt r4,#200
 	
+	mov r4,r4,lsl#8
+	orr r4,r4,#0xC8
+	
 	rsb r0,r0,#0
 	sub r0,r0,#33		;window x-7
 	mov r5,r0
@@ -1243,12 +1272,12 @@ windowXfinish			;newframe jumps here
 	add r1,r2,r1,lsl#4
 	add addy,addy,#1
 	add r2,r2,addy,lsl#4
-	ldr r3,=WINBUFF+1
+	ldr r3,=WINBUFF
 	add r3,r3,addy,lsl#3
 wx1	
 	strh r5,[r2,#-8]!	;fill backwards from scanline to lastline
 	strh r0,[r2,#-8]!	;fill backwards from scanline to lastline
-	strb r4,[r3,#-8]!	;fill backwards from scanline to lastline
+	strh r4,[r3,#-8]!	;fill backwards from scanline to lastline
 	
 	cmp r2,r1
 	bgt wx1
@@ -1294,7 +1323,7 @@ vram_W
 
 	ldr r2,agb_vrambank		;AGB BG tileset
 	tst addy,#0x2000
-	addeq r1,r2,#0x10000	;0x06010000=OBJ
+	addeq r1,r2,#0x12000	;0x06010000=OBJ
 	streq r0,[r1,addy]		;OBJ
 	addne r2,r2,#0x6000
 	addeq r2,r2,#0x4000		;0x06004000/8000=BG
@@ -1309,11 +1338,18 @@ vram_W
 ;----------------------------------------------------------------------------
 VRAM_name0	;(9800-9FFF)
 ;----------------------------------------------------------------------------
+	ldrb r2,gbmode
+	cmp r2,#0
+ [ RESIZABLE
+	ldr r2,xgb_vram
+ |
 	ldr r2,=XGB_VRAM
+ ]
 	sub addy,addy,#0x8000
 	ldrb r0,[r2,addy]
-	add r2,r2,#0x2000
-	ldrb r1,[r2,addy]
+	addne r2,r2,#0x2000
+	ldrneb r1,[r2,addy]
+	moveq r1,#0
 	and r2,r1,#0x7
 	mov r2,r2,lsl#12
 	orr r0,r0,r2
@@ -1326,7 +1362,7 @@ VRAM_name0	;(9800-9FFF)
 	and r2,r1,#0x68
 	mov r2,r2,lsl#5
 	orr r0,r0,r2
-	orr r0,r0,#0x00008200
+	add r0,r0,#0x00008100
 
 ;gbc byte 2
 ;  Bit 0-2  Background Palette number  (BGP0-7)
@@ -1346,7 +1382,8 @@ VRAM_name0	;(9800-9FFF)
 ;	tst r1,#1
 ;	movne pc,lr  ;hack for GBC mode...
 
-	ldr r2,=AGB_BG
+	ldrne r2,=AGB_BG
+	ldreq r2,=AGB_BG_GBMODE 
 	and r1,r1,#0x07
 ;	add r1,r1,#0x01
 	
@@ -1354,8 +1391,8 @@ VRAM_name0	;(9800-9FFF)
 	add addy,addy,addy	;lsl#1
 
 	strh r0,[r2,addy]	;write tile#
-	add addy,addy,#0x1000
-	strh r1,[r2,addy]	;write background tile#
+	addne addy,addy,#0x1000
+	strneh r1,[r2,addy]	;write background tile#
 	
 	mov pc,lr
 
@@ -1502,31 +1539,6 @@ FF6B_W	;OCPD - OBJ Color Palette Data
 
 oambuffer	DCD OAM_BUFFER1,OAM_BUFFER2
 dmaoambuffer	DCD OAM_BUFFER2
-
-
-;vram_map	;for vmdata_R
-;	DCD 0
-;	DCD 0
-;	DCD 0
-;	DCD 0
-;	DCD 0
-;	DCD 0
-;	DCD 0
-;	DCD 0
-;nes_nt0 DCD XGB_VRAM+0x1800 ;$9800
-;nes_nt1 DCD XGB_VRAM+0x1800 ;$9800
-;nes_nt2 DCD XGB_VRAM+0x1800 ;$9800
-;nes_nt3 DCD XGB_VRAM+0x1800 ;$9800
-;	DCD XGB_VRAM+0x2C00
-;	DCD XGB_VRAM+0x2C00
-;	DCD XGB_VRAM+0x2C00
-;	DCD XGB_VRAM+0x2C00
-
-;agb_nt_map	;set thru mirror*
-;agb_nt0 DCD 0
-;agb_nt1 DCD 0
-;agb_nt2 DCD 0
-;agb_nt3 DCD 0
 
 gbc_palette	% 128	;CGB $FF68-$FF6D???
 

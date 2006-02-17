@@ -7,118 +7,46 @@ int selected;//selected menuitem.  used by all menus.
 int mainmenuitems;//? or CARTMENUITEMS, depending on whether saving is allowed
 u32 oldkey;//init this before using getmenuinput
 
-/*
+int savestate(void* dest){return 0;}
+void loadstate(int foo, void* dest){}
 
-#include <stdio.h>
-#include <string.h>
-
-
-#include "gba.h"
-
-void cls(int);		//from main.c
-u8 *findrom(int n); //from main.c
-void rommenu(void);
-void drawtext(int,char*,int);
-void setdarknessgs(int dark);
-void setbrightnessall(int light);
-extern char *textstart;
+#if !CARTSRAM
+//void savestatemenu(){} void loadstatemenu(){} void managesram(){}
+void quicksave(){} void quickload(){}
+#endif
+#if !MULTIBOOT
+//void multiboot(){}
+#endif
 
 
-#define VERSION "alpha 3"
-
-int SendMBImageToClient(void);	//mbclient.c
-void loadcart(int,int);			//from cart.s
-
-//----asm calls------
-void resetSIO(u32);			//io.s
-void doReset(void);			//io.s
-void suspend(void);			//io.s
-void waitframe(void);		//io.s
-int gettime(void);			//io.s
-void debug_(int,int);		//lcd.s
-void paletteinit(void);		//lcd.s
-void PaletteTxAll(void);	//lcd.s
-void transfer_palette(void);	//lcd.s
-//void makeborder(void);		//lcd.s
-//-------------------
-
-extern u32 joycfg;			//from io.s
-extern char novblankwait;	//from gb-z80.s
-extern char request_gb_type;		//from gb-z80.s
-extern u32 sleeptime;		//from gb-z80.s
-extern u32 FPSValue;		//from lcd.s
-extern char fpsenabled;		//from lcd.s
-extern char gammavalue;		//from lcd.s
-extern u32 palettebank;		//from lcd.s palette bank
-//extern u32 bcolor;			//from lcd.s ,border color, black, grey, blue
-
-void backup_gb_sram(int called_from);
-void get_saved_sram(void);		//sram.c
-
-
-extern u8 Image$$RO$$Limit;
-extern u32 max_multiboot_size;
-
-extern u32 g_emuflags;  // from cart.s
-extern int roms;        // from main.c
-extern int selectedrom; // from main.c
-extern char rtc;
-extern char pogoshell;
-extern char gameboyplayer;
-extern char gbaversion;
-
-u8 autoA,autoB;				//0=off, 1=on, 2=R
-u8 stime=0;
-u8 autostate=0;
-
-void autoAset(void);
-void autoBset(void);
-void swapAB(void);
-void controller(void);
-void vblset(void);
-void restart(void);
-void exit(void);
-void multiboot(void);
-void scrolll(int f);
-void scrollr(void);
-void drawui1(void);
-void drawui2(void);
-void drawui3(void);
-void subui(int menunr);
-void ui2(void);
-void ui3(void);
-void drawclock(void);
-void sleep(void);
-void sleepset(void);
-void fpsset(void);
-void brightset(void);
-void fadetowhite(void);
-void loadstatemenu(void);
-void savestatemenu(void);
-void autostateset(void);
-void chpalette(void);
-//void border(void);
-void gbtype(void);
-void timermode(void);
-//void detect(void);
-void go_multiboot(void);
-
-void writeconfig(void);	//sram.c
-void managesram(void);	//sram.c
-
-void make_ui_visible();
-void make_ui_invisible();
-
-*/
 #define MENU2ITEMS 7+SPEEDHACKS			//othermenu items
 #define MENU3ITEMS 2			//displaymenu items
-#define CARTMENUITEMS 13 		//mainmenuitems when running from cart (not multiboot)
-#define MULTIBOOTMENUITEMS 9	//"" when running from multiboot
+
+//mainmenuitems when running from cart (not multiboot)
+#define CARTMENUITEMS 7+MULTIBOOT+GOMULTIBOOT+(CARTSRAM*3)
+#define MULTIBOOTMENUITEMS 7+MULTIBOOT	//"" when running from multiboot
 
 const char MENUXITEMS[]={CARTMENUITEMS,MULTIBOOTMENUITEMS,MENU2ITEMS,MENU3ITEMS};
 
-const fptr multifnlist[]={autoBset,autoAset,controller,ui3,ui2,multiboot,sleep,restart,exit};
-const fptr fnlist1[]={autoBset,autoAset,controller,ui3,ui2,multiboot,savestatemenu,loadstatemenu,managesram,sleep,go_multiboot,restart,exit};
+const fptr multifnlist[]={autoBset,autoAset,ui3,ui2,
+#if MULTIBOOT
+multiboot,
+#endif
+sleep,restart,exit};
+
+const fptr fnlist1[]={autoBset,autoAset,ui3,ui2,
+#if MULTIBOOT
+multiboot,
+#endif
+#if CARTSRAM
+savestatemenu,loadstatemenu,managesram,
+#endif
+sleep,
+#if GOMULTIBOOT
+go_multiboot,
+#endif
+restart,exit};
+
 const fptr fnlist2[]={vblset,fpsset,sleepset,swapAB,autostateset,
 #if SPEEDHACKS
 find_speedhacks,
@@ -129,15 +57,6 @@ const fptr fnlist3[]={chpalette,brightset};
 const fptr* fnlistX[]={fnlist1,multifnlist,fnlist2,fnlist3};
 const fptr drawuiX[]={drawui1,drawui1,drawui2,drawui3};
 
-/*
-int selected;//selected menuitem.  used by all menus.
-int mainmenuitems;//? or CARTMENUITEMS, depending on whether saving is allowed
-
-extern int ui_x;
-extern int ui_y;
-
-u32 oldkey;//init this before using getmenuinput
-*/
 
 u32 getmenuinput(int menuitems)
 {
@@ -171,7 +90,8 @@ void ui()
 {
 	int key,soundvol,oldsel,tm0cnt,i;
 	int mb=(u32)textstart<0x8000000;
-	int savesuccess;
+	int savesuccess=1;
+	int usefade=1;
 
 	make_ui_visible();
 
@@ -188,15 +108,41 @@ void ui()
 	tm0cnt=REG_TM0CNT;
 	REG_TM0CNT=0;				//stop sound (directsound)
 
+#if MOVIEPLAYER
+	if (usinggbamp)
+	{
+		if(g_cartflags&2 && g_rammask!=0)
+		{
+			ui_x=0;
+			move_ui();
+			cls(3);
+			drawtext(9,"         Saving...",0);
+			usefade=0;
+			setdarknessgs(7);
+			save_sram_CF(SramName);	
+		}
+	}
+#endif
 	selected=0;
 	drawui1();
-	for(i=0;i<8;i++)
+	if (usefade)
 	{
-		waitframe();
-		setdarknessgs(i);		//Darken game screen
-		ui_x=224-i*32; move_ui();
+		for(i=0;i<8;i++)
+		{
+			waitframe();
+			setdarknessgs(i);		//Darken game screen
+			ui_x=224-i*32; move_ui();
+		}
 	}
+#if CARTSRAM
 	savesuccess=backup_gb_sram(1);
+#endif
+	if (!savesuccess)
+	{
+		drawui1();
+		ui_x=0;
+		move_ui();
+	}
 	
 
 	oldkey=~REG_P1;			//reset key input
@@ -216,11 +162,13 @@ void ui()
 		if(key&(A_BTN+UP+DOWN+LEFT+RIGHT))
 			drawui1();
 	} while(!(key&(B_BTN+R_BTN+L_BTN)));
+#if CARTSRAM
 	if (savesuccess)
 	{
 		get_saved_sram();
 	}
 	writeconfig();			//save any changes
+#endif
 	for(i=1;i<9;i++)
 	{
 		waitframe();
@@ -235,7 +183,6 @@ void ui()
 	REG_TM0CNT=tm0cnt;		//resume sound (directsound)
 	cls(3);
 	make_ui_invisible();
-
 }
 
 void subui(int menunr)
@@ -295,7 +242,6 @@ char *const autotxt[]={"OFF","ON","with R"};
 char *const vsynctxt[]={"ON","OFF","SLOWMO"};
 char *const sleeptxt[]={"5min","10min","30min","OFF"};
 char *const brightxt[]={"I","II","III","IIII","IIIII"};
-char *const memtxt[]={"Normal","Turbo"};
 char *const hostname[]={"Crap","Prot","GBA","GBP","NDS"};
 char *const ctrltxt[]={"1P","2P","Link2P","Link3P","Link4P"};
 char *const bordtxt[]={"Black","Grey","Blue","None"};
@@ -320,19 +266,23 @@ void drawui1()
 	text(row++,str);
 	strmerge(str,"A autofire: ",autotxt[autoA]);
 	text(row++,str);
-	strmerge(str,"Controller: ",ctrltxt[(joycfg>>29)-2]);
-	text(row++,str);
 	text(row++,"Display->");
 	text(row++,"Other Settings->");
+#if MULTIBOOT
 	text(row++,"Link Transfer");
+#endif
 	if(mainmenuitems==MULTIBOOTMENUITEMS) {
 		text(row++,"Sleep");
 	} else {
+#if CARTSRAM
 		text(row++,"Save State->");
 		text(row++,"Load State->");
 		text(row++,"Manage SRAM->");
+#endif
 		text(row++,"Sleep");
+#if GOMULTIBOOT
 		text(row++,"Go Multiboot");
+#endif
 	}
 	text(row++,"Restart");
 	text(row++,"Exit");
@@ -432,14 +382,6 @@ void autoBset()
 		autoB=0;
 }
 
-void controller()
-{					//see io.s: refreshGBjoypads
-	u32 i=joycfg+0x20000000;
-	if(i>=0xe0000000)
-		i-=0xa0000000;
-	resetSIO(i);					//reset link state
-}
-
 void sleepset()
 {
 	stime++;
@@ -476,6 +418,7 @@ void brightset()
 	transfer_palette();				//for real
 }
 
+#if MULTIBOOT
 void multiboot()
 {
 	int i;
@@ -492,10 +435,13 @@ void multiboot()
 			waitframe();
 	}
 }
+#endif
 
 void restart()
 {
+#if CARTSRAM
 	writeconfig();					//save any changes
+#endif
 	scrolll(1);
 	__asm {mov r0,#0x3007f00}		//stack reset
 	__asm {mov sp,r0}
@@ -503,7 +449,9 @@ void restart()
 }
 void exit()
 {
+#if CARTSRAM
 	writeconfig();					//save any changes
+#endif
 	fadetowhite();
 	REG_DISPCNT=FORCE_BLANK;		//screen OFF
 	REG_BG0HOFS=0;
@@ -602,6 +550,7 @@ void timermode()
 	}
 }
 
+#if GOMULTIBOOT
 void go_multiboot()
 {
 	char *src, *dest;
@@ -636,4 +585,4 @@ void go_multiboot()
 	mainmenuitems=MENUXITEMS[1];
 	roms=1;
 }
-
+#endif
