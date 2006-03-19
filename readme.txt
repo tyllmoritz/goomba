@@ -1,4 +1,4 @@
-Goomba v2.31
+Goomba v2.32
 -=-=-=-=-=-=-
 
 It's a Gameboy emulator for the GameBoy Advance. 

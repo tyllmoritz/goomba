@@ -171,7 +171,7 @@ int updatestates(int index,int erase,int type) {
 	// Append, if appropriate
 	if(!erase) {
 		srcsize = newdata->size;
-		total += i;
+		total += srcsize;
 		if(total > 0xe000) //**OUT OF MEMORY**
 			return 0;
 		memcpy(dst, newdata, srcsize);

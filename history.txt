@@ -1,6 +1,10 @@
 Goomba revision history
 -=-=-=-=-=-=-=-=-=-=-=-
 
+v2.32 - 2006-03-19 (Kuwanger)
+	Fixed a nasty bug involving the improper updating of totalstatesize--
+      probably my fault
+
 v2.31 - 2005-09-27 (Kuwanger)
    Incorporate changes from FluBBa's v2.30
     FluBBa's changes from v2.2 to v2.3
