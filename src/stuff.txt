@@ -1,0 +1,192 @@
+Need clarification on:
+	window
+		When do window parameters apply?
+		Changing them during screen render?
+		Disabling window - does it show BG instead?
+		Does window scrolling location change when window is enabled and disabled multiple times a frame?
+		Is window position updated at the end of vblank then frozen?
+	turning off screen
+		Does screen immediatly render after screen is turned from off to on, or does it wait until vblank would have ended first?
+		Does normal scanline counter still run?
+		Is this why LY is writable?
+
+
+info needed:
+	lcd control per scanline
+	x scroll per scanline
+	y scroll per scanline
+	window x per scanline
+	window y per frame
+optional:
+	bg palette change events, scanline # and data
+	spr palette change events, scanline # and data
+
+maps:
+	map0 for tiles         (0)
+	map0 for HP tiles      (0h)
+	map0 for color 0 tiles (0c)
+	map1 for tiles         (1)
+	map1 for HP tiles      (1a)
+	map1 for color 0 tiles (1c)
+	Border
+	GUI
+
+display possibilities:
+	GB mode, window at bottom
+		1 GBA BG layer
+		Generate GBA BG maps for:
+			0,1
+		When reaches window, replace BG layer with window
+	GB mode, window at right
+		2 GBA BG layers
+		use gba window mode to separate window from BG
+		Generate GBA BG maps for
+			0,1
+	GBC mode, window at bottom
+		3 GBA BG layers
+		Generate GBA BG maps for:
+			0,0h,0c
+			1,1h,1c
+		When reaches window, replace BG layer with window
+	GBC mode, window at right
+		4 GBA BG layers
+		No high-priority support
+		Use window mode to separate window from BG
+		Generate GBA BG maps for
+			0,0c
+			1,1c
+
+sgb colorization:
+	to run down a scanline (BG only):
+		get tilemap # from screen scanline
+		tilemap row = (YS - scroll_y[YS])/8
+		tilemap col = -scroll_x[YS]/8
+	to see if it needs to paint the next row:
+		get new tilemap_row
+		if different than old, paint
+		ignore X changes for now
+
+GBA vblank:
+	update scanline DMA buffers
+	update sprites
+	update map
+	update graphics
+	
+
+
+
+
+How to render screen:
+
+(use win0 for GBA window)
+
+possible stuff to find out:
+	Does window ever split horizontally?
+	
+	
+
+if WX is static, WY < 160
+	if WX > 7 && WX < 167
+		set GBA WX to GBC WX-7+40
+
+
+
+
+Always assume 4 BG layers in buffer.
+
+rendering
+	Test if state has changed:
+		Split Window becomes visible
+			Y >= WY
+			WX > 7  &&  WX < 167
+			bit 5 of LCDC = 1
+		Split Window becomes invisible
+			bit 5 of LCDC = 0
+			WX <= 7 || WX >=167
+		Full window becomes visible
+			Y >= WY
+			WX <= 7
+			bit 5 of LCDC = 1
+
+
+	Rendering Full BG:
+		LDCD changes
+			enable/disable screen
+			enable/disable BG rendering (GB only)
+				on GBC, make BG low priority
+			enable/disable sprite rendering
+			select tilemap, chr set
+		else
+			store into main buffer, buffer 3 times
+		subtract 40
+		store into buffer 3 times
+		read YS
+		subtract 8
+		store into buffer 3 times
+	Rendering Full Window:
+		LDCD Changes
+			enable/disable screen
+			enable/disable Window rendering
+			...
+		else
+			store into buffers...
+		read WX
+		see if still should be full window mode
+		subtract 40-7
+		store into buffer 3 times
+		use buffered window Y location
+		store into buffer 3 times
+	Rendering Split Window/BG:
+		LDCD Changes
+			enable/disable screen
+			enable/disable window
+		...
+		read WX
+		see if still should be split window mode
+		subtract 40-7
+		store into scrolling buffer slots 1,3
+		store into WX buffer
+		Read XS
+		add 40
+		store into scrolling buffer slots 0,2
+		use buffered window Y location
+		store into scrolling buffer 1,3
+		read YS
+		add 8
+		store into buffer 0,2
+After everything else rendered, throw on the border and UI.
+
+
+Priority:
+	UI		0
+	Border		0
+	HP BG,HP WIN	1
+	sprites		2
+	BG, WIN		2
+	LP sprites	3
+	BG0, WIN0	3
+
+Priority in funky gbc mode:
+	UI		0
+	Border		0
+	Sprites		2
+	LP Sprites	3
+	BG,WIN		3
+	BG0,Win0	3
+	HP BG, HP WIN	3
+
+vram usage:
+1a
+2a
+solid tiles, border tiles
+(4 maps), ui0, ui1, border, unused
+1b
+2b
+font, (2 maps) bg0,bg00
+(4 maps) bg0H,bg1,bg10,bg1H
+
+maps:
+6 GB maps
+2 UI maps
+1 border map
+1 free map

@@ -1,0 +1,115 @@
+savestate
+
+REGS 12
+EMUF 20
+IO   256
+MAPR 44
+PAL  128
+OAM  160
+RAM  8192
+RAM2 24576
+VRAM 8192
+VRM2 8192
+
+;49772
+
+PACK 112
+SPAL 64
+PALS 4096
+ATFS 4096
+ATTR 360
+;58500
+
+SRAM 8192
+SRM2 24576
+
+
+
+
+cpu registers (12)
+	af
+	bc
+	de
+	hl
+	sp
+	pc
+
+EMUF (20)
+	cycles
+	dividereg
+	timercounter
+	gb_ime #1
+	gbcmode #1
+	sgbmode #1
+	doubletimer_ #1
+
+IO MEMORY and HRAM
+	256 bytes
+
+Main RAM
+	8K
+
+GBC extended RAM
+	24K
+
+VRAM
+	8K
+
+GBC extended VRAM
+	8K
+
+SRAM
+	Up to 32k
+
+OAM
+	160 bytes
+
+GBC PALETTE
+	128 bytes
+
+Mapper:
+	1 word, rom bank number 0
+	1 word, rom bank number 1
+	1 word, ram bank number
+	"mapperdata", 32 bytes	
+	
+"mapperdata"
+General:
+	0 - low bits of rom bank number, may be masked
+	1 - high bits of rom bank number, may be either <<5 or <<8 to first byte
+	2 - SRAM enable, 0A if enabled
+	3 - Rom/RAM bankswitch mode for MBC1, MBC3 time latch
+	4 - SRAM Bank, MBC3 RTC register selection, MBC7 SRAM bank/disable
+	5 - MBC1, two bits for rom bank or sram bank
+	...
+	26-30 - time data
+	
+
+
+MBC1:
+0	low 5 bits of rom bank number (00-1F), 00 becomes 01.
+1	high 2 bits of rom bank number
+2	sram enabled (0A if enabled)
+3	rom/ram bankswitch mode (0 for rom, 1 for ram)
+4	sram bank
+5	2 bits for either rom bank or sram bank
+
+MBC2:
+2	sram enabled (0A if enabled)
+
+MBC3:
+2	sram/RTC write enabled (0A if enabled)
+3	mbc3 time latch
+4	sram bank 0-7 or RTC register 8-C
+
+MBC5:
+0	low 8 bits of bank number
+1	high 1 bit of bank number
+2	sram enabled (0A if enabled)
+3	
+4	sram bank / rumble
+MBC7:
+0	low 7 bits of bank number, if 0, then 1
+2	sram enabled (0A if enabled)
+4	sram bank, 0-8, or 9+ to disable?
+

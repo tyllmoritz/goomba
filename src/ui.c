@@ -19,7 +19,7 @@ void quicksave(){} void quickload(){}
 #endif
 
 
-#define MENU2ITEMS 7+SPEEDHACKS			//othermenu items
+#define MENU2ITEMS 8+SPEEDHACKS			//othermenu items
 #define MENU3ITEMS 2			//displaymenu items
 
 //mainmenuitems when running from cart (not multiboot)
@@ -51,7 +51,7 @@ const fptr fnlist2[]={vblset,fpsset,sleepset,swapAB,autostateset,
 #if SPEEDHACKS
 find_speedhacks,
 #endif
-timermode,gbtype};
+timermode,gbtype,gbatype};
 const fptr fnlist3[]={chpalette,brightset};
 
 const fptr* fnlistX[]={fnlist1,multifnlist,fnlist2,fnlist3};
@@ -217,7 +217,9 @@ void ui2()
 }
 void ui3()
 {
+	setdarknessgs(0);
 	subui(3);
+	setdarknessgs(8);
 }
 
 void text(int row,char *str)
@@ -248,7 +250,7 @@ char *const bordtxt[]={"Black","Grey","Blue","None"};
 char *const paltxt[16]={"Yellow","Grey","Multi1","Multi2","Zelda","Metroid",
 				"AdvIsland","AdvIsland2","BaloonKid","Batman","BatmanROTJ",
 				"BionicCom","CV Adv","Dr.Mario","Kirby","DK Land"};
-char *const gbtxt[]={"GB","GBC","GBA"};
+char *const gbtxt[]={"GB","Perfer SGB over GBC","Perfer GBC over SGB","GBC+SGB"};
 char *const clocktxt[]={"None","Timers","Full"};
 char *const emuname = "Goomba Color ";
 
@@ -310,9 +312,11 @@ void drawui2()
 	strmerge(str,"Speed Hacks: ",autotxt[2==(g_hackflags&2)]);
 	text2(row++,str);
 #endif
-	strmerge(str,"Double Speed: ",clocktxt[g_doubletimer]);
+	strmerge(str,"Double Speed: ",clocktxt[doubletimer]);
 	text2(row++,str);
 	strmerge(str,"Game Boy: ",gbtxt[request_gb_type]);
+	text2(row++,str);
+	strmerge(str,"GBC game sees GBA: ",autotxt[request_gba_mode]);
 	text2(row++,str);
 }
 
@@ -414,9 +418,8 @@ void brightset()
 {
 	gammavalue++;
 	if (gammavalue>4) gammavalue=0;
-	paletteinit();
-	PaletteTxAll();					//make new palette visible
-	transfer_palette();				//for real
+	g_update_border_palette=1;
+	transfer_palette();				//make new palette visible
 }
 
 #if MULTIBOOT
@@ -458,7 +461,7 @@ void exit()
 	REG_DISPCNT=FORCE_BLANK;		//screen OFF
 	REG_BG0HOFS=0;
 	REG_BG0VOFS=0;
-	REG_BLDCNT=0;					//no blending
+	REG_BLDMOD=0;					//no blending
 	doReset();
 }
 
@@ -537,19 +540,17 @@ void chpalette()
 //}
 void gbtype()
 {
-	request_gb_type=(request_gb_type+1) % 3;
+	request_gb_type=(request_gb_type+1) % 4;
+}
+void gbatype()
+{
+	request_gba_mode=!request_gba_mode;
 }
 void timermode()
 {
-	g_doubletimer=(g_doubletimer+1) % 3;
-	if ((0!=(g_doublespeed&0x80)) && (g_doubletimer==2))
-	{
-		g_cyclesperscanline=912*16;
-	}
-	else
-	{
-		g_cyclesperscanline=456*16;
-	}
+	doubletimer=(doubletimer+1) % 3;
+	if (doubletimer==0) doubletimer=1;
+	update_doublespeed_ui();
 }
 
 #if GOMULTIBOOT

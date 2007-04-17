@@ -10,5 +10,5 @@
 	IMPORT gettime
 	IMPORT refreshNESjoypads
 	IMPORT serialinterrupt
-	IMPORT OAMfinish
+	IMPORT _FF70W
 	END

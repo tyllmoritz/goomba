@@ -5,7 +5,7 @@
 	INCLUDE cart.h
 	INCLUDE gbz80.h
 	INCLUDE gbz80mac.h
-
+	INCLUDE sgb.h
 	EXPORT IO_reset
 	EXPORT IO_R
 	EXPORT IO_High_R
@@ -25,7 +25,6 @@
 	EXPORT LZ77UnCompVram
 	EXPORT CheckGBAVersion
 	EXPORT gbpadress
-	EXPORT OAMfinish
 	EXPORT _FF70W
  [ RESIZABLE
 	IMPORT add_exram
@@ -62,9 +61,18 @@ CheckGBAVersion
 	mov r0,r12
 	bx lr
 
+resetSIO
+	b_long resetSIO_core
+
 ;----------------------------------------------------------------------------
 IO_reset
 ;----------------------------------------------------------------------------
+	ldrb r0,sgbmode
+	movs r0,r0
+	ldrne r0,=joy0_W_SGB
+	ldrne r1,=joypad_write_ptr
+	strne r0,[r1]
+	
 	mov r0,#0
 	strb r0,stctrl
 	bx lr
@@ -311,24 +319,22 @@ io_read_tbl
 	DCD void
 	DCD void
 
-OAM_R
-	cmp addy,#0xFE00
-	ldrpl r1,=GBOAM_BUFFER
-	ldrplb r0,[r1,r2]
-	movpl pc,lr
-	sub addy,addy,#0x2000		;C000-DCFF mirror.
-	b mem_RC0
-OAM_W
-	cmp addy,#0xFE00
-	ldrpl r1,=GBOAM_BUFFER
-	strplb r0,[r1,r2]
-	movpl pc,lr
-	sub addy,addy,#0x2000		;C000-DCFF mirror.
-	b wram_W
-;rtexten
-;	DCB "Read from OAM.",0x0a,0x00
-;wtexten
-;	DCB "Wrote to OAM.",0x0a,0x00,0x00
+
+;OAM_R
+;	cmp addy,#0xFE00
+;	ldrpl r1,=GBOAM_BUFFER
+;	ldrplb r0,[r1,r2]
+;	movpl pc,lr
+;	sub addy,addy,#0x2000		;C000-DCFF mirror.
+;	b mem_RC0
+;OAM_W
+;	cmp addy,#0xFE00
+;	ldrpl r1,=GBOAM_BUFFER
+;	strplb r0,[r1,r2]
+;	movpl pc,lr
+;	sub addy,addy,#0x2000		;C000-DCFF mirror.
+;	b wram_W
+
 ;----------------------------------------------------------------------------
 IO_W		;I/O write
 ;----------------------------------------------------------------------------
@@ -483,20 +489,39 @@ joypad_write_ptr
 ;----------------------------------------------------------------------------
 HRAM_W;		(FF80-FFFF)
 ;----------------------------------------------------------------------------
-	add r1,r2,#0x1F80
-	strb r0,[gb_zpage,r1]
+	ldr r1,=XGB_HRAM-0x80
+	strb r0,[r1,r2]
 	cmp r2,#0xFF
 	movne pc,lr
 	strb r0,gb_ie		;0xFFFF=Interrupt Enable.
 	ldrb r1,gb_if
 	ands r1,r1,r0
-	movne cycles,#0		;Ugly Hack.
-	mov pc,lr
+	moveq pc,lr
+	ldrb r0,gb_ime
+	movs r0,r0
+	moveq pc,lr
+	
+	;different ugly hack which doesn't mess up timing,
+	;this is necessary because goomba can't handle GB interrupts from within a memory write
+	sub cycles,cycles,#1024*CYCLE  ;this just makes it go somewhere else instead of the next instruction
+	ldr r0,nexttimeout
+	str r0,nexttimeout_alt
+	ldr r0,=no_more_irq_hack
+	str r0,nexttimeout
+	bx lr
+
+no_more_irq_hack
+	add cycles,cycles,#1024*CYCLE
+	ldr r0,nexttimeout_alt
+	str r0,nexttimeout
+	b checkIRQ
+
+
 ;----------------------------------------------------------------------------
 HRAM_R;		(FF80-FFFF)
 ;----------------------------------------------------------------------------
-	add r2,r2,#0x1F80
-	ldrb r0,[gb_zpage,r2]
+	ldr r1,=XGB_HRAM-0x80
+	ldrb r0,[r1,r2]
 	mov pc,lr
 ;----------------------------------------------------------------------------
 _FF01W;		SB - Serial Transfer Data
@@ -631,157 +656,6 @@ _FF0FR
 ;----------------------------------------------------------------------------
 	ldrb r0,gb_if
 	mov pc,lr
-;----------------------------------------------------------------------------
-FF46_W;		sprite DMA transfer
-;----------------------------------------------------------------------------
-;	and r0,r0,#0xff		;not needed?
-	and r1,r0,#0xF0
-	adr r2,memmap_tbl
-	ldr r1,[r2,r1,lsr#2]	;in: addy,r1=addy&0xE000 (for rom_R)
-	add addy,r1,r0,lsl#8	;addy=DMA source
-	ldr r2,=GBOAM_BUFFER
-
-	mov r1,#40		;number of sprites on the GB
-OAMLoop
-	ldr r0,[addy],#4
-	str r0,[r2],#4
-	subs r1,r1,#1
-	bne OAMLoop
-
-	mov pc,lr
-;----------------------------------------------------------------------------
-OAMfinish;		transfer OAM from GB to GBA
-;----------------------------------------------------------------------------
-PRIORITY EQU 0x400	;0x400=AGB OBJ priority 1
-	stmfd sp!,{r3-r6,lr}
-
-	ldr addy,=GBOAM_BUFFER
-
-	ldr r2,oambuffer+4	;r2=dest
-	ldr r0,oambuffer
-	str r2,oambuffer
-	str r0,oambuffer+4
-
-	ldrb r5,gbmode
-
-	ldrb r0,lcdctrl0frame	;8x16?
-;	ldrb r0,lcdctrl		;8x16?
-	tst r0,#0x04
-	bne dm4
-
-	mov r4,#PRIORITY		;r4=CHR set+AGB priority
-;	moveq r4,#0+PRIORITY		;r4=CHR set+AGB priority
-;	movne r4,#0x100+PRIORITY
-dm11
-	ldr r3,[addy],#4
-	ands r0,r3,#0xff
-	beq dm10		;skip if sprite Y=0
-	cmp r0,#159
-	bhi dm10		;skip if sprite Y>159
-
-	sub r0,r0,#8
-	and r0,r0,#0xff
-
-	and r1,r3,#0xff00
-	add r1,r1,#0x2000	;x+32
-	orr r0,r0,r1,lsl#8
-	and r1,r3,#0x60000000	;flip
-	orr r0,r0,r1,lsr#1
-	and r1,r3,#0x80000000	;priority
-	orr r0,r0,r1,lsr#21	;Set Transp OBJ.
-	str r0,[r2],#4		;store OBJ Atr 0,1
-
-;  Bit7   OBJ-to-BG Priority (0=OBJ Above BG, 1=OBJ Behind BG color 1-3)
-;         (Used for both BG and Window. BG color 0 is always behind OBJ)
-;  Bit6   Y flip          (0=Normal, 1=Vertically mirrored)
-;  Bit5   X flip          (0=Normal, 1=Horizontally mirrored)
-;  Bit4   Palette number  **Non CGB Mode Only** (0=OBP0, 1=OBP1)
-;  Bit3   Tile VRAM-Bank  **CGB Mode Only**     (0=Bank 0, 1=Bank 1)
-;  Bit2-0 Palette number  **CGB Mode Only**     (OBP0-7)
-
-;  Bit   Expl.
-;  0-9   Character Name          (0-1023=Tile Number)
-;  10-11 Priority relative to BG (0-3; 0=Highest)
-;  12-15 Palette Number   (0-15) (Not used in 256 color/1 palette mode)
-	cmp r5,#0
-	mov r1,r4
-	;gbc vram bank
-	andne r0,r3,#0x08000000
-	orrne r1,r1,r0,lsr#19
-	;gbc color
-	andne r0,r3,#0x07000000
-	orrne r1,r1,r0,lsr#12
-	;gb color
-	andeq r0,r3,#0x10000000
-	orreq r1,r1,r0,lsr#3
-	;tile + priority
-	bic r0,r3,#0xEF000000
-	orr r1,r1,r0,lsr#16
-	
-	strh r1,[r2],#4		;store OBJ Atr 2
-dm9
-	and r0,addy,#0xff
-	cmp r0,#0xA0		;40 sprites
-	bne dm11
-	ldmfd sp!,{r3-r6,pc}
-dm10
-	mov r0,#0x2a0		;double, y=160
-	str r0,[r2],#8
-	b dm9
-
-
-dm4	;- - - - - - - - - - - - -8x16
-
-	mov r4,#PRIORITY
-dm12
-	ldr r3,[addy],#4
-	ands r0,r3,#0xff
-	beq dm13		;skip if sprite Y=0
-	cmp r0,#159
-	bhi dm13		;skip if sprite Y>159
-
-	sub r0,r0,#8
-	and r0,r0,#0xff
-
-	and r1,r3,#0xff00
-	add r1,r1,#0x2000	;x+32
-	orr r0,r0,r1,lsl#8
-	and r1,r3,#0x60000000	;flip
-	orr r0,r0,r1,lsr#1
-	and r1,r3,#0x80000000	;priority
-	orr r0,r0,r1,lsr#21	;Set Transp OBJ.
-	orr r0,r0,#0x8000	;8x16
-	str r0,[r2],#4		;store OBJ Atr 0,1
-
-	cmp r5,#0
-	mov r1,r4
-	;gbc vram bank
-	andne r0,r3,#0x08000000
-	orrne r1,r1,r0,lsr#19
-	;gbc color
-	andne r0,r3,#0x07000000
-	orrne r1,r1,r0,lsr#12
-	;gb color
-	andeq r0,r3,#0x10000000
-	orreq r1,r1,r0,lsr#3
-	;tile + priority
-	bic r0,r3,#0xEF000000
-	orr r1,r1,r0,lsr#16
-	bic r1,r1,#0x0001
-
-;	bic r3,r3,#0xef000000	;Keep tile and color.
-;	bic r3,r3,#0x00010000	;Mask out lowest tile bit for 8x16 spr.
-;	orr r3,r4,r3,lsr#16	;tileset+priority
-	strh r1,[r2],#4		;store OBJ Atr 2
-dm14
-	and r0,addy,#0xff
-	cmp r0,#0xA0		;40 sprites
-	bne dm12
-	ldmfd sp!,{r3-r6,pc}
-dm13
-	mov r0,#0x2a0		;double, y=160
-	str r0,[r2],#8
-	b dm14
 ;----------------------------------------------------------------------------
 serialinterrupt
 ;----------------------------------------------------------------------------
@@ -935,7 +809,7 @@ endSIO
 	teq r4,#0
 	mov pc,lr
 ;----------------------------------------------------------------------------
-resetSIO	;r0=joycfg
+resetSIO_core	;r0=joycfg
 ;----------------------------------------------------------------------------
 	bic r0,r0,#0x0f000000
 	str r0,joycfg
@@ -1062,7 +936,8 @@ stage1		;other GBA wants to reset
 	ldrb r3,received0	;slaves uses master's timing flags
 	bic r1,r1,#USEPPUHACK+CPUHACK
 	orr r1,r1,r3
-sg1	bl loadcart		;game reset
+sg1	
+	bl_long loadcart		;game reset
 
 	mov r1,#0
 	str r1,sending		;reset sequence numbers
@@ -1094,40 +969,15 @@ sendreset       ;exits with r1=emuflags, r4=REG_SIOCNT, Z=1 if send was OK
 gbpadress DCD 0x04000000
 joycfg DCD 0x40ff01ff ;byte0=auto mask, byte1=(saves R)bit2=SwapAB, byte2=R auto mask
 ;bit 31=single/multi, 30,29=1P/2P, 27=(multi) link active, 24=reset signal received
-joy0state DCD 0
-joy1state DCD 0
-joy2state DCD 0
-joy3state DCD 0
-joy0serial DCD 0
-joy1serial DCD 0
 nrplayers DCD 0		;Number of players in multilink.
 ssba2ssab DCB 0x00,0x02,0x01,0x03, 0x04,0x06,0x05,0x07, 0x08,0x0a,0x09,0x0b, 0x0c,0xe0,0xd0,0x0f
 
-;----------------------------------------------------------------------------
-joy0_W_		;FF00
-;----------------------------------------------------------------------------
-	ands r0,r0,#0x30
-	moveq pc,lr
-	eors r0,r0,#0x30
-	moveq pc,lr
-	eor r0,r0,#0x30
-
-	tst r0,#0x10		;Direction
-
-	ldr r1,joy0state
-	moveq r1,r1,lsr#4
-	eor r1,r1,#0x0F
-	and r1,r1,#0x0F
-	orr r1,r1,r0
-	str r1,joy0serial
-
-	mov pc,lr
 ;----------------------------------------------------------------------------
 joy0_W		;FF00
 ;----------------------------------------------------------------------------
 	orr r0,r0,#0xCF
 	mov r2,#0x0
-	ldr r1,joy0state
+	ldrb r1,joy0state
 	tst r0,#0x10		;Direction
 	orreq r2,r2,r1,lsr#4
 	tst r0,#0x20		;Buttons
@@ -1135,9 +985,17 @@ joy0_W		;FF00
 
 	and r2,r2,#0x0F
 	eor r2,r2,r0
-	str r2,joy0serial
+	ldrb r1,joy0serial
+	strb r2,joy0serial
+	
+	bx lr
+;
+;	
+;	ldrb r2,sgbmode
+;	movs r2,r2
+;	bxeq lr
+;	b SGB_transfer_bit
 
-	mov pc,lr
 ;----------------------------------------------------------------------------
 joy0_R		;FF00
 ;----------------------------------------------------------------------------
@@ -1234,6 +1092,15 @@ FF4D_W	;KEY1 - prepare double speed
 	bx lr
 
 
+ AREA wram_globals3, CODE, READWRITE
+	 DCB 0 ;joy0state
+	 DCB 0 ;joy1state
+	 DCB 0 ;joy2state
+	 DCB 0 ;joy3state
+	 DCB 0 ;joy0serial
+	 DCB 0 ;joy1serial
+	 DCB 0
+	 DCB 0
 
 
 	END

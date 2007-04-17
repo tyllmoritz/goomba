@@ -9,9 +9,6 @@
 	IMPORT |Image$$RW$$Limit|
 	IMPORT |Image$$ZI$$Base|
 	IMPORT |Image$$ZI$$Limit|
- [ BUILD = "DEBUG"
-	IMPORT |zzzzz$$Base|
- ]
 
 	IMPORT C_entry	;from main.c
 	IMPORT textstart
@@ -21,6 +18,7 @@
 	EXPORT font
 	EXPORT fontpal
 ;------------------------------------------------------------
+head
  	b __main
 
 	DCB 36,255,174,81,105,154,162,33,61,132,130,10,132,228,9,173
@@ -33,15 +31,15 @@
 	DCB 169,99,190,3,1,78,56,226,249,162,52,255,187,62,3,68
 	DCB 120,0,144,203,136,17,58,148,101,192,124,99,135,240,60,175
 	DCB 214,37,228,139,56,10,172,114,33,212,248,7
-	DCB "GOOMBAGOOMBA"	;title
-	DCB "GMBA"			;gamecode
+	DCB "GOOMBA COLOR"	;title
+	DCB "GMBC"			;gamecode
 	DCW 0				;maker
 	DCB 0x96			;fixed value
 	DCB 0				;unit code
-	DCB 0				;device type
+	DCB 0x80			;device type
 	DCB 0,0,0,0,0,0,0	;unused
 	DCB 0				;version
-	DCB 0xd0			;complement check
+	DCB 0x64			;complement check
 	DCW 0				;unused
 ;----------------------------------------------------------
 __main
@@ -49,94 +47,135 @@ __main
 	b %F0
 	% 28			;multiboot struct. clock regs also?
 0
-	[ BUILD = "DEBUG"
-		mov r0, #0x10	;usr mode
-		msr cpsr_f, r0
-	]
+	ldr sp,=0x3007F00			;set System Stack
 
-	ldr sp,=0x3007f00			;set System Stack
-	LDR	r5,=|Image$$RO$$Limit| ;r5=pointer to IWRAM code
- [ BUILD = "DEBUG"
-	ldr r1,=|zzzzz$$Base|
- |
-	ldr r1,=|Image$$ZI$$Base|
- ]
-	add r1,r1,r5
-	sub r6,r1,#0x3000000		;r6=textstart
-
-	adr lr,_3
-	tst lr,#0x8000000
-	beq _3				;running from cart?
-		add r6,r6,#0x6000000		;textstart=8xxxxxx
-		add r5,r5,#0x6000000		;RW code ptr=8xxxxxx
-
-		ldr r1,=|Image$$RO$$Base|	;copy rom code to ewram
-		adr r0,headcopy				; XG2 resets when 0x08000000 is accessed.
-		add r3,r1,#192				; EZFA mess with the GBA header
-_5		cmp r1,r3
-		ldrcc r2, [r0], #4
-		strcc r2, [r1], #4
-		bcc _5
-		add r0,r1,#0x6000000
-		ldr r3,=|Image$$RO$$Limit|
-_2		cmp r1,r3
-		ldrcc r2, [r0], #4
-		strcc r2, [r1], #4
-		bcc _2
-		sub pc,lr,#0x6000000	;jump to ewram copy
-_3
-	LDR	r1, =|Image$$RW$$Base|
-	LDR	r3, =|Image$$ZI$$Base| ; Zero init base => top of initialized data
-_0	CMP	r1, r3
-	LDRCC	r2, [r5], #4		;copy RW code to IWRAM
-	STRCC	r2, [r1], #4
-	BCC	_0
-	LDR	r1, =|Image$$ZI$$Limit| ; Top of zero init segment
-	MOV	r2, #0
-_1	CMP	r3, r1 ; Zero init
-	STRCC	r2, [r3], #4
-	BCC	_1
-
-
-;---------------------------------------- MB test ----------
-	tst lr,#0x8000000
-	bne _4					;running from cart?
-	ldr r0,=|Image$$RO$$Limit|
-	mov r3,#0x20000			;up to 128kbyte
-	mov r1,r0
-_loop
-	ldr r2,[r6],#4			;old textstart
-	str r2,[r1],#4
-	subs r3,r3,#4
-	bne _loop
-	mov r6,r0				;new textstart
-_4
-;---------------------------------------- MB test ----------
- [ DEBUG
-	ldr r0,=GB_RAM
-	cmp r1,r0		;sanity check - make sure iwram code fits in iwram
-giveup	bhi giveup
- ]
-	ldr r4,=textstart	;textstart=ptr to GB rom info
-	str r6,[r4]
-
-	ldr r6,=(END_OF_EXRAM-0x2000000)	;how much free space is left?
-	ldr r4,=max_multiboot_size
-	str r6,[r4]
-
-;	ldr r0,=0x4014		;3/1 wait state, prefetch.  No difference???
-;	mov r0,#0x0018		;2/1 wait state, not working on flashcarts?
+	;set waitstates
 	mov r0,#0x0014		;3/1 waitstate
 	ldr r1,=REG_WAITCNT
 	strh r0,[r1]
-
-;	ldr r0,=0x0E000020	;1 waitstate,0x0D000020=2 waitstate
-;	ldr r1,=0x04000800	;EWRAM WAITCTL
-;	str r0,[r1]			;2/1 waitstate
+	
+	;disable interrupts
+	mov r0,#0
+	ldr r2,=REG_BASE+REG_IME
+	strh r0,[r2]
+	
+	;r1 = source address
+	adr r1,head
+	
+	ldr r0,=|Image$$RO$$Base|
+	ldr r3,=|Image$$RO$$Limit|
+	sub r2,r3,r0
+	bl memcopy
+	
+	ldr r0,=|Image$$RW$$Base|
+	ldr r3,=|Image$$ZI$$Base|
+	sub r2,r3,r0
+	bl memcopy
+	
+	;r0 = |Image$$ZI$Base|
+	ldr r3,=|Image$$ZI$$Limit|
+	sub r2,r3,r0
+	mov r3,#0
+	bl memset
+	
+	;r1 = textstart if not in multiboot mode
+	tst r1,#0x08000000
+	bne %F1
+	
+	;multiboot mode - copy appended data to beginning of available EWRAM
+	
+	;test if rolimit is in ewram, if so use it
+	ldr r0,=|Image$$RO$$Limit|
+	and r2,r0,#0xFF000000
+	cmp r2,#0x02000000
+	
+	;otherwise check if rwlimit is in ewram, if so use it
+	ldrne r0,=|Image$$RW$$Limit|
+	andne r2,r0,#0xFF000000
+	cmpne r2,#0x02000000
+	
+	;otherwise all ewram is free, use base as append address
+	movne r0,#0x02000000
+	ldr r2,=0x02040000
+	sub r2,r2,r1 ;copy 256k - append location base
+	
+	stmfd sp!,{r0}
+	bl memcopy
+	ldmfd sp!,{r1}
+1
+	ldr r3,=textstart
+	str r1,[r3]
+	
+	ldr r2,=(MULTIBOOT_LIMIT-0x2000000)	;how much free space is left?
+	ldr r3,=max_multiboot_size
+	str r2,[r3]
 
 	ldr r1,=C_entry
 	bx r1
 ;----------------------------------------------------------
+memset
+;r0 = dest
+;r2 = size
+;r3 = fill
+0
+	str r3,[r0],#4
+	subs r2,r2,#4
+	bgt %b0
+	bx lr
+memcopy
+;in:
+;r0 = dest
+;r1 = src
+;r2 = size
+;out:
+;r0 = dest+size
+;r1 = src+size
+;r2 = 0
+	;src == dest?
+	cmp r0,r1
+	beq nocopy
+
+ 	;if already in rom, there's no multiboot support anyway,
+ 	;don't care if header is corrupt
+ [ VERSION_IN_ROM
+ |
+	;Use headcopy if SRC = 0x08000000
+	cmp r1,#0x08000000
+	;Use headcopy because supercard corrupts the header
+	bne noheadcopy
+	stmfd sp!,{r1,r2,lr}
+	adr r1,headcopy
+	mov r2,#192
+	bl memcopy
+	ldmfd sp!,{r1,r2,lr}
+	sub r2,r2,#192
+	add r1,r1,#192
+noheadcopy
+ ]	
+1
+ 	;fast memcopy using r4-r11
+ 	subs r2,r2,#32
+ 	ldmplia r1!,{r4-r11}
+ 	stmplia r0!,{r4-r11}
+ 	bpl %b1
+ 	adds r2,r2,#32
+ 	bxeq lr
+2
+	ldr r4,[r1],#4
+	str r4,[r0],#4
+	subs r2,r2,#4
+	bgt %b2
+ 	bx lr
+nocopy
+	add r0,r0,r2
+	add r1,r1,r2
+	mov r2,#0
+	bx lr
+
+
+
+ [ VERSION_IN_ROM
+ |
 headcopy
 	DCD 0xEA00002E			;b main
 	DCB 36,255,174,81,105,154,162,33,61,132,130,10,132,228,9,173
@@ -149,17 +188,17 @@ headcopy
 	DCB 169,99,190,3,1,78,56,226,249,162,52,255,187,62,3,68
 	DCB 120,0,144,203,136,17,58,148,101,192,124,99,135,240,60,175
 	DCB 214,37,228,139,56,10,172,114,33,212,248,7
-	DCB "GOOMBAGOOMBA"	;title
-	DCB "GMBA"			;gamecode
+	DCB "GOOMBA COLOR"	;title
+	DCB "GMBC"			;gamecode
 	DCW 0				;maker
 	DCB 0x96			;fixed value
 	DCB 0				;unit code
-	DCB 0				;device type
+	DCB 0x80			;device type
 	DCB 0,0,0,0,0,0,0	;unused
 	DCB 0				;version
-	DCB 0xd0			;complement check
+	DCB 0x64			;complement check
 	DCW 0				;unused
-
+ ]
 font
 	INCBIN font.lz77
 ;	INCBIN font.bin

@@ -7,6 +7,7 @@
 	INCLUDE io.h
 	INCLUDE lcd.h
 	INCLUDE sound.h
+	INCLUDE sgb.h
 
 	IMPORT |wram_globals0$$Base|
 	IMPORT ui	;ui.c
@@ -20,6 +21,7 @@
 	EXPORT XGB_VRAM
 	EXPORT GBC_EXRAM
  ]
+	EXPORT update_doublespeed_ui
 	
 	EXPORT emu_reset
 	EXPORT run
@@ -31,18 +33,20 @@
 	EXPORT frametotal
 	EXPORT sleeptime
 	EXPORT novblankwait
+	EXPORT request_gba_mode
 	EXPORT request_gb_type
 	EXPORT line145_to_end
+	EXPORT checkIRQ
+	EXPORT _00
+	EXPORT gbc_mode
+	
 	[ SPEEDHACKS
 	EXPORT num_speedhacks
 	EXPORT speedhacks
 	EXPORT cpuhack_reset
 	]
 	EXPORT g_hackflags
-	EXPORT g_doubletimer
-	EXPORT gb_mode
-	EXPORT g_doublespeed
-	EXPORT g_cyclesperscanline
+	EXPORT doubletimer
 	
 	EXPORT g_readmem_tbl
 	EXPORT g_writemem_tbl
@@ -137,10 +141,10 @@ _08;	LD (nnnn),SP	write SP to (nnnn)
 	ldrb addy,[gb_pc],#1
 	ldrb r0,[gb_pc],#1
 	orr addy,addy,r0,lsl#8
-	ldrb r0,gb_sp+2
+	mov r0,gb_sp,lsr#16
 	writemem
 	add addy,addy,#1		;Might be changed!!!
-	ldrb r0,gb_sp+3
+	mov r0,gb_sp,lsr#24
 	writemem
 	fetch 20
 ;----------------------------------------------------------------------------
@@ -185,22 +189,24 @@ _10;	STOP	stops the processor until an (joypad) interrupt.
 ;----------------------------------------------------------------------------
 	ldrb r0,doublespeed
 	tst r0,#1
-	blne speedswitch
+	blne_long speedswitch
 	
-	b _noStop
-;	b _76 ;halt instead?
-	ldrb r1,gb_ime
-	tst r1,#1			;no Halt if IRQ disabled.
-	beq _noStop
-	ldrb r0,gb_ic		;interrupt confirm
-	cmp r0,#0
-	movne r0,#0
-	strneb r0,gb_ic
-	subeq gb_pc,gb_pc,#1
-	moveq cycles,#0
+;	b _noStop
+;;	b _76 ;halt instead?
+;	ldrb r1,gb_ime
+;	tst r1,#1			;no Halt if IRQ disabled.
+;	beq _noStop
+;	ldrb r0,gb_ic		;interrupt confirm
+;	cmp r0,#0
+;	movne r0,#0
+;	strneb r0,gb_ic
+;	subeq gb_pc,gb_pc,#1
+;	moveq cycles,#0
 _noStop
-	add gb_pc,gb_pc,#1
+;	add gb_pc,gb_pc,#1
 	fetch 4
+	
+	LTORG
 ;----------------------------------------------------------------------------
 _11;	LD DE,#nnnn
 ;----------------------------------------------------------------------------
@@ -484,8 +490,7 @@ _30;	JR NC,*	jump if no carry
 _31;	LD SP,#nnnn
 ;----------------------------------------------------------------------------
 	opLDIM16
-	mov r0,r0,lsl#16
-	str r0,gb_sp
+	mov gb_sp,r0,lsl#16
 	fetch 16
 ;----------------------------------------------------------------------------
 _32;	LDD (HL),A	write A to (HL), decr HL
@@ -497,9 +502,7 @@ _32;	LDD (HL),A	write A to (HL), decr HL
 ;----------------------------------------------------------------------------
 _33;	INC SP
 ;----------------------------------------------------------------------------
-	ldr r0,gb_sp
-	opINC16 r0
-	str r0,gb_sp
+	opINC16 gb_sp
 	fetch 8
 ;----------------------------------------------------------------------------
 _34;	INC (HL)
@@ -552,8 +555,7 @@ _38;	JR C,*	jump if carry
 ;----------------------------------------------------------------------------
 _39;	ADD HL,SP
 ;----------------------------------------------------------------------------
-	ldr r0,gb_sp
-	opADD16 r0
+	opADD16 gb_sp
 ;----------------------------------------------------------------------------
 _3A;	LDD A,(HL)	load A from (HL), decr HL
 ;----------------------------------------------------------------------------
@@ -564,9 +566,7 @@ _3A;	LDD A,(HL)	load A from (HL), decr HL
 ;----------------------------------------------------------------------------
 _3B;	DEC SP
 ;----------------------------------------------------------------------------
-	ldr r0,gb_sp
-	opDEC16 r0
-	str r0,gb_sp
+	opDEC16 gb_sp
 	fetch 8
 ;----------------------------------------------------------------------------
 _3C;	INC A
@@ -1458,11 +1458,9 @@ _E6;	AND #nn
 _E8;	ADD SP,dd
 ;----------------------------------------------------------------------------
 	ldrsb r0,[gb_pc],#1
-	ldr r2,gb_sp
-	eor r1,r2,r0,lsl#16		;prepare for h check.
-	adds r2,r2,r0,lsl#16
-	str r2,gb_sp
-	eor gb_flg,r1,r2
+	eor r1,gb_sp,r0,lsl#16		;prepare for h check.
+	adds gb_sp,gb_sp,r0,lsl#16
+	eor gb_flg,r1,gb_sp
 	and gb_flg,gb_flg,#PSR_h
 	orrcs gb_flg,gb_flg,#PSR_C
 	fetch 12
@@ -1529,9 +1527,8 @@ _F6;	OR #nn
 _F8;	LD HL,SP+dd
 ;----------------------------------------------------------------------------
 	ldrsb r0,[gb_pc],#1
-	ldr r2,gb_sp
-	eor r1,r2,r0,lsl#16
-	adds gb_hl,r2,r0,lsl#16
+	eor r1,gb_sp,r0,lsl#16
+	adds gb_hl,gb_sp,r0,lsl#16
 	eor gb_flg,r1,gb_hl
 	and gb_flg,gb_flg,#PSR_h
 	orrcs gb_flg,gb_flg,#PSR_C
@@ -1539,7 +1536,7 @@ _F8;	LD HL,SP+dd
 ;----------------------------------------------------------------------------
 _F9;	LD SP,HL
 ;----------------------------------------------------------------------------
-	str gb_hl,gb_sp
+	mov gb_sp,gb_hl
 	fetch 8
 ;----------------------------------------------------------------------------
 _FA;	LD A,(nnnn)	load A from (nnnn)
@@ -1620,25 +1617,31 @@ _CB76;		BIT 6,(HL)
 
 
 ;----------------------------------------------------------------------------
-run	;r0=0 to return after frame
+run_core	;r0=0 to return after frame
 ;----------------------------------------------------------------------------
-	mov r1,#0
-	strb r1,novblankwait
-
-	str r0,dontstop
 	tst r0,#1
-	stmeqfd sp!,{gb_flg-gb_pc,globalptr,gb_zpage,lr}
+	stmeqfd sp!,{gb_flg-gb_pc,globalptr,r11,lr}
 
 	ldr globalptr,=|wram_globals0$$Base|
-	ldr gb_zpage,=XGB_RAM
+	strb r0,dontstop_
+	mov r1,#0
+	strb r1,novblankwait_
+
 	b line0x
 ;----------------------------------------------------------------------------
 ;cycles ran out
 ;----------------------------------------------------------------------------
 line0
+	;now do double speed vblank stuff:
+	ldr r0,doubletimer_
+	tst r0,#0x01
+	blne updatespeed
+	
+
+
 	adr r2,cpuregs
-	stmia r2,{gb_flg-gb_pc}	;save 6502 state
-waitformulti
+	stmia r2,{gb_flg-gb_pc,gb_sp}	;save gbz80 state
+;waitformulti
 	ldr r1,=REG_P1		;refresh input every frame
 	ldrh r0,[r1]
 		eor r0,r0,#0xff
@@ -1648,16 +1651,16 @@ waitformulti
 	and r1,r1,r0		;r1=button state (0->1)
 	str r0,AGBjoypad
 
-	ldr r2,dontstop
+	ldrb r2,dontstop_
 	cmp r2,#0
-	ldmeqfd sp!,{gb_flg-gb_pc,globalptr,gb_zpage,lr}	;exit here if doing single frame:
+	ldmeqfd sp!,{gb_flg-gb_pc,globalptr,r11,lr}	;exit here if doing single frame:
 	bxeq lr							;return to rommenu()
 
 	;----anything from here til line0x won't get executed while rom menu is active---
 
 	mov r2,#REG_BASE
 	mov r3,#0x0110				;was 0x0310
-	strh r3,[r2,#REG_BLDCNT]	;stop darkened screen,OBJ blend to BG0/1
+	strh r3,[r2,#REG_BLDMOD]	;stop darkened screen,OBJ blend to BG0/1
 	mov r3,#0x1000				;BG0/1=16, OBJ=0
 	strh r3,[r2,#REG_BLDALPHA]	;Alpha values
 
@@ -1684,11 +1687,11 @@ waitformulti
 
 	tst r0,#0x200		;L?
 	tstne r1,#8		;START?
-	ldrb r2,novblankwait	;0=Normal, 1=No wait, 2=Slomo
+	ldrb r2,novblankwait_	;0=Normal, 1=No wait, 2=Slomo
 	addne r2,r2,#1
 	cmp r2,#3
 	moveq r2,#0
-	strb r2,novblankwait
+	strb r2,novblankwait_
 
 	tst r0,#0x100		;R?
 	tstne r1,#8		;START:
@@ -1701,67 +1704,55 @@ waitformulti
 	bxne r1
 line0x
 	bl refreshNESjoypads	;Z=1 if communication ok
-	bne waitformulti	;waiting on other GBA..
+;	bne waitformulti	;waiting on other GBA..
 
 	ldr r0,AGBjoypad
-	ldr r2,fiveminutes		;sleep after 5/10/30 minutes of inactivity
+	ldr r2,fiveminutes_		;sleep after 5/10/30 minutes of inactivity
 	cmp r0,#0				;(left out of the loop so waiting on multi-link
-	ldrne r2,sleeptime		;doesn't accelerate time)
+	ldrne r2,sleeptime_		;doesn't accelerate time)
 	subs r2,r2,#1
-	str r2,fiveminutes
-	bleq suspend
+	str r2,fiveminutes_
+	bleq_long suspend
 
 	mov r1,#0
-	str r1,scanline		;reset scanline count
+	strb r1,scanline		;reset scanline count
 	bl newframe		;display update
 
-
- [ BUILD <> "DEBUG"
-	ldrb r4,novblankwait
-	teq r4,#1
-	beq l03
-l01
-	mov r0,#0				;don't wait if not necessary
-	mov r1,#1				;VBL wait
-	swi 0x040000			; Turn of CPU until IRQ if not too late allready.
-	teq r4,#2				;Check for slomo
-	moveq r4,#0
-	beq l01
-l03
- ]
-	ldr r0,fpsvalue
-	add r0,r0,#1
-	str r0,fpsvalue
-
 	adr r0,cpuregs
-	ldmia r0,{gb_flg-gb_pc}	;restore GB-Z80 state
+	ldmia r0,{gb_flg-gb_pc,gb_sp}	;restore GB-Z80 state
 
 ;	ldrb r1,lcdctrl		;not liked by SML.
 ;	tst r1,#0x80
 	ldrb r0,lcdstat		;
 	and r0,r0,#0x78		;reset lcd mode flags (vblank/hblank/oam/lcd)
 	strb r0,lcdstat		;
-;	ldr r0,cyclesperscanline
-;	add cycles,cycles,r0
+
+	ldr r0,cyclesperscanline
+	add cycles,cycles,r0
+
 	adr r0,line1_to_71
 	str r0,nexttimeout
-	mov r1,#-1		;Scanline
-	str r1,scanline      ;add
-
-;	ldr pc,scanlinehook
+	mov r1,#0 		;Scanline
+	strb r1,scanline      ;add
+	ldr pc,scanlinehook
+	
 line1_to_71 ;------------------------
 	ldr r0,cyclesperscanline
 	add cycles,cycles,r0
 
-	ldr r1,scanline
+	ldrb r1,scanline
 	add r1,r1,#1
-	str r1,scanline
+	strb r1,scanline
 	cmp r1,#71
 	ldrmi pc,scanlinehook
 ;--------------------------------------------- between 71 and 72
 
 	ldrb r0,lcdctrl
-	strb r0,lcdctrl0frame		;Chase HQ likes this
+	strb r0,lcdctrl0midframe		;Chase HQ likes this
+	
+	;;;
+	;;;bl gbc_chr_update
+	;;;
 
 	adr addy,line72_to_143
 	str addy,nexttimeout
@@ -1770,9 +1761,9 @@ line72_to_143 ;------------------------
 	ldr r0,cyclesperscanline
 	add cycles,cycles,r0
 
-	ldr r1,scanline
+	ldrb r1,scanline
 	add r1,r1,#1
-	str r1,scanline
+	strb r1,scanline
 	cmp r1,#143
 	ldrmi pc,scanlinehook
 
@@ -1780,12 +1771,42 @@ line72_to_143 ;------------------------
 	str addy,nexttimeout
 	ldr pc,scanlinehook
 line144 ;------------------------
+	ldrb r0,doubletimer_
+	tst r0,#1
+	beq %f0
+	ldrb r0,doublespeed
+	tst r0,#0x80
+	bl updatespeed2
+0
+	bl newframe_vblank
+;	stmfd sp!,{r0-addy,lr}
+
+; [ BUILD <> "DEBUG"
+;	ldrb r2,novblankwait
+;	teq r2,#1
+;	beq l03
+;l01
+;	mov r0,#0				;don't wait if not necessary
+;	mov r1,#1				;VBL wait
+;	swi 0x040000			; Turn of CPU until IRQ if not too late allready.
+;	teq r2,#2				;Check for slomo
+;	moveq r2,#0
+;	beq l01
+;l03
+; ]
+;	ldmfd sp!,{r0-addy,lr}
+
+
+	ldr r0,fpsvalue
+	add r0,r0,#1
+	str r0,fpsvalue
+
 
 
  [ DEBUG
 	mov r1,#REG_BASE			;darken screen during GB vblank
 	mov r0,#0x00f1
-	strh r0,[r1,#REG_BLDCNT]
+	strh r0,[r1,#REG_BLDMOD]
 	ldrh r0,[r1,#REG_VCOUNT]
 	mov r1,#19
 	bl debug_
@@ -1807,7 +1828,7 @@ novbirq
 	add cycles,cycles,r0
 
 	mov r1,#144
-	str r1,scanline
+	strb r1,scanline
 
 	adr addy,VBL_Hook
 	str addy,nexttimeout
@@ -1824,9 +1845,9 @@ line145_to_end ;------------------------
 	ldr r0,cyclesperscanline
 	add cycles,cycles,r0
 
-	ldr r1,scanline
+	ldrb r1,scanline
 	add r1,r1,#1
-	str r1,scanline
+	strb r1,scanline
 	cmp r1,#153				;last scanline
 	ldrmi pc,scanlinehook
 
@@ -1849,7 +1870,7 @@ checkScanlineIRQ
 	and r0,r2,#0x09		;LCD stat HBlank IRQ/VBL.
 	cmp r0,#0x08		;LCD stat HBlank IRQ.
 	beq ScanlineIRQ
-	ldr r1,scanline
+	ldrb r1,scanline
 	ldrb r0,lcdyc
 	cmp r0,r1
 	bne noScanlineIRQ
@@ -1864,7 +1885,7 @@ noScanlineIRQ
 
 ;------------------
 checkTimerIRQ
-	ldrb r2,doubletimer
+	ldrb r2,doubletimer_
 	tst r2,#0x01
 	ldrneb r2,doublespeed
 	tstne r2,#0x80
@@ -1959,12 +1980,6 @@ doIRQ
 	encodePC
 
 	fetch 24
-;----------------------------------------------------------------------------
-fiveminutes DCD 5*60*60
-sleeptime DCD 5*60*60
-dontstop DCD 0
-novblankwait DCB 0
-request_gb_type DCB 2
 ;----------------------------------------------------------------------------
 	AREA rom_code, CODE, READONLY
 
@@ -2374,19 +2389,32 @@ _CBC7;		SET x,A		, actually CB-C7,CF,D7,DF,E7,EF,F7 & FF
 ;----------------------------------------------------------------------------
 
 
+update_doublespeed_ui ;called from UI
+	stmfd sp!,{globalptr,addy,lr}
+	ldr globalptr,=|wram_globals0$$Base|
+	bl updatespeed
+	ldmfd sp!,{globalptr,addy,lr}
+	bx lr
+
 speedswitch
 	ldrb r0,doublespeed
 	bic r0,r0,#0x7F
 	eors r0,r0,#0x80
 	strb r0,doublespeed
-	ldrb r0,doubletimer
+updatespeed
+	ldrb r0,doublespeed
+	tst r0,#0x80
+	ldrb r0,doubletimer_
 	tstne r0,#0x02
-
+updatespeed2
 
 ;(DMG=456*CYCLE, CGB=912*CYCLE)
 	movne r1,#DOUBLE_SPEED
 	moveq r1,#SINGLE_SPEED
 	str r1,cyclesperscanline
+	movne r1,#DOUBLE_SPEED_HBLANK
+	moveq r1,#SINGLE_SPEED_HBLANK
+	str r1,hblankposition
 	bx lr
 
  [ PROFILE
@@ -2438,9 +2466,14 @@ emu_reset	;called by loadcart (r0-r9 are free to use)
 	bl IO_reset
 	bl Sound_reset
 	bl GFX_reset
+	bl sgb_reset
 ;---Speed - normal GB
-	ldr r1,=456*CYCLE
+	mov r1,#SINGLE_SPEED
 	str r1,cyclesperscanline
+	mov r1,#SINGLE_SPEED_HBLANK
+	str r1,hblankposition
+	
+	
 cpu_reset
 ;---cpu reset
 	[ SPEEDHACKS
@@ -2449,30 +2482,27 @@ cpu_reset
  [ PROFILE
 	bl profile_reset
  ]
-	ldrb r0,gbmode
+	ldrb r0,gbcmode
 	cmp r0,#0
 	moveq gb_a,#0x01000000	;0x01=Normal GB/SGB, 0xFF=PocketGB/SGB2, 0x11=CGB/AGB.
 	ldreq gb_bc,=0x00130000	;Breg->0=Normal,1=AGB
 	movne gb_a,#0x11000000	;0x01=Normal GB/SGB, 0xFF=PocketGB/SGB2, 0x11=CGB/AGB.
 	ldrne gb_bc,=0x00130000	;Breg->0=Normal,1=AGB
-	cmp r0,#2
-	ldreq gb_bc,=0x01130000	;Breg->0=Normal,1=AGB
-	
-	
-	moveq gb_de,#0x00d80000
-	movne gb_de,#0x00200000	;For Goomba detection, e=0x20
+	ldrneb r0,gbamode
+	movnes r0,r0
+	ldrne gb_bc,=0x01130000	;Breg->0=Normal,1=AGB
+	mov gb_de,#0x00d80000
+;	movne gb_de,#0x00200000	;For Goomba detection, e=0x20
 	ldr gb_hl,=0x014d0000
 	mov gb_flg,#PSR_Z+PSR_C+PSR_h
 	mov r0,#0
-	IMPORT _FF70W
-	bl _FF70W
+	bl_long _FF70W  ;set WRAM page #0
 	mov r1,#0
 	strb r1,doublespeed
 	str r1,gb_ime		;disable all IRQ
 	str r1,timercounter	;reset timers
 	str r1,timermodulo	;reset timers
-	ldr r0,=0xfffe0000
-	str r0,gb_sp		;SP=FFFE
+	ldr gb_sp,=0xfffe0000
 	mov cycles,#0
 
 	str r1,frame		;frame count reset
@@ -2484,7 +2514,7 @@ cpu_reset
 	encodePC			;get RESET vector
 
 	adr r0,cpuregs
-	stmia r0,{gb_flg-gb_pc}
+	stmia r0,{gb_flg-gb_pc,gb_sp}
 	ldr pc,[sp],#4
 
 	[ SPEEDHACKS
@@ -2495,6 +2525,25 @@ jmpops
 opindex
 	DCD op_table+0x20*4,op_table+0x28*4,op_table+0x30*4,op_table+0x38*4
 	]
+
+
+run
+	b_long run_core
+
+
+
+	AREA wram_globals5, CODE, READWRITE
+;----------------------------------------------------------------------------
+fiveminutes DCD 5*60*60 ;fiveminutes_
+sleeptime DCD 5*60*60 ;sleeptime_
+dontstop DCB 0 ;dontstop_
+ DCB 0
+ DCB 0
+ DCB 0
+;----------------------------------------------------------------------------
+
+
+
 ;----------------------------------------------------------------------------
 	AREA wram_globals0, CODE, READWRITE
 ;----------------------------------------------------------------------------
@@ -2564,12 +2613,11 @@ rommap	% 8*4		;$0000-7FFF (rommap only used for savestates)
 
 cpustate
 	;group these together for save/loadstate
-	% 7*4 ;cpuregs (flg,a,bc,de,hl,cycles,pc)
-	DCD 0 ;gb_sp:
+	% 8*4 ;cpuregs (flg,a,bc,de,hl,cycles,pc)
 	DCB 0 ;gb_ime:	(interrupt master enable)
 	DCB 0 ;gb_ie:	(interrupt enable, adr $FFFF)
 	DCB 0 ;gb_if:	(interrupt flags, adr $FF0F)
-	DCB 0 ;gb_ic:	(interrupt confirm, HALT)
+	DCB 0
 	DCD 0 ;lastbank: last memmap added to PC (used to calculate current PC)
 
 	DCD 0 ;dividereg
@@ -2579,11 +2627,10 @@ cpustate
 	DCB 0 ;stctrl
 	DCB 0 ;debugstop
 	DCD 0 ;nexttimeout:  jump here when cycles runs out
+	DCD 0 ;nexttimeout_alt
 	DCD 0 ;scanlinehook
-	DCD 0 ;scanline
 frametotal		;let ui.c see frame count for savestates
 	DCD 0 ;frame
-g_cyclesperscanline
 	DCD 0 ;cyclesperscanline (DMG=456*CYCLE, CGB=912*CYCLE)
  [ SPEEDHACKS
 num_speedhacks
@@ -2594,17 +2641,23 @@ num_speedhacks
 	DCD 0x02008000 ;profiler
  ]
 	DCB 0 ;rambank
-g_doublespeed
-	DCB 0 ;doublespeed
-gb_mode
-	DCB 0 ;gbmode
+gbc_mode
+	DCB 0 ;gbcmode
+sgb_mode
+	DCB 0 ;sgbmode
 g_hackflags
 	DCB 0 ;hackflags
-g_doubletimer
-	DCB 1 ;doubletimer
-	DCB 0
-	DCB 0
-	DCB 0
+doubletimer
+	DCB 2 ;doubletimer_
+request_gba_mode
+	DCB 0 ;gbamode
+request_gb_type
+	DCB 2 ;request_gb_type_
+novblankwait
+	DCB 0 ;novblankwait_
+
+	DCD 0 ;hblankposition (DMG=204*CYCLE, CGB=408*CYCLE)
+
 
  [ RESIZABLE
 XGB_sram

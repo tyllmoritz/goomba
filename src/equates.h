@@ -7,9 +7,16 @@
 		GBLL RUMBLE
 		GBLL SAVESTATES
 
+		GBLL SRAM_32
+
+		GBLL LITTLESOUNDDJ
+
+SRAM_32		SETL {FALSE}
+
 DEBUG		SETL {FALSE}
 PROFILE		SETL {FALSE}
 SPEEDHACKS		SETL {FALSE}
+LITTLESOUNDDJ   SETL {FALSE}
 
  [ GBAMPVERSION
 MOVIEPLAYER		SETL {TRUE}
@@ -26,13 +33,14 @@ SAVESTATES	SETL {FALSE}
 ;BUILD		SETS "DEBUG"/"GBA"	(defined at cmdline)
 ;----------------------------------------------------------------------------
 
-XGB_RAM			EQU 0x3005000
-XGB_HRAM		EQU XGB_RAM+0x2000
-CHR_DECODE		EQU XGB_HRAM+0x80
-OAM_BUFFER1		EQU CHR_DECODE+0x400
-OAM_BUFFER2		EQU OAM_BUFFER1+0x140	;0x200
-GBOAM_BUFFER	EQU OAM_BUFFER2+0x140	;must be on a 0x00 boundary.
-;?				EQU GBOAM_BUFFER+0xA0
+XGB_RAM		EQU 0x3005400
+XGB_HRAM	EQU XGB_RAM+0x2000
+CHR_DECODE	EQU XGB_HRAM+0x80
+;?		EQU CHR_DECODE+0x400
+
+;statck starts at 0x03007700
+
+BORDER_PALETTE EQU 0x06006F80
 
 				;This area can probably be overwritten when making a savestate.
   [ RESIZABLE
@@ -71,42 +79,97 @@ fatWriteBuffer EQU fatBuffer
 
   
   |
+MAX_RECENT_TILES EQU 96  ;if you change this, change RECENT_TILES as well!
 
-SCROLLBUFF1		EQU 0x06002000-160*16
-SCROLLBUFF2		EQU SCROLLBUFF1-160*16
-BG0CNTBUFF		EQU SCROLLBUFF2-164*8
-WINBUFF		EQU BG0CNTBUFF-160*8
+;VRAM areas:
+;0x600 bytes at 06006200
+;0x80 bytes at 06006f00
+;0x400 bytes at 0600cc00
+;0x4000 at 06014000
+;0x300 at 06007D00-06008000
 
-XGB_SRAM		EQU 0x2040000-0x8000	;IMPORTANT!! XGB_SRAM in GBA.H points here.  keep it current if you fuck with this
-XGB_VRAM		EQU XGB_SRAM-0x4000
-GBC_EXRAM   EQU XGB_VRAM-0x6000
-	[ SPEEDHACKS
-speedhacks  EQU GBC_EXRAM-512
-MAPPED_RGB		EQU speedhacks-16*4	;mapped GB palette.
-	|
-MAPPED_RGB		EQU GBC_EXRAM-16*4	;mapped GB palette.
-	]
-;palbuff			EQU MAPPED_RGB - 512
+;SGB border areas coincide with the GBA areas reserved for them
+SNES_VRAM	EQU 0x06004220 ;one tile ahead, too bad if games don't write low tiles then high tiles, also overlaps with recent_tiles...
+SNES_MAP	EQU 0x06006780 ;overlaps with recent_tiles, map must be updated in reverse order
+RECENT_TILES	EQU 0x06006200 ;DIRTY_TILES-(MAX_RECENT_TILES*16)
 
-INSTANT_PAGES EQU MAPPED_RGB-1024
-openFiles       EQU INSTANT_PAGES-1200
-lfnName			EQU openFiles-256
-;fatBuffer	EQU lfnName-512
-globalBuffer    EQU lfnName-512
+
+
+MEM_END	EQU 0x02040000
+
+XGB_SRAM	EQU MEM_END-0x8000
+XGB_VRAM	EQU XGB_SRAM-0x4000
+GBC_EXRAM	EQU XGB_VRAM-0x6000
+SGB_PACKET	EQU GBC_EXRAM-112
+INSTANT_PAGES	EQU 0x0600cc00 ;SGB_PACKET-1024
+SGB_PALETTE	EQU SGB_PACKET-16*4
+
+DIRTY_ROWS EQU SGB_PALETTE-48
+DIRTY_TILES EQU DIRTY_ROWS-768-4
+RECENT_TILENUM	EQU DIRTY_TILES-(MAX_RECENT_TILES+2)*2
+
+SGB_PALS	EQU RECENT_TILENUM-4096
+SGB_ATFS	EQU SGB_PALS-4096
+sgb_attributes EQU SGB_ATFS-360
+
+
+GBOAMBUFF1	EQU sgb_attributes-160
+GBOAMBUFF2	EQU GBOAMBUFF1-160
+
+BG0CNT_SCROLL_BUFF	EQU GBOAMBUFF2-144*24
+WINDOWBUFF	EQU BG0CNT_SCROLL_BUFF-144*2
+DISPCNTBUFF	EQU WINDOWBUFF-144*2
+
+BG0CNT_SCROLL_BUFF2	EQU DISPCNTBUFF-144*24
+WINDOWBUFF2	EQU BG0CNT_SCROLL_BUFF2-144*2
+DISPCNTBUFF2	EQU WINDOWBUFF2-144*2
+
+;WXBUFF1	EQU DISPCNTBUFF-144
+;YSCROLLBUFF1	EQU WXBUFF1-144
+;XSCROLLBUFF1	EQU YSCROLLBUFF1-144
+;LCDCBUFF1	EQU XSCROLLBUFF1-144
+;WXBUFF2	EQU LCDCBUFF1-144
+;YSCROLLBUFF2	EQU WXBUFF2-144
+;XSCROLLBUFF2	EQU YSCROLLBUFF2-144
+;LCDCBUFF2	EQU XSCROLLBUFF2-144
+
+MULTIBOOT_LIMIT	EQU DISPCNTBUFF2-0	;How much data is left for Multiboot to work.
+
+openFiles	EQU DISPCNTBUFF2-1200
+lfnName	EQU openFiles-256
+globalBuffer	EQU lfnName-512
 fatBuffer	EQU globalBuffer-512
-SramName		EQU fatBuffer-256
+SramName	EQU fatBuffer-256
+fatWriteBuffer	EQU fatBuffer
 
 
-;77552
 
-;10664 bytes for these:
-DISPCNTBUFF		EQU SramName-164*2
+;MEM_END	EQU 0x02040000
+;GBOAMBUFF1	EQU -160
+;GBOAMBUFF2	EQU -160
+;SCROLLBUFF	EQU -144*16
+;BG0CNTBUFF	EQU -144*8
+;DISPCNTBUFF	EQU -144*2
+;XSCROLLBUFF1	EQU -144
+;XSCROLLBUFF2	EQU -144
+;YSCROLLBUFF1	EQU -144
+;YSCROLLBUFF2	EQU -144
+;LCDCONTROLBUFF1	EQU -144
+;LCDCONTROLBUFF2	EQU -144  ;0x1200 + 0x140
+;XGB_SRAM	EQU -0x8000
+;XGB_VRAM	EQU -0x4000
+;GBC_EXRAM	EQU -0x6000
+;INSTANT_PAGES	EQU -1024
+;MAPPED_RGB	EQU -16*4
+;openFiles	EQU -1200
+;lfnName	EQU -256
+;globalBuffer	EQU -512
+;fatBuffer	EQU -512
+;SramName	EQU -256
+;MULTIBOOT_LIMIT	EQU -0	;How much data is left for Multiboot to work.
 
-END_OF_EXRAM	EQU DISPCNTBUFF-0000	;How much data is left for Multiboot to work.
-DMA1BUFF		EQU DISPCNTBUFF
-fatWriteBuffer EQU fatBuffer
-  
-  
+;speedhacks  EQU -512
+
   ]
 
 
@@ -125,7 +188,7 @@ AGB_SRAM		EQU 0xE000000
 AGB_BG			EQU AGB_VRAM+0xA000
 AGB_BG_GBMODE		EQU AGB_VRAM+0x4000
 
-DEBUGSCREEN		EQU AGB_VRAM+0xD800
+DEBUGSCREEN		EQU AGB_VRAM+0x7800
 
 REG_BASE		EQU 0x4000000
 REG_DISPCNT		EQU 0x00
@@ -149,7 +212,7 @@ REG_WIN0V		EQU 0x44
 REG_WIN1V		EQU 0x46
 REG_WININ		EQU 0x48
 REG_WINOUT		EQU 0x4A
-REG_BLDCNT		EQU 0x50
+REG_BLDMOD		EQU 0x50
 REG_BLDALPHA	EQU 0x52
 REG_BLDY		EQU 0x54
 REG_SG1CNT_L	EQU 0x60
@@ -190,6 +253,7 @@ REG_DM3CNT_H	EQU 0xDE
 REG_TM0D		EQU 0x100
 REG_TM0CNT		EQU 0x102
 REG_IE			EQU 0x200
+REG_IME			EQU 0x208
 REG_IF			EQU 0x4000202
 REG_P1			EQU 0x4000130
 REG_P1CNT		EQU 0x132
@@ -213,20 +277,17 @@ cycles		RN r8
 gb_pc		RN r9
 globalptr	RN r10 ;=wram_globals* ptr
 gb_optbl	RN r10
-gb_zpage	RN r11 ;=XGB_RAM
+gb_sp		RN r11
 addy		RN r12 ;keep this at r12 (scratch for APCS)
 		;r13=SP
 		;r14=LR
 		;r15=PC
 ;----------------------------------------------------------------------------
 
- MAP 0,gb_zpage
-xgb_ram # 0x2000
-xgb_hram # 0x80
-chr_decode # 0x400
-oam_buffer1 # 0x200
-oam_buffer2 # 0x200
-oam_buffer3 # 0x200
+; MAP 0,gb_zpage
+;xgb_ram # 0x2000
+;xgb_hram # 0x80
+;chr_decode # 0x400
 
 ;everything in wram_globals* areas:
 
@@ -235,12 +296,11 @@ opz # 256*4
 readmem_tbl # 16*4
 writemem_tbl # 16*4
 memmap_tbl # 16*4
-cpuregs # 7*4
-gb_sp # 4
+cpuregs # 8*4
 gb_ime # 1
 gb_ie # 1
 gb_if # 1
-gb_ic # 1
+gb_ic # 1  ;not actually used
 lastbank # 4
 dividereg # 4
 timercounter # 4
@@ -249,8 +309,8 @@ timerctrl # 1
 stctrl # 1
 debugstop # 1 ;align
 nexttimeout # 4
+nexttimeout_alt # 4
 scanlinehook # 4
-scanline # 4
 frame # 4
 cyclesperscanline # 4
  [ SPEEDHACKS
@@ -261,11 +321,15 @@ speedhacks_p # 4
 profiler # 4
  ]
 rambank # 1
-doublespeed # 1
-gbmode # 1
+gbcmode # 1
+sgbmode # 1
 hackflags # 1
-doubletimer # 1
- # 3
+doubletimer_ # 1
+gbamode # 1
+request_gb_type_ # 1
+novblankwait_ # 1
+hblankposition # 4
+
  [ RESIZABLE
 xgb_sram # 4
 xgb_sramsize # 4
@@ -280,43 +344,100 @@ fpsvalue # 4
 AGBjoypad # 4
 XGBjoypad # 4
 
+lcdctrl # 1
+lcdstat # 1
 scrollX # 1
 scrollY # 1
-windowX # 1
-windowY # 1
-lcdyc_r # 1
+
+scanline # 1
 lcdyc # 1
-lcdstat # 1
-lcdctrl # 1
-lcdctrl0frame # 1
-ppuctrl1 # 1
-gbpalette # 1
+ # 1
+bgpalette # 1
+
 ob0palette # 1
 ob1palette # 1
-vrambank # 1
+windowX # 1
+windowY # 1
+
 BCPS_index # 1
+doublespeed # 1
 OCPS_index # 1
+vrambank # 1
+
 dma_src # 2
 dma_dest # 2
-agb_vrambank # 4
- 
+
+bigbuffer	# 4
+bg01cnt		# 4
+bg23cnt		# 4
+xyscroll	# 4
+xyscroll2	# 4
+dispcntdata	# 4
+windata		# 4
+dispcntaddr	# 4
+windowyscroll	# 4
+buffer_lastscanline	# 4
+
+lcdctrl0midframe # 1
+lcdctrl0frame # 1
+rendermode # 1
+_ui_border_visible # 1
+ui_border_cnt_bic # 4
+ui_border_cnt_orr # 4
+ui_border_scroll2 # 4
+ui_border_scroll3 # 4
+_ui_x # 4
+_ui_y # 4
+_ui_moved # 1
+ # 3
 			;cart.s (wram_globals2)
+bank0 # 4
+bank1 # 4
+srambank # 4
 mapperdata # 32
 sramwptr # 4
 
 biosbase # 4
 rombase # 4
 romnumber # 4
-emuflags # 4
+emuflags # 4  ;NOT ACTUALLY USED!
 
 rommask # 4
 rammask # 4
 
 cartflags # 1
 sramsize # 1
-bank0 # 1
-bank1 # 1
+ # 2
+			;io.s (wram_globals3)
+joy0state # 1
+joy1state # 1
+joy2state # 1
+joy3state # 1
+joy0serial # 1
+joy1serial # 1
+	# 2
 
+			;sgb.s (wram_globals4)
+packetcursor # 4
+packetbitcursor # 4
+packetstate # 1
+player_turn # 1
+player_mask # 1
+sgb_mask # 1
+
+update_border_palette # 1
+ # 3
+sgb_hack_frame # 4
+
+
+			;gbz80.s (wram_globals5)
+fiveminutes_ # 4
+sleeptime_   # 4
+dontstop_    # 1
+ # 3
+
+   
+   
 
 ;----------------------------------------------------------------------------
 ;IRQ_VECTOR EQU 0xfffe ; IRQ/BRK interrupt vector address
@@ -353,7 +474,237 @@ CYC_MASK		EQU CYCLE-1	;Mask
 
 SINGLE_SPEED EQU 456*CYCLE
 DOUBLE_SPEED EQU 912*CYCLE
+SINGLE_SPEED_HBLANK EQU 204*CYCLE  ;should be 204
+DOUBLE_SPEED_HBLANK EQU 408*CYCLE
+
+
+WINDOW_TOP EQU 8
+WINDOW_LEFT EQU 40
 
 ;----------------------------------------------------------------------------
+
+ [ VERSION_IN_ROM
+	MACRO
+	bl_long $label
+	mov lr,pc
+	ldr pc,=$label
+	MEND
+
+	MACRO
+	bleq_long $label
+	moveq lr,pc
+	ldreq pc,=$label
+	MEND
+
+	MACRO
+	bllo_long $label
+	movlo lr,pc
+	ldrlo pc,=$label
+	MEND
+
+	MACRO
+	blhi_long $label
+	movhi lr,pc
+	ldrhi pc,=$label
+	MEND
+
+	MACRO
+	bllt_long $label
+	movlt lr,pc
+	ldrlt pc,=$label
+	MEND
+
+	MACRO
+	blgt_long $label
+	movgt lr,pc
+	ldrgt pc,=$label
+	MEND
+
+	MACRO
+	blne_long $label
+	movne lr,pc
+	ldrne pc,=$label
+	MEND
+
+	MACRO
+	blcc_long $label
+	movcc lr,pc
+	ldrcc pc,=$label
+	MEND
+
+	MACRO
+	blpl_long $label
+	movpl lr,pc
+	ldrpl pc,=$label
+	MEND
+
+	MACRO
+	b_long $label
+	ldr pc,=$label
+	MEND
+
+	MACRO
+	bcc_long $label
+	ldrcc pc,=$label
+	MEND
+
+	MACRO
+	bhs_long $label
+	ldrhs pc,=$label
+	MEND
+
+	MACRO
+	beq_long $label
+	ldreq pc,=$label
+	MEND
+
+	MACRO
+	bne_long $label
+	ldrne pc,=$label
+	MEND
+
+	MACRO
+	blo_long $label
+	ldrlo pc,=$label
+	MEND
+
+	MACRO
+	bhi_long $label
+	ldrhi pc,=$label
+	MEND
+
+	MACRO
+	bgt_long $label
+	ldrgt pc,=$label
+	MEND
+
+	MACRO
+	blt_long $label
+	ldrlt pc,=$label
+	MEND
+
+	MACRO
+	bcs_long $label
+	ldrcs pc,=$label
+	MEND
+
+	MACRO
+	bmi_long $label
+	ldrmi pc,=$label
+	MEND
+
+	MACRO
+	bpl_long $label
+	ldrpl pc,=$label
+	MEND
+
+	|
+
+	MACRO
+	bl_long $label
+	bl $label
+	MEND
+
+	MACRO
+	bleq_long $label
+	bleq $label
+	MEND
+
+	MACRO
+	bllo_long $label
+	bllo $label
+	MEND
+
+	MACRO
+	blhi_long $label
+	blhi $label
+	MEND
+
+	MACRO
+	bllt_long $label
+	bllt $label
+	MEND
+
+	MACRO
+	blgt_long $label
+	blgt $label
+	MEND
+
+	MACRO
+	blne_long $label
+	blne $label
+	MEND
+
+	MACRO
+	blcc_long $label
+	blcc $label
+	MEND
+
+	MACRO
+	blpl_long $label
+	blpl $label
+	MEND
+
+	MACRO
+	b_long $label
+	b $label
+	MEND
+
+	MACRO
+	bcc_long $label
+	bcc $label
+	MEND
+
+	MACRO
+	bhs_long $label
+	bhs $label
+	MEND
+
+	MACRO
+	beq_long $label
+	beq $label
+	MEND
+
+	MACRO
+	bne_long $label
+	bne $label
+	MEND
+
+	MACRO
+	blo_long $label
+	blo $label
+	MEND
+
+	MACRO
+	bhi_long $label
+	bhi $label
+	MEND
+
+	MACRO
+	bgt_long $label
+	bgt $label
+	MEND
+
+	MACRO
+	blt_long $label
+	blt $label
+	MEND
+
+	MACRO
+	bcs_long $label
+	bcs $label
+	MEND
+
+	MACRO
+	bmi_long $label
+	bmi $label
+	MEND
+
+	MACRO
+	bpl_long $label
+	bpl $label
+	MEND
+ ]
+
 
 		END

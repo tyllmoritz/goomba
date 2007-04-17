@@ -13,5 +13,9 @@
 	IMPORT sram_W2
 	IMPORT wram_W
 	IMPORT wram_W_2
+	IMPORT echo_W
+	IMPORT echo_R
+	
 	IMPORT filler_
+	IMPORT copy_
 	END

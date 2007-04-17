@@ -9,7 +9,6 @@
 	IMPORT findrom2 ;from main.c
 	IMPORT make_instant_pages
 	IMPORT init_cache
-	IMPORT request_gb_type
 	
 	[ MOVIEPLAYER
 	IMPORT update_cache
@@ -36,7 +35,7 @@
 	EXPORT romnum
 	EXPORT g_cartflags
 	EXPORT g_banks
-	EXPORT END_OF_EXRAM
+	EXPORT MULTIBOOT_LIMIT
 	
 	EXPORT INSTANT_PAGES
 	EXPORT SramName
@@ -132,16 +131,15 @@ loadcart ;called from C:  r0=rom number, r1=emuflags
 	bl thumbcall_r1
 
 	ldr globalptr,=|wram_globals0$$Base|	;need ptr regs init'd
-	ldr gb_zpage,=XGB_RAM
 
 	mov r3,r0		;r0 now points to rom image
 	str r3,rombase		;set rom base
 				;r3=rombase til end of loadcart so DON'T FUCK IT UP
 
-	mov r0,#0
-	ldr r1,=AGB_VRAM+0x4000	;clear AGB Tiles
-	mov r2,#0x8000/4
-	bl filler_
+;	mov r0,#0
+;	ldr r1,=AGB_VRAM+0x4000	;clear AGB Tiles
+;	mov r2,#0x8000/4
+;	bl filler_
 
 ;	ldr r0,=0x01000100
 ;	ldr r1,=AGB_BG1		;clear AGB BG (GB Window sides)
@@ -152,15 +150,42 @@ loadcart ;called from C:  r0=rom number, r1=emuflags
 	str r0,romnumber
         str r1,emuflags
         
-	ldr r0,=request_gb_type
-	ldrb r0,[r0]
-
+	;check for SGB support, r2 = supports SGB
+	ldrb r1,[r3,#0x146]
+	cmp r1,#3
+	ldreqb r1,[r3,#0x14B]
+	cmpeq r1,#0x33
+	moveq r2,#1
+	movne r2,#0
+	
+	;check for GBC support, r1 = supports GBC
         ldrb r1,[r3,#0x143]
         cmp r1,#0x80
         cmpne r1,#0xC0
+        moveq r1,#1
         movne r1,#0
-        moveq r1,r0
-       	strb r1,gbmode
+
+	;check what GB type we want:
+	;0 = GB
+	;1 = perfer SGB over GBC
+	;2 = perfer GBC over SGB
+	;3 = Weird GBC+SGB
+	ldrb r0,request_gb_type_
+        
+        cmp r0,#0
+        moveq r1,#0
+        moveq r2,#0
+        
+        cmp r0,#1
+        cmpeq r2,#1
+        moveq r1,#0 ;disable GBC if SGB supported
+        
+        cmp r0,#2
+        cmpeq r1,#1
+        moveq r2,#0 ;disable SGB if GBC supported
+        
+        strb r1,gbcmode
+        strb r2,sgbmode
        	
  [ RESIZABLE
  	cmp r1,#0x00
@@ -178,10 +203,11 @@ loadcart ;called from C:  r0=rom number, r1=emuflags
 	ldrb r0,[r3,#0x147]
 	cmp r0,#5 ;mbc2 has that funky 512 nibbles of ram
 	cmpne r0,#6
-	moveq r0,#4 ;invalid value used just for mbc2
+	moveq r0,#5 ;invalid value used just for mbc2
 	
 	ldrneb r0,[r3,#0x149]	;get ram size.
 	strneb r0,sramsize
+	
 	adr r1,rammasktbl
 	ldr r0,[r1,r0,lsl#2]
 	str r0,rammask
@@ -209,14 +235,14 @@ loadcart ;called from C:  r0=rom number, r1=emuflags
 	ldmfd sp!,{r0-addy,lr}
 	
 	mov r0,#0
-	strb r0,bank0
+	str r0,bank0
 	mov r1,#1
-	strb r0,bank1
+	str r0,bank1
 	
 	mov r0,#0		;default ROM mapping
-	bl map0123_		;0123=1st 16k
+	bl_long map0123_		;0123=1st 16k
 	mov r0,#1
-	bl map4567_		;4567=2nd 16k
+	bl_long map4567_		;4567=2nd 16k
 
 ;	bl FixRealBios
 ;	bl mapBIOS_		;01=BIOS
@@ -239,7 +265,7 @@ loadcart ;called from C:  r0=rom number, r1=emuflags
 	ldrne r1,=sram_W2
 dont_use_true_sram
 	str r1,sramwptr
-
+	
 	ldr r0,=default_scanlinehook
 	str r0,scanlinehook	;no mapper irq
 
@@ -247,12 +273,9 @@ dont_use_true_sram
 	mov r1,#AGB_OAM
 	mov r2,#0x100
 	bl filler_		;no stray sprites please
-	ldr r1,=OAM_BUFFER1
-	mov r2,#0x180
-	bl filler_
 
 	mov r0,#0		;clear gb ram+hram
-	mov r1,gb_zpage
+	ldr r1,=XGB_RAM
 	mov r2,#0x2080/4
 	bl filler_
  [ RESIZABLE
@@ -338,6 +361,14 @@ lc1				;call mapper*init
 	mov pc,r0		;Jump to MapperInit
 0
 ;	bl mirror1_		;(call after mapperinit to allow mappers to set up cartflags first)
+	
+	[ LITTLESOUNDDJ
+	;Little Sound DJ stuff
+	ldrb r0,sramsize
+	cmp r0,#4
+	bleq little_sound_dj_init
+	;END Little Sound DJ stuff
+	]
 
 	bl emu_reset		;reset everything else
 	ldmfd sp!,{r4-r11,lr}
@@ -349,7 +380,74 @@ rammasktbl
 	DCD 0x07FF
 	DCD 0x1FFF
 	DCD 0x7FFF
+	DCD 0x7FFF ;little sound DJ 128k
 	DCD 0x01FF
+
+	[ LITTLESOUNDDJ
+;LITTLE SOUND DJ STUFF!
+
+;----------------------------------------------------------------------------
+sram_W_LSDJ	;sram write ($A000-$BFFF)
+;----------------------------------------------------------------------------
+	ldr r1,memmap_tbl+40
+	tst addy,#1
+	bic addy,addy,#1
+	ldrh r2,[r1,addy]
+	bicne r2,r2,#0xFF00
+	orrne r2,r2,r0,lsl#8
+	biceq r2,r2,#0x00FF
+	orreq r2,r2,r0
+	strh r2,[r1,addy]
+	mov pc,lr
+
+M3_SRAM_BUFFER EQU 0x9FE0000
+
+LSDJ_MAP
+	strb r0,mapperdata+4
+LSDJ_MAP2
+	ldrb r0,mapperdata+4		;rambank
+	ldr r1,=sram_W_LSDJ
+	str r1,sramwptr
+	str r1,writemem_tbl+40
+	str r1,writemem_tbl+44
+	ldr r1,=mem_RA0
+	str r1,readmem_tbl+40
+	str r1,readmem_tbl+44
+	ldr r1,=M3_SRAM_BUFFER-0xA000
+	ldr r2,=0x1FFFF
+	and r0,r2,r0,lsl#13
+	add r0,r1,r0
+	str r0,memmap_tbl+40
+	str r0,memmap_tbl+44
+	b flush
+
+little_sound_dj_init
+	ldr r1,=sram_W_LSDJ
+	str r1,sramwptr
+	str r1,writemem_tbl+40
+	str r1,writemem_tbl+44
+	adr r2,writemem_tbl
+	ldr r1,=LSDJ_MAP
+	str r1,[r2,#16]
+	str r1,[r2,#20]
+	ldr r1,=LSDJ_MAP2
+	str r1,[r2,#0]
+	str r1,[r2,#4]
+	
+	mov addy,lr
+	;clear M3_SRAM_BUFFER
+	mov r0,#0
+	ldr r1,=M3_SRAM_BUFFER
+	mov r2,#32768
+	bl filler_
+	mov lr,addy
+	
+	bx lr
+
+;END LITTLE SOUND DJ STUFF!
+	]
+
+
 ;----------------------------------------------------------------------------
 FixRealBios;		r3=rombase
 ;----------------------------------------------------------------------------
@@ -406,9 +504,9 @@ ss0	ldr r5,[r2],#4
 ;savetags DCB "VERS","CFG ","REGS","RAM ","HRAM","VRAM","RAM2","SRAM","PAL ","MAPR","BANK","CPUS","GFXS"
 ;savesizes DCB 4,4,
 
-savelst	DCD rominfo,4,XGB_RAM,0x2080,XGB_VRAM,0x2000,XGB_SRAM,0x8000,GBOAM_BUFFER,0xA0,gbc_palette,128
-	DCD mapperstate,32,rommap,16,cpustate,52,lcdstate,16
-lstend
+;savelst	DCD rominfo,4,XGB_RAM,0x2080,XGB_VRAM,0x2000,XGB_SRAM,0x8000,GBOAM_BUFFER,0xA0,gbc_palette,128
+;	DCD mapperstate,32,rommap,16,cpustate,52,lcdstate,16
+;lstend
 
 ;savelst	DCD rominfo,4,XGB_RAM,0x2080,XGB_VRAM,0x2000,XGB_SRAM,0x8000,GBOAM_BUFFER,0xA0,agb_pal,96
 ;	DCD vram_map,64,agb_nt_map,16,mapperstate,32,rommap,16,cpustate,52,lcdstate,16
@@ -443,11 +541,10 @@ fixromptrs	;add r2 to some things
 loadstate	;called from ui.c
 ;void loadstate(int rom#,u32 *stateptr)	 (stateptr must be word aligned)
 ;----------------------------------------------------------------------------
-	stmfd sp!,{r4-r7,globalptr,gb_zpage,lr}
+	stmfd sp!,{r4-r7,globalptr,r11,lr}
 
 	mov r6,r1		;r6=where state is at
 	ldr globalptr,=|wram_globals0$$Base|
-	ldr gb_zpage,=XGB_RAM
 
 	ldr r1,[r6]             ;emuflags
 	bl loadcart		;cart init
@@ -477,7 +574,7 @@ ls3	ldrb r0,[r3],#1
 
 	bl resetlcdregs
 
-	ldmfd sp!,{r4-r7,globalptr,gb_zpage,lr}
+	ldmfd sp!,{r4-r7,globalptr,r11,lr}
 	bx lr
  ]
 
@@ -519,7 +616,7 @@ map0123_
 ;----------------------------------------------------------------------------
 	ldr r1,rommask
 	and r0,r0,r1,lsr#14
-	strb r0,bank0
+	str r0,bank0
 	ldr r1,=INSTANT_PAGES
 	ldr r0,[r1,r0,lsl#2]
 	subs r0,r0,#0x0000
@@ -566,7 +663,7 @@ map4567_
 ;----------------------------------------------------------------------------
 	ldr r1,rommask
 	and r0,r0,r1,lsr#14
-	strb r0,bank1
+	str r0,bank1
 	ldr r1,=INSTANT_PAGES
 	ldr r0,[r1,r0,lsl#2]
 	subs r0,r0,#0x4000
@@ -612,9 +709,9 @@ need_to_use_cache
 ;	mov r0,r0,lsl#1
 ;	ldr r1,rommask
 ;	and r0,r0,r1,lsr#14
-;	strb r0,bank0
+;	str r0,bank0
 ;	add r1,r0,#1
-;	strb r1,bank1
+;	str r1,bank1
 ;	ldr r1,=INSTANT_PAGES
 ;	ldr r0,[r1,r0,lsl#2]
 ;	subs r0,r0,#0x0000
@@ -645,6 +742,7 @@ need_to_use_cache
 
 ;----------------------------------------------------------------------------
 mapAB_
+	str r0,srambank
  [ RESIZABLE
 	ldr r1,xgb_sram
 	sub r1,r1,#0xA000
@@ -660,6 +758,10 @@ mapAB_
 ;----------------------------------------------------------------------------
  AREA wram_globals2, CODE, READWRITE
 
+g_banks
+	DCD 0	;bank0
+	DCD 0	;bank1
+	DCD 0   ;srambank
 mapperstate
 	% 32	;mapperdata
 
@@ -681,8 +783,9 @@ g_cartflags
 	DCB 0	;cartflags
 g_sramsize	
 	DCB 0	;sramsize
-g_banks
-	DCW 0	;bank1
-	DCW 0	;bank2
+
+	DCB 0
+	DCB 0
+
 ;----------------------------------------------------------------------------
 	END

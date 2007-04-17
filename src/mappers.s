@@ -47,6 +47,14 @@ mbc0init
 	DCD void,void,void,void
 	mov pc,lr
 
+;mapperdata for mbc1:
+;0	low 5 bits of rom bank number (00-1F), 00 becomes 01.
+;1	high 2 bits of rom bank number
+;2	sram enabled (0A if enabled)
+;3	rom/ram bankswitch mode (0 for rom, 1 for ram)
+;4	sram bank
+;5	2 bits for either rom bank or sram bank
+
 ;----------------------------------------------------------------------------
 mbc1init
 ;----------------------------------------------------------------------------
@@ -121,7 +129,7 @@ mbc3latchtime
 	cmp r1,#1
 	movne pc,lr
 	stmfd sp!,{r3,lr}
-	bl gettime
+	bl_long gettime
 	ldmfd sp!,{r3,lr}
 	mov pc,lr
 ;----------------------------------------------------------------------------

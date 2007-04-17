@@ -1,9 +1,15 @@
 #ifndef __INCLUDES_H__
 #define __INCLUDES_H__
 
-#define VERSION "alpha 6"
+#define SRAM_SIZE 64
+
+#define VERSION "4-17-07"
+
+#define LITTLESOUNDDJ 0
+//Little Sound DJ Hack requires M3/G6/Supercard
 
 #ifdef _GBAMP_VERSION
+	#define SPLASH 0
 	#define MULTIBOOT 0
 	#define CARTSRAM 0
 	#define SPEEDHACKS 0
@@ -15,6 +21,7 @@
 	#define GOMULTIBOOT 0
 	#define POGOSHELL 0
 #else
+	#define SPLASH 1
 	#define MULTIBOOT 1
 	#define CARTSRAM 1
 	#define SPEEDHACKS 0
@@ -36,6 +43,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "gba.h"
+
 #include "asmcalls.h"
 #include "fs.h"
 #include "minilzo.107/minilzo.h"

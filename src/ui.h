@@ -38,6 +38,7 @@ void swapAB(void);
 void autostateset(void);
 void chpalette(void);
 void gbtype(void);
+void gbatype(void);
 void timermode(void);
 void go_multiboot(void);
 

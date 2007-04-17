@@ -1,0 +1,124 @@
+---final answer---
+
+gbFrameEnd:
+	if v=1 then
+		add tiles to buffer
+		B=1
+		if buffer becomes full, D=1
+		do not wait for vblank
+	else
+		D=1
+		wait for vblank
+	v=0
+vblank:	
+	if B=1
+		consume tile buffer
+		B=0
+	if D=1
+		consume dirty tiles
+		D=0
+	v=1
+
+
+---end of final answer---
+
+
+
+gbFrameEnd:
+	...
+	input flags:
+		v - vblank happened while emulating frame, won't wait.
+		B - buffer is present or needs to be consumed
+	output flags:
+		D - consume dirty tiles
+		B - consume buffer
+	
+	if vsync is off
+		set v flag
+	
+	v,B
+	0,0 -	normal frame
+		B=0
+		D=1
+		wait for vblank
+		vblank:
+			draw dirtytiles directly to vram
+			D=0
+			v=1
+		v=0
+		...
+		if vblank happens before next frame finishes:
+			B==0, D==0, do nothing
+			v=1
+			next state is 1,0
+		else
+			next state is 0,0
+		
+	1,0 -	slow normal frame
+		
+		store tiles into buffer
+		if buffer becomes full
+			D=1
+			Graphics become corrupt for a frame
+		B=1
+		do not wait for vblank
+		v=0
+		...
+		if vblank happens before next frame:
+			draw buffer
+			B=0
+			if D==1, draw dirtytiles
+			D=0
+			v=1
+			next state is 1,0
+		else
+			next state is 0,1
+	0,1 -	fast frame with stuff inside buffer
+		B is already 1
+		D=1
+	
+		wait for vblank
+		vblank:
+			draw tile buffer
+			draw dirtytiles
+			B=0
+			D=0
+			v=1
+		v=0
+		
+		if vblank happens before next frame finishes:
+			do nothing to tiles
+			v=1
+			next state is 1,0
+		else
+			next state is 0,0
+	1,1 -	slow frame with stuff inside buffer
+		add new tiles to buffer
+		if buffer becomes full
+			D=1
+			graphics are corrupt for one frame
+		do not wait for vblank
+		v=0
+		if vblank happens before next frame:
+			consume tile buffer
+			B=0
+			if D==1, consume dirty tiles and D=0
+			v=1
+			next state is 1,0
+		else
+			next state is 0,1
+	
+	
+	
+		
+	
+	
+
+Vblank:
+
+
+
+gbFrameEnd before Vblank:
+
+
+Vblank before gbFrameEnd:
