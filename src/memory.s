@@ -19,7 +19,11 @@
 	EXPORT sram_W2
 	EXPORT wram_W
 	EXPORT wram_W_2
+	EXPORT echo_W
+	EXPORT echo_R
+	
 	EXPORT filler_
+	EXPORT copy_
 ;----------------------------------------------------------------------------
 empty_R		;read bad address (error)
 ;----------------------------------------------------------------------------
@@ -96,7 +100,11 @@ mem_RC0_2	;ram read ($D000-$DFFF)
 sram_W2	;write to real sram ($A000-$BFFF)  AND emulated sram
 ;----------------------------------------------------------------------------
 	orr r1,addy,#0xe000000	;r1=e00A000+
-	add r1,r1,#0x4000		;r1=e00e000+
+ [ SRAM_32
+ 	sub r1,r1,#0x4000   ;32k sram: A000>>6000
+ | ;64k sram
+	add r1,r1,#0x4000   ;64k sram: A000>>E000
+ ]
 	strb r0,[r1]
 ;----------------------------------------------------------------------------
 sram_W	;sram write ($A000-$BFFF)
@@ -116,6 +124,20 @@ wram_W_2	;wram write ($C000-$DFFF)
 	ldr r1,memmap_tbl+52
 	strb r0,[r1,addy]
 	mov pc,lr
+
+echo_R
+	sub addy,addy,#0x2000
+	tst addy,#0x1000
+	beq mem_RC0
+	b mem_RC0_2
+
+echo_W
+	sub addy,addy,#0x2000
+	tst addy,#0x1000
+	beq wram_W
+	b wram_W_2
+
+
 ;----------------------------------------------------------------------------
  AREA rom_code, CODE, READONLY
 filler_ ;r0=data r1=dest r2=word count
@@ -124,6 +146,14 @@ filler_ ;r0=data r1=dest r2=word count
 	subs r2,r2,#1
 	str r0,[r1,r2,lsl#2]
 	bne filler_
-	mov pc,lr
+	bx lr
 ;----------------------------------------------------------------------------
+copy_
+	;r0=dest, r1=src, r2=count, addy=destroyed
+	subs r2,r2,#1
+	ldr addy,[r1,r2,lsl#2]
+	str addy,[r0,r2,lsl#2]
+	bne copy_
+	bx lr
+
 	END

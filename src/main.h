@@ -17,7 +17,6 @@ extern u32 oldinput;
 extern u8 *textstart;//points to first GB rom (initialized by boot.s)
 extern int roms;//total number of roms
 extern int selectedrom;
-extern int ui_visible;
 extern int ui_x;
 extern int ui_y;
 extern u32 max_multiboot_size;

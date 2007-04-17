@@ -1,3 +1,4 @@
+/*
 #include "gba.h"
 #include <string.h>
 
@@ -8,28 +9,56 @@
 #include "ui.h"
 #include "savestate.h"
 #include "asmcalls.h"
+*/
 
-const char statelist[37] ="0123456789abcdefghijklmnopqrstuvwxyz";
-char stateexist[36];
-const char saveversion[]="PocketNES " VERSION_NUMBER " savestate";
-#define VERSION_TAG 0
-#define VRAM1_TAG 5
-#define VRAM2_TAG 6
-#define VRAM4_TAG 7
-#define NUM_TAGS 11
-const char *const tags[]={
-	"VERS",
-	"CPUS",
-	"GFXS",
-	"RAM ",
-	"SRAM",
-	"VRM1",
-	"VRM2",
-	"VRM4",
-	"MAPR",
-	"PAL ",
-	"MIRR",
-};
+/*
+VERS	4	
+REGS	12	
+EMUF	20	
+IO  	256	
+MAPR	44	
+PAL 	128	gbc_palette
+OAM 	160	NULL
+RAM 	8192	XGB_RAM
+RAM2	24576	GBC_EXRAM
+VRAM	16384	XGB_VRAM
+PACK	112	
+SPAL	64	
+PALS	4096	
+ATFS	4096	
+ATTR	360	
+SRAM	32768	XGB_SRAM
+*/
+
+TAG # 4
+blocksize # 2
+decompsize # 2
+
+const char alltags[]="VERSREGSEMUFIO  MAPRPAL OAM RAM RAM2VRAMVRM2SRAMPACKSPALPALSATFSATTR"
+const u32 *const tags=(u32*)alltags;
+/*
+VERS
+REGS
+EMUF
+IO  
+MAPR
+PAL 
+OAM 
+RAM 
+RAM2
+VRAM
+VRM2
+SRAM
+PACK
+SPAL
+PALS
+ATFS
+ATTR
+*/
+
+lzo1x_1_compress
+
+
 void * addresses[]=
 {
 	(void*)saveversion,

@@ -24,13 +24,11 @@ extern u8 g_sramsize;
 #define true (1==1)
 #define false (1==0)
 
-
 #define MEM_PALETTE (u16*)0x5000000
 #define MEM_VRAM (u16*)0x6000000
 #define MEM_OAM (u32*)0x7000000
 #define MEM_SRAM (u8*)0xE000000
 #define INTR_VECT *(u32*)0x3007FFC
-#define SCREENBASE (u16*)0x600D000
 
 #define REG_DISPCNT *(vu32*)0x4000000
 #define MODE0 0
@@ -109,7 +107,7 @@ extern u8 g_sramsize;
 #define REG_DM1CNT_H *(u16*)0x40000c6
 #define REG_DM2CNT_H *(u16*)0x40000d2
 #define REG_DM3CNT_H *(u16*)0x40000de
-#define REG_BLDCNT *(u16*)0x4000050
+#define REG_BLDMOD *(u16*)0x4000050
 #define REG_BLDALPHA *(u16*)0x4000052
 #define REG_BLDY *(u16*)0x4000054
 #define REG_SGCNT0_L *(u16*)0x4000080

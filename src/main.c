@@ -1,5 +1,7 @@
 #include "includes.h"
 
+#define SCREENBASE (u16*)0x6007000
+
 #if MOVIEPLAYER
 int usinggbamp;
 int usingcache;
@@ -7,13 +9,11 @@ File rom_file=NO_FILE;
 char save_slot;
 #endif
 
+
 u32 oldinput;
 u8 *textstart;//points to first GB rom (initialized by boot.s)
 int roms;//total number of roms
 int selectedrom=0;
-int ui_visible=0;
-int ui_x=0;
-int ui_y=0;
 #if POGOSHELL
 char pogoshell_romname[32];	//keep track of rom name (for state saving, etc)
 char pogoshell=0;
@@ -31,10 +31,72 @@ u32 max_multiboot_size;		//largest possible multiboot transfer (init'd by boot.s
 
 void loadfont()
 {
-	LZ77UnCompVram(&font,(u16*)0x600C400);
-	
-	
+	LZ77UnCompVram(&font,(u16*)0x600C000);
 }
+
+#if LITTLESOUNDDJ
+vu16 *const SC_UNLOCK = (vu16*)0x09FFFFFE;
+vu16 *const M3_UNLOCK = (vu16*)0x09FFEFFE;
+
+bool test_mem()
+{
+	u32 oldbyte;
+	u32 deadbeef=0xDEADBEEF;
+	vu32* address=(u32*)0x09876540;
+	bool success;
+	oldbyte=*address;
+	*address=deadbeef;
+	success=*address==deadbeef;
+	*address=oldbyte;
+	return success;
+}
+
+__inline bool unlock_sc()
+{
+	//unlock SuperCard
+	*SC_UNLOCK = 0xA55A;
+	*SC_UNLOCK = 0xA55A;
+	*SC_UNLOCK = 0x0005;
+	*SC_UNLOCK = 0x0005;
+	return test_mem();
+}
+__inline bool unlock_g6()
+{
+	//unlock G6
+	*SC_UNLOCK = 0xAA55;
+	return test_mem();
+}
+__inline bool unlock_m3()
+{
+	//unlock M3
+	*M3_UNLOCK = 0xAA55;
+	return test_mem();
+}
+
+int enable_ram()
+{
+	int cardtype;
+	cardtype=0;
+	if (test_mem())
+	{
+		cardtype=4;
+	}
+	else if (unlock_sc())
+	{
+		cardtype=1;
+	}
+	else if (unlock_g6())
+	{
+		cardtype=2;
+	}
+	else if (unlock_m3())
+	{
+		cardtype=3;
+	}
+	return cardtype;
+}
+#endif
+
 
 
 void C_entry()
@@ -45,6 +107,12 @@ void C_entry()
 	u32 temp=(u32)(*(u8**)0x0203FBFC);
 	pogoshell=((temp & 0xFE000000) == 0x08000000)?1:0;
 #endif
+
+#if LITTLESOUNDDJ
+	enable_ram();
+#endif
+
+
 	*timeregs=1;
 	if(*timeregs & 1) rtc=1;
 	gbaversion=CheckGBAVersion();
@@ -62,9 +130,13 @@ void C_entry()
 
 	// The maximal space
 #if CARTSRAM
-	buffer1=(&Image$$RO$$Limit);
-	buffer2=(&Image$$RO$$Limit+0x10000);
-	buffer3=(&Image$$RO$$Limit+0x20000);
+	{
+		u8* ewram_start=&Image$$RO$$Limit;
+		if ( ((u32)ewram_start)&0x08000000 ) ewram_start = (u8*)0x02000000;
+		buffer1=(ewram_start);
+		buffer2=(ewram_start+0x10000);
+		buffer3=(ewram_start+0x20000);
+	}
 #endif
 
 #if POGOSHELL
@@ -126,24 +198,10 @@ void C_entry()
 		}
 #endif
 	}
-	//make 16 solid tiles
-	{
-		u32*  p=(u32*)0x06000000;
-		for (i=0;i<16;i++)
-		{
-			u32 val=i*0x11111111;
-			for (j=0;j<8;j++)
-			{
-				*p=val;
-				p++;
-			}
-		}
-	}
-
 	if(REG_DISPCNT==FORCE_BLANK)	//is screen OFF?
 		REG_DISPCNT=0;				//screen ON
 	*MEM_PALETTE=0x7FFF;			//white background
-	REG_BLDCNT=0x00ff;				//brightness decrease all
+	REG_BLDMOD=0x00ff;				//brightness decrease all
 	for(i=0;i<17;i++) {
 		REG_BLDY=i;					//fade to black
 		waitframe();
@@ -156,9 +214,24 @@ void C_entry()
 	lzo_init();	//init compression lib for savestates
 #endif
 
+	//make 16 solid tiles
+	{
+		u32*  p=(u32*)0x06004000;
+		for (i=0;i<16;i++)
+		{
+			u32 val=i*0x11111111;
+			for (j=0;j<8;j++)
+			{
+				*p=val;
+				p++;
+			}
+		}
+	}
+
+
 	//load font+palette
 	loadfont();
-	memcpy((void*)0x5000080,&fontpal,64);
+	memcpy((void*)0x50000A0,&fontpal,64);
 #if CARTSRAM
 	readconfig();
 #endif
@@ -296,9 +369,9 @@ void rommenu(void)
 			lastselected=sel;
 			for(i=0;i<8;i++)
 			{
-				waitframe();
 				ui_x=224-i*32;
 				move_ui();
+				waitframe();
 			}
 			setdarknessgs(7);			//Lighten screen
 		}
@@ -399,15 +472,6 @@ int drawmenu(int sel)
 		j=roms;
 	}
 
-	for(i=0;i<j;i++)
-	{
-		p=findrom(toprow+i);
-		if(roms>1)drawtextl(i,(char*)p+0x134,i==(sel-toprow)?1:0,15);
-		if(i==sel-toprow) {
-			//ri=(romheader*)p;
-			//romflags=(*ri).flags|(*ri).spritefollow<<16;
-		}
-	}
 	if(roms>20)
 	{
 		ui_y=topline%8;
@@ -417,6 +481,17 @@ int drawmenu(int sel)
 	{
 		ui_y=176+roms*4;
 		move_ui();
+	}
+	waitframe();
+
+	for(i=0;i<j;i++)
+	{
+		p=findrom(toprow+i);
+		if(roms>1)drawtextl(i,(char*)p+0x134,i==(sel-toprow)?1:0,15);
+		if(i==sel-toprow) {
+			//ri=(romheader*)p;
+			//romflags=(*ri).flags|(*ri).spritefollow<<16;
+		}
 	}
 	return romflags;
 }
@@ -451,7 +526,7 @@ void cls(int chrmap)
 	if(chrmap==2)
 		i=0x200;
 	for(;i<len;i++)				//512x256
-		scr[i]=0x00200020;
+		scr[i]=0x00000000;
 	ui_y=0;
 	move_ui();
 }
@@ -465,46 +540,49 @@ void drawtextl(int row,char *str,int hilite,int len)
 	u16 *here=SCREENBASE+row*32;
 	int i=0;
 
-	*here=hilite?0x402a:0x4020;
-	hilite=(hilite<<12)+0x4000;
+	*here=hilite?0x500a:0x5000;
+	hilite=(hilite<<12)+0x5000;
 	here++;
 	while(str[i]>=' ' && i<len) {
-		here[i]=str[i]|hilite;
+		here[i]=(str[i]-32)|hilite;
 		i++;
 	}
 	for(;i<31;i++)
-		here[i]=0x0020;
+		here[i]=0x5000;
 }
 
 void setdarknessgs(int dark)
 {
-	REG_BLDCNT=0x01f7;				//darken game screens
+	int ui_layer_bit=(ui_border_visible==3 ? 4 : 8);
+	REG_BLDMOD=0x1FF ^ ui_layer_bit;
 	REG_BLDY=dark;					//Darken screen
 	REG_BLDALPHA=(0x10-dark)<<8;	//set blending for OBJ affected BG0
 }
 
 void setbrightnessall(int light)
 {
-	REG_BLDCNT=0x00bf;				//brightness increase all
+	REG_BLDMOD=0x00bf;				//brightness increase all
 	REG_BLDY=light;
 }
 
 void make_ui_visible()
 {
-	ui_visible=1;
+	ui_border_visible|=1;
+	
 	loadfont();
 	cls(3);
-	REG_WININ=0x3D3A;  //BG3 visible regardless of window
-	REG_WINOUT=0x3F28; //BG3 visible outside of window
+//	REG_WININ=0x3D3A;  //BG3 visible regardless of window
+//	REG_WINOUT=0x3F28; //BG3 visible outside of window
 	move_ui();
 }
 
 void make_ui_invisible()
 {
-	ui_visible=0;
-	REG_WININ=0x353A;  //settings back to normal
-	REG_WINOUT=0x3F20; 
+	ui_border_visible&=~1;
+//	REG_WININ=0x353A;  //settings back to normal
+//	REG_WINOUT=0x3F20; 
 #if MOVIEPLAYER
 	reload_vram_page1();
 #endif
+	move_ui();
 }

@@ -4,6 +4,12 @@
 #include "fs.h"
 //#include "cache.h"
 
+extern u8 ui_border_visible;
+extern u8 ui_moved;
+//extern u8 border_visible;
+extern int ui_x;
+extern int ui_y;
+
 extern u8 Image$$RO$$Base;
 extern u8 Image$$RW$$Base;
 extern u8 Image$$RO$$Limit;
@@ -11,6 +17,8 @@ extern u8 Image$$RW$$Limit;
 extern u32 max_multiboot_size;
 
 //gbz80.s
+void update_doublespeed_ui(void);
+
 void emu_reset(void);
 void cpuhack_reset(void);
 void run(int dont_stop);
@@ -28,15 +36,14 @@ extern u32 frametotal;
 extern u32 sleeptime;
 extern u8 novblankwait;
 extern u8 request_gb_type;
+extern u8 request_gba_mode;
 
 extern u8 g_hackflags;
 extern u32 num_speedhacks;
 extern u16 speedhacks[256];
 
 extern u8 gb_mode;
-extern u8 g_doubletimer;
-extern u8 g_doublespeed;
-extern u32 g_cyclesperscanline;
+extern u8 doubletimer;
 
 extern u32 dontstop;
 
@@ -180,5 +187,8 @@ extern u16 FREQTBL2[2048];
 
 //visoly.s
 void doReset(void);
+
+//sgb.s
+extern u8 g_update_border_palette;
 
 #endif

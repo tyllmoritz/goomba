@@ -20,7 +20,7 @@ typedef struct {
 typedef struct {		//(modified stateheader)
 	u16 size;
 	u16 type;	//=CONFIGSAVE
-	char bordercolor;
+	char unused1;
 	char palettebank;
 	char misc;
 	char reserved3;

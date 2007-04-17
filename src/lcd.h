@@ -1,3 +1,12 @@
+	IMPORT gboambuff
+	IMPORT newframe_vblank
+
+	IMPORT update_sgb_palette
+
+	IMPORT OAM_W
+	IMPORT OAM_R
+
+	IMPORT gbc_chr_update
 	IMPORT GFX_init
 	IMPORT GFX_reset
 	IMPORT FF40_R
@@ -12,6 +21,7 @@
 	IMPORT FF44_W
 	IMPORT FF45_R
 	IMPORT FF45_W
+	IMPORT FF46_W
 	IMPORT FF47_R
 	IMPORT FF47_W
 	IMPORT FF48_R
@@ -39,10 +49,10 @@
 ;	IMPORT vram_map
   IMPORT gbc_palette
 	IMPORT debug_
-	IMPORT map_palette
+;	IMPORT map_palette
 	IMPORT newframe
 	IMPORT lcdstate
 ;	IMPORT writeBG
-	IMPORT oambuffer
+;	IMPORT oambuffer
 	IMPORT resetlcdregs
 	END

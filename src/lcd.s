@@ -1,3 +1,101 @@
+;newest todo:
+;*Fix balloon kid's garbage graphics
+;Take lots of non-critical code out of IWRAM
+;*remove NONE from double speed menu
+;option to use color 0 as border color
+;Fix the damn UI shaking, fix the darkened UI when changing between SGB and non SGB
+;Finish the job, make the interrupt handler be in charge of adding the UI/Border
+;	Do this by comparing my_ui_border with _ui_border_visible
+;	Also make my_ui_border work
+;*TIMERS doublespeed mode should be full double speed during vblank period
+;Incorporate UI and Border into scanline filler, also ensure 4 layers always visible
+
+;newer todo:
+;fix flickering
+
+;new todo:
+;fix sprite priority in window split mode
+;sync BG tiles
+;
+;SGB STUFF:
+;do SGB colors correctly
+;do sgb attributes
+;*update SGB border palette for real
+;*Proper darkness when UI and Border visible
+
+;other border stuff:
+;custom borders
+
+
+
+;TODO:
+;* = written, + = tested
+;fake bios, init sound like the real bios
+;*verify that turning off screen is working correctly
+;*verify that interrupts are working correctly
+;fix STOP instruction
+;*"ugly hack" from io.s?
+;Border Support
+;	border generation ui, border loading...
+;*set default double speed mode to Full
+;Save options per game, like palette, double speed mode
+;Custom palettes
+;SGB Support
+;Palette changes per line using vcount, may up to 4 palettes per frame total
+;Savestates
+;Real HDMA
+;re-add GBAMP support
+;Possibly separate gbz80 core from gb system stuff?
+;Port to NDS
+;ROM Compression
+
+;test new code
+;*buffer filler (vblank and others)
+;*newframe_vblank
+
+;finished TODO:
+;*fix recent_tiles again, there's graphics corruption
+;*correct graphics in fast mode
+;*gamma correct GBC palette
+;*init window values
+;*newframe applys at start of vblank
+;*look again at those buffer fillers, check the code for problems
+;*fill in values for bgxcntbuff
+;*incorporate UI visibility
+;*change windowx code to store into a buffer
+;*new code for DMAing the buffers (using vcount interrupts to start and stop)
+;*write vcount interrupt
+;*write code to generate GBA tilemaps, including HP tiles
+;*new vram arrangement
+;*integrate dirty tiles
+;*integrate delayed dirty tiles
+;*add sprite generator
+
+
+;dma: scrolling, dispcnt, bgXcnt, windowx
+;border GFX takes up 1E00 bytes [240 tiles] per border
+
+;vram usage:
+;1a
+;2a
+;solid tiles, border tiles
+;4 maps
+;1b
+;2b
+;font, (2 maps) bg0,bg00
+;(4 maps) bg0H,bg1,bg101bg1H
+;
+;26, 27, 28, 29, 30, 31
+
+
+;
+;
+;maps:
+;6 GB maps
+;2 UI maps
+;1 border map
+;1 free map
+
 	INCLUDE equates.h
 	INCLUDE memory.h
 	INCLUDE cart.h
@@ -5,15 +103,24 @@
 	INCLUDE gbz80.h
 	INCLUDE sound.h
 	INCLUDE mappers.h
+	INCLUDE sgb.h
 
  [ RUMBLE
 	IMPORT RumbleInterrupt
 	IMPORT StartRumbleComs
  ]
-	IMPORT ui_visible
-	IMPORT ui_y
-	IMPORT ui_x
-
+	EXPORT ui_border_visible
+	EXPORT ui_y
+	EXPORT ui_x
+	EXPORT ui_moved
+	
+	EXPORT move_ui
+	
+	EXPORT gboambuff
+	
+	EXPORT newframe_vblank
+	EXPORT gbc_chr_update
+	
 	EXPORT GFX_init
 	EXPORT GFX_reset
 	EXPORT FF40_R
@@ -28,6 +135,7 @@
 	EXPORT FF44_W
 	EXPORT FF45_R
 	EXPORT FF45_W
+	EXPORT FF46_W
 	EXPORT FF47_R
 	EXPORT FF47_W
 	EXPORT FF48_R
@@ -51,6 +159,9 @@
 	EXPORT FF6A_W	;OCPS - OBJ Color Palette Specification
 	EXPORT FF6B_W	;OCPD - OBJ Color Palette Data
 
+	EXPORT OAM_W
+	EXPORT OAM_R
+
 	EXPORT vram_W
 	EXPORT vram_W2
 	EXPORT debug_
@@ -59,31 +170,26 @@
 	EXPORT paletteinit
 	EXPORT PaletteTxAll
 	EXPORT transfer_palette
+	EXPORT update_sgb_palette
 	EXPORT newframe
 	EXPORT lcdstate
 	EXPORT gammavalue
-	EXPORT oambuffer
-	EXPORT makeborder
-	EXPORT bcolor
 	EXPORT palettebank
 	EXPORT resetlcdregs
 	EXPORT fpsenabled
 	EXPORT FPSValue
 	EXPORT vbldummy
 	EXPORT vblankfptr
-;	EXPORT vcountfptr
+	EXPORT vcountfptr
 	EXPORT vblankinterrupt
 	EXPORT gbc_palette
-;	EXPORT vcountinterrupt
-	
-	EXPORT move_ui
-	
-	EXPORT WINBUFF
+	EXPORT vcountinterrupt
+	EXPORT WINDOWBUFF
 
-	EXPORT DISPCNTBUFF
-	EXPORT BG0CNTBUFF
-	EXPORT SCROLLBUFF1
-	EXPORT SCROLLBUFF2
+;	EXPORT DISPCNTBUFF
+;	EXPORT BG0CNTBUFF
+;	EXPORT SCROLLBUFF1
+;	EXPORT SCROLLBUFF2
 ;	EXPORT DMA0BUFF
 
 
@@ -178,6 +284,11 @@ GFX_init	;(called from main.c) only need to call once
 ;----------------------------------------------------------------------------
 	mov addy,lr
 
+	;install IRQ handler
+	ldr r1,=AGB_IRQVECT
+	ldr r2,=irqhandler
+	str r2,[r1]
+
 	mov r1,#0xffffff00			;build chr decode tbl
 	ldr r2,=CHR_DECODE
 ppi0	mov r0,#0
@@ -206,19 +317,9 @@ ppi0	mov r0,#0
 	mov r2,#0x80/4
 	bl filler_
 
-	ldr r1,=DISPCNTBUFF			;clear DISPCNT+DMA1BUFF
-	mov r2,#328/4
-	bl filler_
-
-	;fill window buffer
-	ldr r0,=0x28C8C8C8 ;win0h, win1h
-	ldr r1,=0x08989898 ;win0v, win1v
-	ldr r3,=WINBUFF
-	mov r2,#160*8/8
-fill_win_loop
-	stmia r3!,{r0,r1}
-	subs r2,r2,#1
-	bne fill_win_loop
+;	ldr r1,=DISPCNTBUFF			;clear DISPCNT+DMA1BUFF
+;	mov r2,#328/4
+;	bl filler_
 
 	mov r1,#REG_BASE
 	mov r0,#0x0008
@@ -233,44 +334,101 @@ fill_win_loop
 	strh r0,[r1,#REG_WINOUT]	;WinOUT0/1, Everything enabled outside Windows
 
 
-	add r0,r1,#REG_BG0HOFS		;DMA0 always goes here
-	str r0,[r1,#REG_DM0DAD]
-	mov r0,#1					;1 word transfer
-	strh r0,[r1,#REG_DM0CNT_L]
-;	ldr r0,=DMA0BUFF			;DMA0 src=
-;	str r0,[r1,#REG_DM0SAD]
-
-	str r1,[r1,#REG_DM1DAD]		;DMA1 goes here
-	mov r0,#1					;1 word transfer
-	strh r0,[r1,#REG_DM1CNT_L]
+;	add r0,r1,#REG_BG0HOFS		;DMA0 always goes here
+;	str r0,[r1,#REG_DM0DAD]
+;	mov r0,#1					;1 word transfer
+;	strh r0,[r1,#REG_DM0CNT_L]
+;;	ldr r0,=DMA0BUFF			;DMA0 src=
+;;	str r0,[r1,#REG_DM0SAD]
+;
+;	str r1,[r1,#REG_DM1DAD]		;DMA1 goes here
+;	mov r0,#1					;1 word transfer
+;	strh r0,[r1,#REG_DM1CNT_L]
 
 	add r2,r1,#REG_IE
 	mov r0,#-1
 	strh r0,[r2,#2]		;stop pending interrupts
-	ldr r0,=0x1081
-	strh r0,[r2]		;key,vblank,serial interrupt enable
-;	ldr r0,=0x1085
-;	strh r0,[r2]		;key,vcount,vblank,serial interrupt enable
+;	ldr r0,=0x1081
+;	strh r0,[r2]		;key,vblank,serial interrupt enable
+	ldr r0,=0x1085
+	strh r0,[r2]		;key,vcount,vblank,serial interrupt enable
 	mov r0,#1
 	strh r0,[r2,#8]		;master irq enable
-
-	ldr r1,=AGB_IRQVECT
-	ldr r2,=irqhandler
-	str r2,[r1]
 
 	bx addy
 ;----------------------------------------------------------------------------
 GFX_reset	;called with CPU reset
 ;----------------------------------------------------------------------------
 	stmfd sp!,{addy,lr}
+
 	mov r0,#0
 
 ;	ldr r1,=AGB_BG		;clear most of the GB VRAM
 ;	mov r2,#0x2000/4
 ;	bl filler_
 
+;;--------
+	;clear dirtytiles and dirtyrows
+	ldr r1,=DIRTY_TILES
+	mov r2,#(768+48+4)/4
+	bl filler_
+	
+	;clear RECENT_TILENUM
+	mvn r0,#0
+	ldr r1,=RECENT_TILENUM
+	mov r2,#(MAX_RECENT_TILES/2)+1
+	bl filler_
+	
+	;clear RECENT_TILES for no reason
 	mov r0,#0
-	bl FF4F_W
+	ldr r1,=RECENT_TILES
+	mov r2,#(MAX_RECENT_TILES*16)/4
+	bl filler_
+	
+	;clear XGB_VRAM
+	ldr r1,=XGB_VRAM
+	mov r2,#0x4000/4   ;maybe this needs to change for 'resizable'
+	bl filler_
+	
+	;clear GBA vram corresponding to XGB_VRAM
+	ldr r1,=0x06000000
+	mov r2,#0x4000/4
+	bl filler_
+	ldr r1,=0x06008000
+	mov r2,#0x4000/4
+	bl filler_
+	ldr r1,=0x06014000
+	mov r2,#0x4000/4
+	bl filler_
+	;clear GBA tilemaps corresponding to XGB_VRAM
+	ldr r1,=0x06000000
+	mov r2,#0x4000/4
+	bl filler_
+	ldr r1,=0x0600D000
+	mov r2,#0x3000/4
+	bl filler_
+	
+	;clear GB OAM
+	mov r0,#200
+	ldr r1,=GBOAMBUFF1
+	mov r2,#160/4
+	bl filler_
+	ldr r1,=GBOAMBUFF2
+	mov r2,#160/4
+	bl filler_
+
+;;--------
+
+
+	mov r0,#0
+	bl_long FF4F_W
+	
+	;reset emu buffers FIXME
+;	mov r0,#0
+;	strb r0,frame_windowy
+;	strb r0,active_windowy
+;	strb r0,gboamdirty
+	
 
 	
 	mov r0,#0
@@ -279,12 +437,15 @@ GFX_reset	;called with CPU reset
 	strb r0,scrollY
 	strb r0,windowX
 	strb r0,windowY
-	strb r0,lcdyc_r
+	strb r0,lcdyc
 	strb r0,vrambank
+	strb r0,BCPS_index
+	strb r0,OCPS_index
+	strb r0,doublespeed
+	str r0,dma_src ;and dma_dest
 
 	mov r0,#0x91
 	strb r0,lcdctrl		;LCDC
-	strb r0,ppuctrl1
 
 	mov r1,#REG_BASE
 	ldr r0,=0x28C8				;40-200
@@ -295,77 +456,83 @@ GFX_reset	;called with CPU reset
 ;	mov r0,#0x0000
 ;	strh r0,[r1,#REG_BG3CNT]	;Border
 
-	bl makeborder
 	bl paletteinit
 	mov r0,#0xfc
-	strb r0,gbpalette
+	strb r0,bgpalette
 	mov r0,#0xff
 	strb r0,ob0palette
 	strb r0,ob1palette
 	bl resetlcdregs
+	;init the buffer filling engine
+;	mov r11,r11
+	mov r0,#0xFF
+	strb r0,rendermode
+	bl newframeinit
+
 	ldmfd sp!,{addy,lr}
+
 
 	mov pc,lr
 
-;----------------------------------------------------------------------------
-move_ui
-;----------------------------------------------------------------------------
-	stmfd sp!,{r0-addy,lr}
-	ldr r0,=ui_x
-	ldr r0,[r0]
-	ldr r3,=ui_y
-	ldr r3,[r3]
-	orr r0,r0,r3,lsl#16
-	ldr r3,=BG0CNTBUFF+6
-	ldr r4,=DISPCNTBUFF
-	mov r1,#160
-	ldr r2,=dmascrollbuff
-	ldr r2,[r2]
-	add r2,r2,#12
-;	ldr r7,=DMA0BUFF
-;	add r7,r7,#12
-	ldr r8,=scrollbuff
-	ldr r8,[r8]
-	add r8,r8,#12
-;	ldr r7,=
-;	ldr r2,=DMA0BUFF
-;	ldr r6,=dmascrollbuff
-;	str r2,[r6]
-;	ldr r2,=DMA0BUFF+12
-	ldr r6,=0x5A0C
-move_ui_loop
-	str r0,[r2],#16
-;	str r0,[r7],#16
-	str r0,[r8],#16
-	ldrh r5,[r4]
-	orr r5,r5,#0x0800
-	strh r5,[r4],#2
-	strh r6,[r3],#8
-	subs r1,r1,#1
-	bne move_ui_loop
-
-	ldmfd sp!,{r0-addy,lr}
-	bx lr
+;;----------------------------------------------------------------------------
+;move_ui
+;;----------------------------------------------------------------------------
+;	stmfd sp!,{r0-addy,lr}
+;	ldr r0,=ui_x
+;	ldr r0,[r0]
+;	ldr r3,=ui_y
+;	ldr r3,[r3]
+;	orr r0,r0,r3,lsl#16
+;	ldr r3,=BG0CNTBUFF+6
+;	ldr r4,=DISPCNTBUFF
+;	mov r1,#160
+;	ldr r2,=dmascrollbuff
+;	ldr r2,[r2]
+;	add r2,r2,#12
+;;	ldr r7,=DMA0BUFF
+;;	add r7,r7,#12
+;	ldr r8,=scrollbuff
+;	ldr r8,[r8]
+;	add r8,r8,#12
+;;	ldr r7,=
+;;	ldr r2,=DMA0BUFF
+;;	ldr r6,=dmascrollbuff
+;;	str r2,[r6]
+;;	ldr r2,=DMA0BUFF+12
+;	ldr r6,=0x5A0C
+;move_ui_loop
+;	str r0,[r2],#16
+;;	str r0,[r7],#16
+;	str r0,[r8],#16
+;	ldrh r5,[r4]
+;	orr r5,r5,#0x0800
+;	strh r5,[r4],#2
+;	strh r6,[r3],#8
+;	subs r1,r1,#1
+;	bne move_ui_loop
+;
+;	ldmfd sp!,{r0-addy,lr}
+;	bx lr
 
 ;----------------------------------------------------------------------------
 resetlcdregs
 ;----------------------------------------------------------------------------
 	str lr,[sp,#-4]!
 
-	ldrb r0,lcdctrl
-	bl FF40_W
+;	ldrb r0,lcdctrl
+;	bl_long FF40_W
 	ldrb r0,lcdstat
-	bl FF41_W
-	ldrb r0,scrollY
-	bl FF42_W
-	ldrb r0,scrollX
-	bl FF43_W
-	ldrb r0,lcdyc_r
-	bl FF45_W
-	ldrb r0,windowY
-	bl FF4A_W
-	ldrb r0,windowX
-	bl FF4B_W
+	bl_long FF41_W
+;	ldrb r0,scrollY
+;	bl_long FF42_W
+;	ldrb r0,scrollX
+;	bl_long FF43_W
+	ldrb r0,lcdyc
+	bl_long FF45_W
+;	ldrb r0,windowY
+;	bl_long FF4A_W
+;	ldrb r0,windowX
+;	bl_long FF4B_W
 	bl PaletteTxAll
 	
 	ldr pc,[sp],#4
@@ -373,96 +540,58 @@ resetlcdregs
 PaletteTxAll;		also called from UI.c
 ;----------------------------------------------------------------------------
 	str lr,[sp,#-4]!
-	ldrb r0,gbpalette
-	bl FF47_W
+	ldrb r0,bgpalette
+	bl_long FF47_W
 	ldrb r0,ob0palette
-	bl FF48_W
+	bl_long FF48_W
 	ldrb r0,ob1palette
-	bl FF49_W
+	bl_long FF49_W
+	bl copy_gbc_palette
 	ldr lr,[sp],#4
 	bx lr
-;----------------------------------------------------------------------------
-makeborder;		also called from UI.c
-;----------------------------------------------------------------------------
-;	mov r1,#REG_BASE
-;	ldr r2,=0x3F3F
-;	strh r2,[r1,#REG_WININ]		;WinIN0/1, Everything enabled inside Windows
-;	subne r2,r2,#0x17			;r0=0x3f28
-;	strh r2,[r1,#REG_WINOUT]	;WinOUT0/1, SPR, BG0, BG1 & BG2 not enable outside Win0
+
+copy_gbc_palette
+	;copy GBC palette
+	ldr r1,=gbc_palette
+	ldr r2,=gbc_palette2
+	mov addy,#128
+palcopyloop
+	ldr r0,[r1],#4
+	str r0,[r2],#4
+	subs addy,addy,#4
+	bne palcopyloop
 	bx lr
 
-;
-;	mov r1,#0x06000000
-;	adr r2,SGBorder
-;	mov r3,#32*20
-;	ldr r0,bcolor
-;	cmp r0,#3
-;	moveq r0,#0x120
-;	beq bordloopt
-;	mov r0,r0,lsl#12
-;	add r0,r0,#0x3100
-;bordloop
-;	ldrb addy,[r2],#1
-;	orr addy,addy,r0
-;	strh addy,[r1],#2
-;	subs r3,r3,#1
-;	bne bordloop
-;	bx lr
-;bordloopt
-;	strh r0,[r1],#2
-;	subs r3,r3,#1
-;	bne bordloopt
-;	bx lr
-;;----------------------------------------------------------------------------
-bcolor
-	DCD 0 ;Border color
-;SGBorder
-;	DCB 0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f
-;	DCB 0x7f,0x7f,0x7f,0x7f,0x7f,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f
-;	DCB 0x7f,0x7f,0x7f,0x7f,0x7f,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f
-;	DCB 0x7f,0x7f,0x7f,0x7f,0x7f,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f
-;	DCB 0x7f,0x7f,0x7f,0x7f,0x7f,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f
-;	DCB 0x7f,0x7f,0x7f,0x7f,0x7f,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f
-;	DCB 0x7f,0x7f,0x7f,0x7f,0x7f,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f
-;	DCB 0x7f,0x7f,0x7f,0x7f,0x7f,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f
-;	DCB 0x7f,0x7f,0x7f,0x7f,0x7f,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f
-;	DCB 0x7f,0x7f,0x7f,0x7f,0x7f,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f
-;	DCB 0x7f,0x7f,0x7f,0x7f,0x7f,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f
-;	DCB 0x7f,0x7f,0x7f,0x7f,0x7f,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f
-;	DCB 0x7f,0x7f,0x7f,0x7f,0x7f,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f
-;	DCB 0x7f,0x7f,0x7f,0x7f,0x7f,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f
-;	DCB 0x7f,0x7f,0x7f,0x7f,0x7f,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f
-;	DCB 0x7f,0x7f,0x7f,0x7f,0x7f,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f
-;	DCB 0x7f,0x7f,0x7f,0x7f,0x7f,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f
-;	DCB 0x7f,0x7f,0x7f,0x7f,0x7f,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f
-;	DCB 0x7f,0x7f,0x7f,0x7f,0x7f,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f
-;	DCB 0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f,0x7f
 ;----------------------------------------------------------------------------
 paletteinit;	r0-r3 modified.
 ;called by ui.c:  void map_palette(char gammavalue)
 ;----------------------------------------------------------------------------
 	stmfd sp!,{r4-r7,lr}
 	ldr r7,=GBPalettes
-	ldr r1,palettebank	;Which color set (yellow, grey...)
+	ldr r1,=palettebank	;Which color set (yellow, grey...)
+	ldr r1,[r1]
 	add r1,r1,r1,lsl#1	;r1 x 3
 	add r7,r7,r1,lsl#4	;r7 + r1 x 16
-	ldr r6,=MAPPED_RGB
-	ldrb r1,gammavalue	;gamma value = 0 -> 4
+	ldr r6,=SGB_PALETTE
+;	ldrb r1,gammavalue	;gamma value = 0 -> 4
 	mov r4,#16
 nomap					;map rrrrrrrrggggggggbbbbbbbb  ->  0bbbbbgggggrrrrr
 	ldrb r0,[r7],#1		;Red ready
-	bl gammaconvert
+;	bl gammaconvert
+	mov r0,r0,lsr#3
 	mov r5,r0
 
 	ldrb r0,[r7],#1		;Green ready
-	bl gammaconvert
+;	bl gammaconvert
+	mov r0,r0,lsr#3
 	orr r5,r5,r0,lsl#5
 
 	ldrb r0,[r7],#1		;Blue ready
-	bl gammaconvert
+;	bl gammaconvert
+	mov r0,r0,lsr#3
 	orr r5,r5,r0,lsl#10
 
-	str r5,[r6],#4
+	strh r5,[r6],#2
 	subs r4,r4,#1
 	bpl nomap
 
@@ -472,30 +601,161 @@ nomap					;map rrrrrrrrggggggggbbbbbbbb  ->  0bbbbbgggggrrrrr
 ;----------------------------------------------------------------------------
 transfer_palette
 ;----------------------------------------------------------------------------
-	stmfd sp!,{r0-r5}
-	mov r0,#AGB_PALETTE
-	;transfer first 15 colors for solid blocks
-	ldr r1,=gbc_palette
-;	ldrh r2,[r1]
-;	strh r2,[r0],#2
-	mov r3,#16
-pal_loop1
-	ldrh r2,[r1],#8
-	strh r2,[r0],#2
-	subs r3,r3,#1
-	bne pal_loop1
+	stmfd sp!,{r0-r9,lr}
+	
+	ldr r1,=g_update_border_palette
+	ldrb r0,[r1]
+	movs r0,r0
+	movne r0,#0
+	strne r0,[r1]
+	blne update_the_border_palette
 
-	mov r3,#16
-	ldr r1,=gbc_palette
-	ldr r0,=AGB_PALETTE+256
+	ldr r4,=AGB_PALETTE+256
+
+	ldr r2,=g_sgb_mask
+	ldrb r2,[r2]
+	cmp r2,#2
+	bge sgb_mask_palette
+
+	ldr r2,=lcdctrl0frame_
+	ldrb r2,[r2]
+	tst r2,#0x80 ;screen off?
+	beq white_palette
+	
+	ldr r5,=gbc_palette2
+	
+	mov r8,#16 ;16 palettes
+
+	ldr r1,=gammavalue
+	ldrb r1,[r1]
+	movs r1,r1   
+	beq nogamma1
+	
+pal_loop1
+	mov r9,#4
+pal_loop11
+	bl gamma_convert_one
+	
+	subs r9,r9,#1
+	bne pal_loop11
+	add r4,r4,#24
+	subs r8,r8,#1
+	bne pal_loop1
+	b aftergamma
+nogamma1
 pal_loop2
-	ldmia r1!,{r4,r5}
-	stmia r0,{r4,r5}
-	add r0,r0,#32
-	subs r3,r3,#1
+	ldmia r5!,{r0,r1}
+	stmia r4,{r0,r1}
+	add r4,r4,#32
+	subs r8,r8,#1
 	bne pal_loop2
-	ldmfd sp!,{r0-r5}
+aftergamma	
+
+	;for the hell of it, copy first transparent color to color zero
+	;DELETEME?
+	;only do it if SGB border is visible
+	ldr r0,=ui_border_visible
+	ldrb r0,[r0]
+	tst r0,#2
+	
+	;otherwise pick black border?
+	ldr r0,=AGB_PALETTE
+	ldr r1,=AGB_PALETTE+0x100
+	ldrneh r3,[r1]
+	moveq r3,#0
+	strh r3,[r0]
+	
+	;now copy first 8 transparent colors to solid blocks
+	ldr r0,=AGB_PALETTE+0xF0
+	ldr r1,=AGB_PALETTE+0x100
+	mov r2,#8
+pal_loop3
+	ldrh r3,[r1],#32
+	strh r3,[r0],#2
+	
+	subs r2,r2,#1
+	bne pal_loop3
+	
+	ldmfd sp!,{r0-r9,lr}
 	bx lr
+
+
+white_palette
+	ldr r0,=gbc_mode
+	ldrb r0,[r0]
+	movs r0,r0
+	mvn r0,#0
+	bne %f3
+	mov r2,#4
+sgb_mask_palette
+	mov r0,#0
+	cmp r2,#4
+	ldreq r0,=SGB_PALETTE ;if 3, use black, if 4, use SGB color #0
+	ldreqh r0,[r0]
+	orreq r0,r0,r0,lsl#16
+3
+	mov r1,r0
+	mov r2,#16
+whitepal_loop
+	stmia r4,{r0,r1}
+	add r4,r4,#32
+	subs r2,r2,#1
+	bne whitepal_loop
+	b aftergamma
+
+update_the_border_palette
+	stmfd sp!,{lr}
+	
+	ldr r4,=AGB_PALETTE+32
+	ldr r5,=BORDER_PALETTE
+	
+	mov r9,#64 ;64 colors
+
+	ldr r1,=gammavalue
+	ldrb r1,[r1]
+	movs r1,r1
+	beq %f1
+	
+0
+	bl gamma_convert_one
+	subs r9,r9,#1
+	bne %b0
+	ldmfd sp!,{pc}
+	
+1
+	ldr r0,[r5],#4
+	str r0,[r4],#4
+	subs r9,r9,#2
+	bne %b1
+	ldmfd sp!,{pc}
+
+
+gamma_convert_one
+	;r5 = src, r4 = dest
+	stmfd sp!,{lr}
+
+	ldrh r6,[r5],#2 ;read color
+	ands r0,r6,#0x1F  ;red gamma
+	addne r0,r0,#1
+	mov r0,r0,lsl#3
+	subne r0,r0,#1
+	bl gammaconvert
+	mov r7,r0
+	ands r0,r6,#0x3E0 ;green gamma
+	addne r0,r0,#0x20
+	mov r0,r0,lsr#2
+	subne r0,r0,#1
+	bl gammaconvert
+	orr r7,r7,r0,lsl#5
+	ands r0,r6,#0x7C00 ;blue gamma
+	addne r0,r0,#400
+	mov r0,r0,lsr#7
+	subne r0,r0,#1
+	bl gammaconvert
+	orr r7,r7,r0,lsl#10 ;all combined
+	strh r7,[r4],#2
+	
+	ldmfd sp!,{pc}
 
 
 
@@ -514,10 +774,11 @@ gammaconvert;	takes value in r0(0-0xFF), gamma in r1(0-4),returns new value in r
 ;----------------------------------------------------------------------------
 showfps_		;fps output, r0-r3=used.
 ;----------------------------------------------------------------------------
-	ldrb r0,fpschk
+	ldr r2,=fpsenabled
+	ldrb r0,[r2,#1] ;fpschk
 	subs r0,r0,#1
 	movmi r0,#59
-	strb r0,fpschk
+	strb r0,[r2,#1]
 	bxpl lr					;End if not 60 frames has passed
 
  [ RUMBLE
@@ -530,7 +791,7 @@ ret_
  ]
 
 
-	ldrb r0,fpsenabled
+	ldrb r0,[r2,#0]
 	tst r0,#1
 	bxeq lr					;End if not enabled
 
@@ -543,22 +804,23 @@ ret_
 	mov r1,#100
 	swi 0x060000			;Division r0/r1, r0=result, r1=remainder.
 	add r0,r0,#0x30
-	strb r0,fpstext+5
+	strb r0,[r2,#-3];fpstext+5
 	mov r0,r1
 	mov r1,#10
 	swi 0x060000			;Division r0/r1, r0=result, r1=remainder.
 	add r0,r0,#0x30
-	strb r0,fpstext+6
+	strb r0,[r2,#-2];fpstext+6
 	add r1,r1,#0x30
-	strb r1,fpstext+7
+	strb r1,[r2,#-1];fpstext+7
 	
 
-	adr r0,fpstext
+	ldr r0,=fpstext
 	ldr r2,=DEBUGSCREEN
 ;	add r2,r2,r1,lsl#6
 db1
 	ldrb r1,[r0],#1
-	orr r1,r1,#0x4100
+	orr r1,r1,#0x5000
+	sub r1,r1,#32
 	strh r1,[r2],#2
 	tst r2,#15
 	bne db1
@@ -582,14 +844,388 @@ db0
 	bne db0
  ]
 	bx lr
-;----------------------------------------------------------------------------
-palettebank	DCD 0
-fpstext DCB "FPS:    "
-fpsenabled DCB 0
-fpschk	DCB 0
-gammavalue DCB 0
-		DCB 0
-;----------------------------------------------------------------------------
+
+update_sgb_palette
+	stmfd sp!,{lr}
+	bl update_sgb_bg_palette
+	bl update_sgb_obj0_palette
+	bl update_sgb_obj1_palette
+	ldmfd sp!,{pc}
+
+update_sgb_bg_palette
+	stmfd sp!,{lr}
+	ldrb r0,bgpalette
+	ldr r2,=gbc_palette
+	ldr addy,=SGB_PALETTE
+	bl_long dopalette
+	ldr r2,=gbc_palette+8
+	ldr addy,=SGB_PALETTE+8
+	bl_long dopalette
+	ldr r2,=gbc_palette+16
+	ldr addy,=SGB_PALETTE+16
+	bl_long dopalette
+	ldr r2,=gbc_palette+24
+	ldr addy,=SGB_PALETTE+24
+	bl_long dopalette
+	ldmfd sp!,{pc}
+
+update_sgb_obj0_palette
+	stmfd sp!,{lr}
+	ldrb r0,ob0palette
+	ldr r2,=gbc_palette+64
+	ldr addy,=SGB_PALETTE
+	bl_long dopalette
+	ldr r2,=gbc_palette+80
+	ldr addy,=SGB_PALETTE+8
+	bl_long dopalette
+	ldr r2,=gbc_palette+96
+	ldr addy,=SGB_PALETTE+16
+	bl_long dopalette
+	ldr r2,=gbc_palette+112
+	ldr addy,=SGB_PALETTE+24
+	bl_long dopalette
+	ldmfd sp!,{pc}
+update_sgb_obj1_palette
+	stmfd sp!,{lr}
+	ldrb r0,ob1palette
+	ldr r2,=gbc_palette+64+8
+	ldr addy,=SGB_PALETTE
+	bl_long dopalette
+	ldr r2,=gbc_palette+80+8
+	ldr addy,=SGB_PALETTE+8
+	bl_long dopalette
+	ldr r2,=gbc_palette+96+8
+	ldr addy,=SGB_PALETTE+16
+	bl_long dopalette
+	ldr r2,=gbc_palette+112+8
+	ldr addy,=SGB_PALETTE+24
+	bl_long dopalette
+	ldmfd sp!,{pc}
+
+
+	AREA wram_code6, CODE, READWRITE
+decodeptr	RN r2 ;mem_chr_decode
+gbcptr		RN r4 ;chr src
+d_tiles		RN r5 ;dirtytiles
+d_rows		RN r6 ;dirtyrows
+zero		RN r7 ;0
+tilenum		RN r8
+r_tiles 	RN r9
+r_tnum		RN r10
+tilesleft	RN r11
+agbptr_1	RN r3  ;shared with ldmia/stmia copy registers
+agbptr_2	RN r12
+agbptr_3	RN r11 ;shared with tilesleft
+
+;So here's the new tile update system
+
+;update_tile_hook isn't used yet, but I could replace storing/drawing with just drawing.  Probably should do that.
+update_tile_hook DCD store_recent_tile
+;this determines whether to draw stored tiles, or just fail when the tile buffer gets full.  When I replace storing/drawing with just drawing, I won't need this.
+;recent_tiles_full_hook DCD abort_recent_tiles
+init_hook DCD storetiles_init
+
+consumedirty_init
+	ldr r0,=render_dirty_tile
+	str r0,update_tile_hook
+	mov r_tnum,#0
+	ldr decodeptr,=CHR_DECODE
+	bx lr
+storetiles_init
+	ldr r0,=store_recent_tile
+	str r0,update_tile_hook
+;	ldr r0,=abort_recent_tiles
+;	str r0,recent_tiles_full_hook
+	ldr r_tiles,=RECENT_TILES
+	ldr r_tnum,=RECENT_TILENUM
+	mov tilesleft,#MAX_RECENT_TILES
+	
+	;seek through recent tiles for first empty slot
+storetiles_init_seek_empty_loop
+	ldrh r0,[r_tnum]
+	tst r0,#0x8000
+	bne storetiles_init_firstempty
+	subs tilesleft,tilesleft,#1
+	beq storetiles_init_full
+	add r_tnum,r_tnum,#2
+	add r_tiles,r_tiles,#16
+	b storetiles_init_seek_empty_loop
+	
+storetiles_init_firstempty
+	bx lr
+
+storetiles_init_full
+	bx lr
+
+;Directly consume dirty tiles
+consume_dirty_tiles
+	ldrb r0,consume_dirty
+	movs r0,r0
+	bxeq lr
+	mov r0,#0
+	strb r0,consume_dirty
+
+	ldr r0,=consumedirty_init
+	b set_init_hook_
+;Store dirty tiles into a cache
+gbc_chr_update
+	ldr r0,=storetiles_init
+set_init_hook_
+	str r0,init_hook
+check_dirty_rows
+	;first - check if any tiles are dirty the fast way, look at all rows
+	ldr addy,=DIRTY_ROWS
+	ldmia addy!,{r0-r2}
+	orrs r0,r0,r1
+	orreqs r0,r0,r2
+	ldmeqia addy!,{r0-r2}
+	orreqs r0,r0,r1
+	orreqs r0,r0,r2
+	ldmeqia addy!,{r0-r2}
+	orreqs r0,r0,r1
+	orreqs r0,r0,r2
+	ldmeqia addy!,{r0-r2}
+	orreqs r0,r0,r1
+	orreqs r0,r0,r2
+	bxeq lr ;quit if tiles are clean
+	
+	stmfd sp!,{r0-r12,lr}
+	bl process_dirty_tiles
+	ldmfd sp!,{r0-r12,pc}
+
+process_dirty_tiles
+	stmfd sp!,{lr}
+	mov lr,pc
+	ldr pc,init_hook
+update_tiles
+	;push lr before entering here
+	ldr d_rows,=DIRTY_ROWS
+	ldr d_tiles,=DIRTY_TILES
+updatetiles
+	;coarse version on words
+	mov zero,#0
+	mov tilenum,#0
+updatetiles_loop
+	cmp tilenum,#768
+	bge updatetiles_done
+	ldr r0,[d_rows,tilenum,lsr#4]
+	movs r0,r0
+	bne updatetiles_fine
+	add tilenum,tilenum,#64
+	b updatetiles_loop
+
+updatetiles_fine
+	;fine - operates on bytes
+	;jump here only from 64-aligned tilenum, r0=word from dirtyrows
+	tst r0,#0x000000FF
+	addeq tilenum,tilenum,#16
+	tsteq r0,#0x0000FF00
+	addeq tilenum,tilenum,#16
+	tsteq r0,#0x00FF0000
+	addeq tilenum,tilenum,#16
+
+updaterow_loop
+	ldrb r0,[d_tiles,tilenum]
+	movs r0,r0
+;;
+	ldrne pc,update_tile_hook
+;was	bne store_recent_tile
+	add tilenum,tilenum,#1
+backto_updaterow_loop
+	tst tilenum,#0x0F
+	bne updaterow_loop
+updatetiles_resume
+	tst tilenum,#63
+	beq updatetiles_loop
+updatetiles_fine2
+	;byte aligned version of updatetiles, jumps back once aligned
+	ldrb r0,[d_rows,tilenum,lsr#4]
+	movs r0,r0
+	bne updaterow_loop
+	add tilenum,tilenum,#16
+	b updatetiles_resume
+
+get_agb_vram_address
+	ldr agbptr_1,=AGB_VRAM
+	and r1,tilenum,#0x7F
+	add agbptr_1,agbptr_1,r1,lsl#5
+	subs r0,tilenum,#384
+	movlt r0,tilenum
+	addge agbptr_1,agbptr_1,#0x2000
+	tst r0,#0x100
+	addne agbptr_3,agbptr_1,#0x8000  ;255-383: bg 8000
+	addne agbptr_2,agbptr_1,#0x8000
+	addne agbptr_1,agbptr_1,#0x8000
+	bxne lr
+	tst r0,#0x080
+	addeq agbptr_3,agbptr_1,#0x10000 ;0-127: sprite 0000, bg 0000
+	addeq agbptr_2,agbptr_1,#0x10000
+	addeq agbptr_1,agbptr_1,#0x0000
+
+	addne agbptr_3,agbptr_1,#0x11000 ;128-255: sprite 1000, bg 1000, bg 9000
+	addne agbptr_2,agbptr_1,#0x9000
+	addne agbptr_1,agbptr_1,#0x1000
+
+	bx lr
+
+render_dirty_tile
+	bl get_agb_vram_address
+	ldr gbcptr,=XGB_VRAM
+	add gbcptr,gbcptr,r0,lsl#4
+	cmp tilenum,#384
+	addge gbcptr,gbcptr,#0x2000
+
+render_dirty_tile_loop
+	ldrb r0,[gbcptr],#1  ;first plane
+	ldrb r1,[gbcptr],#1  ;second plane
+
+	ldr r0,[decodeptr,r0,lsl#2]
+	ldr r1,[decodeptr,r1,lsl#2]
+	orr r0,r0,r1,lsl#1
+	
+	str r0,[agbptr_1],#4
+	str r0,[agbptr_2],#4
+	str r0,[agbptr_3],#4
+	tst agbptr_1,#0x1F ;finished with AGB tile?
+	bne render_dirty_tile_loop
+	;next tile
+	strb zero,[d_tiles,tilenum]
+	add tilenum,tilenum,#1
+	ldrb r0,[d_tiles,tilenum]
+	movs r0,r0
+	beq backto_updaterow_loop
+	tst tilenum,#0x7F
+	bne render_dirty_tile_loop
+	b render_dirty_tile
+
+store_recent_tile
+	ldr gbcptr,=XGB_VRAM
+	subs r0,tilenum,#384
+	movlt r0,tilenum
+	add gbcptr,gbcptr,r0,lsl#4
+	addge gbcptr,gbcptr,#0x2000
+storetileloop
+	subs tilesleft,tilesleft,#1
+;;;;
+;;	movmi lr,pc
+;;	ldrmi pc,recent_tiles_full_hook
+;was	blmi flush_recent_tiles
+	bmi abort_recent_tiles
+
+	ldmia gbcptr!,{r0-r3}
+	stmia r_tiles!,{r0-r3}
+	strh tilenum,[r_tnum],#2
+	strb zero,[d_tiles,tilenum]
+	add tilenum,tilenum,#1
+	ldrb r0,[d_tiles,tilenum]
+	movs r0,r0
+	beq backto_updaterow_loop
+	cmp tilenum,#384
+	bne storetileloop
+	b store_recent_tile
+
+abort_recent_tiles
+	mov r0,#1
+	strb r0,consume_dirty
+;;	strb r0,recenttilesfull
+	mov r0,#0x8000
+	strh r0,[r_tnum]
+	ldmfd sp!,{pc}
+	
+updatetiles_done
+	mov r0,#0x8000
+	movs r_tnum,r_tnum
+	strneh r0,[r_tnum]
+	mov r1,#12
+0	
+	str zero,[d_rows],#4
+	subs r1,r1,#1
+	bne %b0
+;	str zero,[d_rows,#4]
+;	str zero,[d_rows,#8]
+;	str zero,[d_rows,#12]
+;	str zero,[d_rows,#16]
+;	str zero,[d_rows,#20]
+;	str zero,[d_rows,#24]
+;	str zero,[d_rows,#28]
+;	str zero,[d_rows,#32]
+;	str zero,[d_rows,#36]
+;	str zero,[d_rows,#40]
+;	str zero,[d_rows,#44]
+	ldmfd sp!,{pc}
+
+;flush_recent_tiles
+;	stmfd sp!,{r4,r7-r9,lr}
+;	bl consume_recent_tiles_entry
+;	ldr r_tiles,recent_tiles
+;	ldr r_tnum,recent_tilenum
+;	stmfd sp!,{r5,r6}
+;	bl render_recent_tiles
+;	mov tilesleft,#MAX_RECENT_TILES-1
+;	ldmfd sp!,{r5,r6}
+;	ldmfd sp!,{r4,r7-r9,pc}
+
+consume_recent_tiles
+	ldrb r0,consume_buffer
+	movs r0,r0
+	bxeq lr
+	mov r0,#0
+	strb r0,consume_buffer
+	
+	stmfd sp!,{lr}
+	
+;	ldrb r0,recenttilesfull
+;	movs r0,r0
+;	beq consume_recent_tiles_entry
+;	
+;	stmfd sp!,{r0-addy,lr}
+;	bl consume_recent_tiles_entry
+;	mov r0,#0
+;	str r0,recenttilesfull
+;	ldr r0,=flush_recent_tiles
+;	str r0,recent_tiles_full_hook
+;	bl flush_dirty_tiles
+;	bl flush_recent_tiles
+;	ldmfd sp!,{r0-addy,pc}
+;consume_recent_tiles_entry
+	ldr decodeptr,=CHR_DECODE
+	ldr r_tiles,=RECENT_TILES
+	ldr r_tnum,=RECENT_TILENUM
+	mov r0,#0x8000
+	ldrh tilenum,[r_tnum]
+	strh r0,[r_tnum],#2
+;	b render_next_tile
+;	
+;render_recent_tiles
+;	ldr decodeptr,=CHR_DECODE
+;	ldrh tilenum,[r_tnum],#2
+consume_next_tile
+	tst tilenum,#0x8000
+	ldmnefd sp!,{pc}
+	
+	bl get_agb_vram_address
+consume_tile_loop
+	ldrb r0,[r_tiles],#1  ;first plane
+	ldrb r1,[r_tiles],#1  ;second plane
+
+	ldr r0,[decodeptr,r0,lsl#2]
+	ldr r1,[decodeptr,r1,lsl#2]
+	orr r0,r0,r1,lsl#1
+	
+	str r0,[agbptr_1],#4
+	str r0,[agbptr_2],#4
+	str r0,[agbptr_3],#4
+	tst agbptr_1,#0x1F ;finished with AGB tile?
+	bne consume_tile_loop
+	;next tile
+	add r0,tilenum,#1
+	ldrh tilenum,[r_tnum],#2
+	cmp r0,tilenum
+	bne consume_next_tile
+	tst tilenum,#0x7F  ;crossing 128 tile boundary?
+	bne consume_tile_loop
+	b consume_next_tile
+
 	AREA wram_code1, CODE, READWRITE
 irqhandler	;r0-r3,r12 are safe to use
 ;----------------------------------------------------------------------------
@@ -612,10 +1248,10 @@ irqhandler	;r0-r3,r12 are safe to use
 		;---this CAN be interrupted
 		ands r0,r1,#0x01
 		ldrne r12,vblankfptr
-;		bne jmpintr
-;		ands r0,r1,#0x04
-;		ldrne r12,vcountfptr
-;		bne jmpintr
+		bne jmpintr
+		ands r0,r1,#0x04
+		ldrne r12,vcountfptr
+		bne jmpintr
 		
 		;----
 		moveq r0,r1				;if unknown interrupt occured clear it.
@@ -652,92 +1288,1076 @@ serialfptr DCD RumbleInterrupt
  |
 serialfptr DCD vbldummy
  ]
-;vcountfptr DCD vblankinterrupt
-twitch DCD 0
+vcountfptr DCD vcountinterrupt
+vcountstate DCD 0
 vblankinterrupt;
 ;----------------------------------------------------------------------------
-	stmfd sp!,{r4-r7,globalptr,lr}
+	stmfd sp!,{r4-addy,lr}
 	ldr globalptr,=|wram_globals0$$Base|
+	
+	mov r0,#1
+	strb r0,vblank_happened
+	
+	bl display_frame
+		
+	bl display_sprites
+	bl consume_recent_tiles
+	bl consume_dirty_tiles
+	
+	bl_long showfps_
+	
+	mov r2,#REG_BASE
+	
+	;write buffer values for scanline 0
+	mov r11,r11
+	ldr r1,bigbufferbase2
+	ldmia r1,{r3-r8}
+	
+;	;force first 8 scanlines to contain UI?
+;	;for this to work, you need to enable it at reg_winout, then suppress it afterwards
+;	ldrb r1,_ui_border_visible
+;	tst r1,#1
+;	bne %f0
+;	tst r1,#2
+;	ldr r0,_ui_x
+;	bic r0,r0,#0xFF000000
+;	bic r0,r0,#0x00FF0000
+;	ldr r1,_ui_y
+;	orr r0,r0,r1,lsl#16
+;	biceq r4,r4,#0xFF000000
+;	biceq r4,r4,#0x00FF0000
+;	orreq r4,r4,#0x4E000000
+;	orreq r4,r4,#0x000C0000
+;	moveq r8,r0
+;	bicne r4,r4,#0xFF00
+;	bicne r4,r4,#0x00FF
+;	orrne r4,r4,#0x4E00
+;	orrne r4,r4,#0x000C
+;	movne r7,r0
+;0
+	
+	
+	
+	add r1,r2,#REG_BG0CNT
+	stmia r1,{r3-r8}
+	
+	
+	
+	
+	mov r0,#0
+	strh r0,[r2,#REG_WIN0H]
+	
+	ldr r1,dispcntbase2
+	ldrh r0,[r1]
+	bic r0,r0,#0x2000 ;remove window 0 if present
+	strh r0,[r2,#REG_DISPCNT]
+	
+	;finish up the job at scanline 7, writing new values as scanline 8 starts
+	ldr r0,=do_gba_hdma
+	str r0,vcountfptr
 
-	bl showfps_
+	ldr r0,=0x0728 ;scanline 07, enable vblank+vcount interrupts
+	str r0,[r2,#REG_DISPSTAT]
 
+	bl_long transfer_palette
 
-;	ldr r2,=DMA0BUFF			;setup DMA buffer for scrolling:
-;	add r3,r2,#160*16			;For both background and window
-;	ldr r1,dmascrollbuff
-;vbl6
-;	ldmia r1!,{r0,r4-r7}
-;	stmia r2!,{r0,r4-r7}
-;	cmp r2,r3
-;	bmi vbl6
+	ldmfd sp!,{r4-addy,pc}
 
-	mov r1,#REG_BASE
-
-	ldrb r0,windowYbuf
-	ldrb r2,windowY
-	strb r2,windowYbuf
-	cmp r0,#0x98
-	movpl r0,#0x98
-
-;	ldr r2,=0x0898				;end of window
-;	add r2,r2,r0,lsl#8
-;	strh r2,[r1,#REG_WIN0V]		;Win0Vertical, BG0 not enable in Win0
-
-;	ldrb r0,windowXbuf
-;	cmp r0,#0xA7
-;	movpl r0,#0xA7
-
-;	mov r0,#7
-;	ldr r2,=0x21C8				;end of window
-;	add r2,r2,r0,lsl#8
-;	strh r2,[r1,#REG_WIN0H]		;Win0Horizontal, BG0 not enable in Win0
-
-	strh r1,[r1,#REG_DM0CNT_H]	;DMA stop
-	strh r1,[r1,#REG_DM1CNT_H]
-	strh r1,[r1,#REG_DM2CNT_H]
-	strh r1,[r1,#REG_DM3CNT_H]
-
-	ldr r0,dmaoambuffer			;OAM transfer:
-	str r0,[r1,#REG_DM3SAD]
-	mov r0,#AGB_OAM
-	str r0,[r1,#REG_DM3DAD]
-	mov r0,#0x84000000			;noIRQ 32bit incsrc incdst
-	orr r0,r0,#0x50				;80 words=40sprites, was 128 words,512 bytes,64sprites.
-	str r0,[r1,#REG_DM3CNT_L]	;DMA go
-
-	ldr r0,dmascrollbuff			;setup HBLANK DMA for display scroll:
-	str r0,[r1,#REG_DM0SAD]
-	ldr r0,=0xA6600004			;noIRQ hblank 32bit repeat incsrc inc_reloaddst 4 words
-	str r0,[r1,#REG_DM0CNT_L]	;DMA go
-								;setup HBLANK DMA for DISPCNT (BG/OBJ enable)
-	ldr r3,=DISPCNTBUFF
-	ldrh r2,[r3],#2
-	strh r2,[r1,#REG_DISPCNT]	;set 1st value manually, HBL is AFTER 1st line
-	str r3,[r1,#REG_DM1SAD]		;dmasrc=
-	ldr r0,=0xA240				;noIRQ hblank 16bit repeat incsrc fixeddst
-	strh r0,[r1,#REG_DM1CNT_H]	;DMA go
-
-	;window dma
-	add r0,r1,#REG_WIN0H
-	str r0,[r1,#REG_DM2DAD]
-	ldr r4,=WINBUFF
-	str r4,[r1,#REG_DM2SAD]
-	ldr r0,=0xA6600002			;noIRQ hblank 32bit repeat incsrc inc_reloaddst 2 words
-	str r0,[r1,#REG_DM2CNT_L]	;DMA go
-								;setup HBLANK DMA for BG CHR
-	add r0,r1,#REG_BG0CNT
-	str r0,[r1,#REG_DM3DAD]
-	ldr r4,=BG0CNTBUFF
-	str r4,[r1,#REG_DM3SAD]
-	ldr r0,=0xA6600002			;noIRQ hblank 32bit repeat incsrc inc_reloaddst 2 words
-	str r0,[r1,#REG_DM3CNT_L]	;DMA go
-
-	ldmfd sp!,{r4-r7,globalptr,pc}
-
-totalblend	DCD 0
-;palrptr	DCD 0
-;palwptr	DCD 0
+;;;;;;;
+;;;;;;
+;;;;;
+;;;;
+;;;
+;;
 ;
+
+newframeinit
+;	mov r11,r11
+	mov r0,#0
+	strb r0,buffer_lastscanline
+
+	ldr r0,bigbufferbase;2
+	str r0,bigbuffer
+	ldr r0,dispcntbase;2
+	str r0,dispcntaddr
+
+	mvn r0,#7  ;-8
+	mov r0,r0,lsl#16
+	str r0,windowyscroll
+	
+	
+	
+	;fall thru to newmode  (calls newmode then returns)
+
+newmode
+;	mov r11,r11
+	ldrb r0,lcdctrl
+	tst r0,#0x20
+	beq entermode0
+	
+	ldr r0,hblankposition  ;if cycles >=hblankposition, inside hblank
+	cmp cycles,r0
+	ldrb r0,scanline
+	addmi r0,r0,#1
+	cmp r0,#144
+	movge r0,#0
+	ldrb r1,windowY
+	cmp r0,r1
+	blt entermode0
+	
+	ldrb r1,windowX
+	cmp r1,#166
+	bgt entermode0
+	cmp r1,#7
+	ble entermode1
+
+	;r1=bigbuffer
+	;r2=bg01cnt
+	;r3=bg23cnt
+	;r4=xyscroll
+	;r5=xyscroll2
+	
+	;dispcntdata
+	;windata
+	;dispcntaddr
+entermode2
+;	ldrb r0,rendermode
+;	cmp r0,#2
+;	moveq r1,pc
+;	bxeq lr
+entermode2_
+	mov r0,#2
+	strb r0,rendermode
+	;get LCDC
+	ldrb r0,lcdctrl
+	;default dispcnt | enable win 0, win 1, all 4 bg layers
+	ldr r1,=0x5F40 | 0x6F00
+	tst r0,#0x02 ;sprite enable
+	biceq r1,r1,#0x1000
+	tst r0,#0x80 ;screen off?
+;	orreq r1,r1,#0x0F00  ;enable all layers, not necessary since they are on
+	biceq r1,r1,#0x3000  ;disable win 0, sprites, let the white palette mask the screen
+	orr r1,r1,r1,lsl#16
+	str r1,dispcntdata
+	
+	;default bgXcnt: 000mmmmm000cccpp
+	ldr r1,=0x1A02
+	tst r0,#0x10 ;Tile Select
+	orreq r1,r1,#0x0008
+
+	orr r1,r1,r1,lsl#16
+	tst r0,#0x08 ;BG Tilemap
+	addne r1,r1,#0x0300
+	tst r0,#0x40 ;Win Tilemap
+	addne r1,r1,#0x03000000
+
+	orr r1,r1,#0x00010000 ;priority fix?
+
+	tst r0,#0x01 ;BG enable
+	bne %f0
+	ldrb r0,gbcmode
+	cmp r0,#1
+	orreq r1,r1,#0x0003	;For GBC, low priority for all layers
+	addne r1,r1,#0x0100	;For non-gbc, make all tiles color zero
+	bicne r1,r1,#0x000C
+0
+	str r1,bg01cnt
+	add r1,r1,#0x00000100 ;for color 0 tiles (BG)
+	add r1,r1,#0x01000000
+	bic r1,r1,#0x0000000C
+	bic r1,r1,#0x000C0000
+	str r1,bg23cnt
+
+mode2_update_scroll
+	ldr r1,windowyscroll
+	
+	;get wx
+	ldrb r0,windowX
+	
+	;wx to screen scroll
+	rsb r0,r0,#0
+	sub r0,r0,#(40-7)
+	mov r0,r0,lsl#16
+	orr r1,r1,r0,lsr#16
+	str r1,xyscroll2
+	
+	;wx to GBA window position
+	rsb r0,r0,#0
+	mov r0,r0,lsr#8
+	orr r0,r0,#0x00C8
+	orr r0,r0,r0,lsl#16
+	str r0,windata
+	
+	;get y pos
+	ldrb r0,scrollY
+	sub r0,r0,#8
+	mov r1,r0,lsl#16
+	
+	;get x pos
+	ldrb r0,scrollX
+	sub r0,r0,#40
+	mov r0,r0,lsl#16
+	orr r1,r1,r0,lsr#16
+	str r1,xyscroll
+	bx lr
+	
+;nowindow
+entermode0
+;	ldrb r0,rendermode
+;	cmp r0,#0
+;	moveq r1,pc
+;	bxeq lr
+entermode0_
+	mov r0,#0
+	strb r0,rendermode
+	;get LCDC
+	ldrb r0,lcdctrl
+	
+	;default dispcnt, win 1, all 4 bg layers
+	ldr r1,=0x5F40
+	tst r0,#0x02 ;sprite enable
+	biceq r1,r1,#0x1000
+	orr r1,r1,r1,lsl#16
+	str r1,dispcntdata
+	
+	;default bgXcnt: 000mmmmm000cccpp
+	ldr r1,=0x1A02
+	tst r0,#0x10 ;Tile Select
+	orreq r1,r1,#0x0008
+	tst r0,#0x08 ;BG Tilemap
+	addne r1,r1,#0x0300
+	orr r1,r1,r1,lsl#16
+	add r1,r1,#0x01000000 ;for color 0 tiles
+	orr r1,r1,#0x00010000
+	bic r1,r1,#0x000C0000
+	tst r0,#0x01 ;BG enable
+	bne %f0
+	ldrb r0,gbcmode
+	cmp r0,#1
+	addne r1,r1,#0x0100
+;	orrne r1,r1,#0x0001  ;because there's the unconditional right below this
+	bicne r1,r1,#0x000C
+	orr r1,r1,#0x0001
+0	
+	str r1,bg01cnt
+	addne r1,r1,#0x0200
+	subne r1,r1,#1
+	str r1,bg23cnt
+mode0_update_scroll
+	;get y pos
+	ldrb r0,scrollY
+	sub r0,r0,#8
+	mov r1,r0,lsl#16
+	
+	;get x pos
+	ldrb r0,scrollX
+	sub r0,r0,#40
+	mov r0,r0,lsl#16
+	orr r1,r1,r0,lsr#16
+	str r1,xyscroll
+	bx lr
+
+;nobg
+entermode1
+;	ldrb r0,rendermode
+;	cmp r0,#1
+;	moveq r1,pc
+;	bxeq lr
+entermode1_
+	mov r0,#1
+	strb r0,rendermode
+	;get LCDC
+	ldrb r0,lcdctrl
+	
+	;default dispcnt, win 1, all 4 bg layers
+	ldr r1,=0x5F40
+	tst r0,#0x02 ;sprite enable
+	biceq r1,r1,#0x1000
+	orr r1,r1,r1,lsl#16
+	str r1,dispcntdata
+	
+	;default bgXcnt: 000mmmmm000cccpp
+	ldr r1,=0x1A02
+	tst r0,#0x10 ;Tile Select
+	orreq r1,r1,#0x0008
+	tst r0,#0x40 ;Window Tilemap
+	addne r1,r1,#0x0300
+	orr r1,r1,r1,lsl#16
+	add r1,r1,#0x01000000 ;for color 0 tiles
+	orr r1,r1,#0x00010000
+	bic r1,r1,#0x000C0000
+	tst r0,#0x01 ;BG enable
+	bne %f0
+	ldrb r0,gbcmode
+	cmp r0,#1
+	orreq r1,r1,#0x0001
+0	
+	str r1,bg01cnt
+	addne r1,r1,#0x0200
+	subne r1,r1,#1
+	str r1,bg23cnt
+	
+mode1_update_scroll
+	ldr r1,windowyscroll
+	;get wx
+	ldrb r0,windowX
+	
+	;wx to screen scroll
+	rsb r0,r0,#0
+	sub r0,r0,#(40-7)
+	mov r0,r0,lsl#16
+	orr r1,r1,r0,lsr#16
+	str r1,xyscroll
+	bx lr
+
+bufferfinish
+	mov r2,#144
+	b %f0
+tobuffer
+	ldr r2,hblankposition  ;if cycles >=hblankposition, inside hblank
+	cmp cycles,r2
+	ldrb r2,scanline
+	addmi r2,r2,#1
+	cmp r2,#144
+	movge r2,#0
+0
+	ldrb r1,buffer_lastscanline
+	subs r0,r2,r1
+;	mov r11,r11
+	
+	bxeq lr
+	ble bufferfinish
+	
+	;check if will reach wy
+	ldrb addy,windowY
+	;it will reach if:
+	;s0<wy && s1>=wy
+	cmp r1,addy
+	bge %f0
+	cmp r2,addy
+	blt %f0
+	;check if will reach a new mode, can only be in "no window" since window wasn't hit yet
+	ldrb r1,lcdctrl
+	tst r1,#0x20
+	beq %f0
+	ldrb r1,windowX
+	cmp r1,#166
+	bgt %f0
+	
+	ldrb r1,buffer_lastscanline
+	;Will enter a window mode, so call rest of routine, then come back to finish
+;	mov r11,r11
+	sub r0,addy,r1
+	stmfd sp!,{r2,addy,lr}
+	bl %f0
+	ldrb r1,windowX
+	cmp r1,#7
+	bgt %f1
+	bl entermode1_
+	cmp r0,r0
+1
+	blgt entermode2_
+	ldmfd sp!,{r2,addy,lr}
+
+	subs r0,r2,addy
+	bxeq lr
+0	
+	strb r2,buffer_lastscanline
+	ldrb r1,rendermode
+	cmp r1,#1
+	bgt tobuffer_split
+	ldrlt addy,windowyscroll
+	sublt addy,addy,r0,lsl#16
+	strlt addy,windowyscroll
+	
+	;r0 = scanlines remaining
+	
+	;r1=bigbuffer
+	;r2=bg01cnt
+	;r3=bg23cnt
+	;r4=xyscroll
+	;r5=xyscroll2
+	
+	;dispcntdata
+	;windata
+	;dispcntaddr
+	
+	;windowyscroll
+	
+	stmfd sp!,{r3-r8,lr}
+	;now we need intervention of UI and Border here
+	adrl addy,bigbuffer
+	ldmia addy,{r1-r4}
+	mov r5,r4
+	mov r6,r4
+	mov r7,r4
+	
+	ldr r8,ui_border_cnt_bic
+	tst r8,#0xFF000000
+	beq %f0
+	bic r3,r3,r8
+	ldr r8,ui_border_cnt_orr
+	orr r3,r3,r8
+	tst r8,#0x0000FF00
+	ldrne r6,ui_border_scroll2
+	ldr r7,ui_border_scroll3
+0	
+	mov r8,r0
+	
+	
+	
+1
+	stmia r1!,{r2,r3,r4,r5,r6,r7}
+	subs r0,r0,#1
+	bne %b1
+	str r1,bigbuffer
+	
+	adrl addy,dispcntdata
+	ldr r2,dispcntaddr
+;	add r4,r2,#144*2
+	bl apply16
+	str r2,dispcntaddr
+;	mov r2,r4
+;	bl apply16
+	ldmfd sp!,{r3-r8,pc}
+
+tobuffer_split
+	stmfd sp!,{r3-r8,lr}
+	adrl addy,bigbuffer
+	ldmia addy,{r1-r5}
+	mov r6,r4
+	mov r7,r5
+
+	ldr r8,ui_border_cnt_bic
+	tst r8,#0xFF000000
+	beq %f0
+	bic r3,r3,r8
+	ldr r8,ui_border_cnt_orr
+	orr r3,r3,r8
+	tst r8,#0x0000FF00
+	ldrne r6,ui_border_scroll2
+	ldr r7,ui_border_scroll3
+0	
+	mov r8,r0
+
+1
+	stmia r1!,{r2,r3,r4,r5,r6,r7}
+	subs r0,r0,#1
+	bne %b1
+	str r1,bigbuffer
+
+	adrl addy,dispcntdata
+	ldr r2,dispcntaddr
+	add r4,r2,#144*2
+	bl apply16
+	str r2,dispcntaddr
+	mov r2,r4
+	adrl addy,windata
+	bl apply16
+	ldmfd sp!,{r3-r8,pc}
+
+apply16
+	;sets halfwords, plus one extra one if end is not aligned
+	;r8 = count (in halfwords)
+	;r2 = dest, does not have to be word aligned
+	;addy = pointer to halfword repeated - 4
+	
+	;out: r2 = next halfword to write to
+	mov r0,r8,lsl#1
+	
+	;make aligned
+	tst r2,#2
+	ldrne r1,[addy]!
+	strneh r1,[r2],#2
+	subne r0,r0,#2
+	
+	;DMA transfer, possibly plus one extra halfword
+	mov r1,#REG_BASE
+	str addy,[r1,#REG_DM3SAD]
+	add addy,r0,#2  ;add extra halfword if final halfword is not word aligned
+	movs addy,addy,lsr#2
+	strne r2,[r1,#REG_DM3DAD]
+	orrne addy,addy,#0x85000000 ;enable, fixed src, inc dest
+	strne addy,[r1,#REG_DM3CNT_L]
+	bicne addy,addy,#0xFF000000
+	add r2,r2,r0
+	bx lr
+
+;
+;;
+;;;
+;;;;
+;;;;;
+;;;;;;
+;;;;;;;
+
+
+
+ [ {FALSE}
+setlayer
+	mov r1,#144
+setlayerloop
+	ldrh r0,[r2]
+	orr r0,r0,r5
+	strh r0,[r2],#2
+	strh r7,[r3],#24
+	str r6,[r4],#24
+	subs r1,r1,#1
+	bne setlayerloop
+	bx lr
+	
+move_ui
+;	mov r11,r11
+	;still need to do that thingy with bldmod in case border changes visibility
+	stmfd sp!,{r0-addy,lr}
+	ldr globalptr,=|wram_globals0$$Base|
+	bl update_ui_border
+	bl move_ui_2
+;	;insert bldmod check here
+	
+	
+	ldmfd sp!,{r0-addy,lr}
+	bx lr
+
+
+
+; winin and winout for no extra layers
+;	ldr r0,=0xFFE0FFFA    ;no extra layers
+;	mov r1,#REG_BASE
+;	str r0,[r1,#REG_WININ]
+; winin and winout for one extra layer
+;	ldr r0,=0xFFE8FFFA  ;one layer
+;	mov r1,#REG_BASE
+;	str r0,[r1,#REG_WININ]
+; winin and winout for two extra layers
+;	ldr r0,=0xFFECFFFE  ;two layers
+;	mov r1,#REG_BASE
+;	str r0,[r1,#REG_WININ]
+ ]
+
+move_ui
+	mov r0,#1
+	ldr r1,=ui_moved
+	ldrb r0,[r1]
+	add r0,r0,#1
+	strb r0,[r1]
+	bx lr
+
+move_ui_2
+	ldr r4,ui_border_cnt_bic
+	ldr r5,ui_border_cnt_orr
+	ldr r6,ui_border_scroll2
+	ldr r7,ui_border_scroll3
+	tst r4,#0xFF000000
+	bxeq lr
+	ldr r1,bigbufferbase2
+	mov r2,#144
+	tst r4,#0x0000FF00
+	bne %f1
+0
+	ldr r0,[r1,#4]
+	bic r0,r0,r4
+	orr r0,r0,r5
+	str r0,[r1,#4]
+	str r7,[r1,#20]
+	add r1,r1,#24
+	subs r2,r2,#1
+	bne %b0
+	bx lr
+1
+0
+	str r5,[r1,#4]
+	str r6,[r1,#16]
+	str r7,[r1,#20]
+	add r1,r1,#24
+	subs r2,r2,#1
+	bne %b0
+	bx lr
+
+add_ui_border
+	;called at vblank, adds/removes UI and border, also moves UI.
+	;If UI moved, move the UI.
+	ldrb r0,_ui_moved
+	ldrb r1,my_ui_moved2
+	cmp r0,r1
+	bne %f0
+	bx lr
+0
+	mov r11,r11
+	stmfd sp!,{lr}
+	;store to indicate it moved
+	ldrb r0,_ui_moved
+	strb r0,my_ui_moved2
+	
+	;Load ui and border visibility
+	ldrb r0,_ui_border_visible
+	
+	;Now would be a good time to update winin and winout registers
+	cmp r0,#2
+	ldrle r2,=0xFFE8FFFA ;one layer
+	cmp r0,#3
+	ldreq r2,=0xFFECFFFE ;two layers
+	cmp r0,#0
+	ldreq r2,=0xFFE0FFFA ;no extra layers
+	mov r1,#REG_BASE
+	str r2,[r1,#REG_WININ]
+
+	;Test if we have incorrect bldmod, like when a SGB game adds its border at the boot menu
+	cmp r0,#3
+	ldr r2,[r1,#REG_BLDMOD]
+	beq %f0
+	;should be on layer #3, see if it's on layer #2, fix it if it is
+	tst r2,#4
+	eoreq r2,r2,#0x0C
+	b %f1
+0
+	;should be on layer #2, see if it's on layer #3, fix it if it is
+	tst r2,#8
+	eoreq r2,r2,#0x0C
+1	
+	str r2,[r1,#REG_BLDMOD]
+	
+	;now do the dirty work!
+	
+	;get previous ui_border_varibales
+	adr r4,ui_border_cnt_bic
+	ldmia r4,{r0-r3}
+	;push old ones on the stack
+	stmfd sp!,{r0-r3,r4}
+	;get the new ones
+	bl update_ui_border_masks
+	
+	;now apply the settings to the active (to be displayed) scanline buffers
+	bl move_ui_2
+	
+	;restore previous ui_border_variables...
+	ldmfd sp!,{r0-r3,r4}
+	stmia r4,{r0-r3}
+	
+	ldmfd sp!,{pc}
+
+
+update_ui_border_masks
+	ldrb r0,_ui_border_visible
+	cmp r0,#1
+	beq %f1
+	cmp r0,#2
+	beq %f2
+	cmp r0,#3
+	beq %f3
+0 ;neither visible
+	mov r0,#0
+	str r0,ui_border_cnt_bic
+	str r0,ui_border_cnt_orr
+	bx lr
+1 ;UI visible
+	ldr r0,=0xFFFF0000
+	str r0,ui_border_cnt_bic
+	ldr r0,=0x4E0C0000
+	str r0,ui_border_cnt_orr
+
+	ldr r0,_ui_x
+	bic r0,r0,#0xFF000000
+	bic r0,r0,#0x00FF0000
+	ldr r1,_ui_y
+	orr r0,r0,r1,lsl#16
+	str r0,ui_border_scroll3
+	bx lr
+2 ;Border visible
+	ldr r0,=0xFFFF0000
+	str r0,ui_border_cnt_bic
+	ldr r0,=0x0D040000
+	str r0,ui_border_cnt_orr
+	ldr r0,=0x00200008
+	str r0,ui_border_scroll3
+	bx lr
+3 ;UI and Border visible
+	mvn r0,#0
+	str r0,ui_border_cnt_bic
+	ldr r0,=0x0D044E0C
+	str r0,ui_border_cnt_orr
+	ldr r0,=0x00200008
+	str r0,ui_border_scroll3
+	ldr r0,_ui_x
+	bic r0,r0,#0xFF000000
+	bic r0,r0,#0x00FF0000
+	ldr r1,_ui_y
+	orr r0,r0,r1,lsl#16
+	str r0,ui_border_scroll2
+	bx lr
+
+
+ [ {FALSE}
+
+add_ui_border
+	stmfd sp!,{lr}
+	ldr r2,dispcntbase2
+;	ldr r2,=DISPCNTBUFF
+	ldr r3,bigbufferbase2
+	add r4,r3,#8+12	;layer 3 scrolling
+	add r3,r3,#6	;layer 3 control
+;	ldr r3,=BG0CNT_SCROLL_BUFF+6  ;layer 3 control
+;	ldr r4,=BG0CNT_SCROLL_BUFF+8+12
+	
+	ldr r8,=border_visible
+	ldr r8,[r8]
+	movs r8,r8
+	beq no_border
+	mov r5,#0x0800 ;enable layer #3
+	ldr r6,=0x00200008 ;scrolling position, (-8,-40) for border
+
+	;bgXcnt: 000mmmmm000cccpp
+	ldr r7,=0x0D04 ;control for border
+	bl setlayer
+	
+	ldr r2,dispcntbase2
+	ldr r3,bigbufferbase2
+	add r4,r3,#8+8	;layer 2 scrolling
+	add r3,r3,#4	;layer 2 control
+no_border
+	ldr r9,=ui_visible
+	ldr r9,[r9]
+	movs r9,r9
+	beq no_ui
+	mov r5,#0x0800 ;enable layer #3
+	ldr r0,=ui_x
+	ldr r6,[r0]
+	ldr r1,=0xFFFF
+	and r0,r0,r1
+	ldr r0,=ui_y
+	ldr r0,[r0]
+	orr r6,r6,r0,lsl#16
+	ldr r7,=0x4E0C ;control for UI
+	bl setlayer
+no_ui
+	;set window controls based on number of extra layers
+	ldr r0,=0xFFE0FFFA    ;no extra layers
+	orrs r1,r8,r9
+	ldrne r0,=0xFFE8FFFA  ;one layer
+	ands r1,r8,r9
+	ldrne r0,=0xFFECFFFE  ;two layers
+	
+	mov r1,#REG_BASE
+	str r0,[r1,#REG_WININ] ;store to window control
+	
+	;now test if we got incorrect bldmod
+	ldr r0,[r1,#REG_BLDMOD]
+	tst r8,r9
+	beq %f0
+	
+	;bit 2 on?
+	tst r0,#4
+	eorne r0,r0,#0x0C
+	strne r0,[r1,#REG_BLDMOD]
+	ldmfd sp!,{pc}
+0	
+	;bit 3 on?
+	tst r0,#8
+	eorne r0,r0,#0x0C
+	strne r0,[r1,#REG_BLDMOD]
+	
+	
+	ldmfd sp!,{pc}
+ ]
+
+display_frame	;called at vblank
+	stmfd sp!,{globalptr,lr}
+	;init windows
+	ldr r0,=0x28C8
+	mov r1,#REG_BASE
+	strh r0,[r1,#REG_WIN1H]
+	ldr r0,=0x08980898
+	str r0,[r1,#REG_WIN0V]
+	;fill line buffers
+;	bl fill_line_buffers
+	bl add_ui_border
+	bl display_bg
+	
+	ldmfd sp!,{globalptr,pc}
+
+
+display_bg
+	bx lr
+;
+;	;destroys r0-r12
+;	ldr r9,=0x00070007
+;	ldr r12,=0x00080008
+;	ldr r11,=0x00680068
+;	
+;	mov r8,lr
+;	mov r10,#0x1000
+;	ldr r2,=XGB_VRAM+0x1800
+;	ldr r6,=0x72007200 ;#512+4096*7
+;
+;	ldr r3,=AGB_VRAM+26*2048
+;	bl display_bg2
+;	mov lr,r8
+;	ldr r3,=AGB_VRAM+29*2048
+;display_bg2
+;	mov r7,#1024/2
+;display_bg_loop
+;	ldrh r1,[r2,r10,lsl#1]   ;operates 2 tiles at a time
+;	orr r1,r1,r1,lsl#8 ;doesn't matter if there's dirt in byte 1 of the word
+;	ldrh r0,[r2],#2
+;	orr r0,r0,r0,lsl#8
+;	bic r0,r0,#0x00FF00 ;clear dirt from shifted OR of two tile numbers
+;	and r5,r1,r9 ;0x00070007
+;	add r5,r5,r12 ;0x00080008
+;	orr r0,r0,r5,lsl#12
+;	and r4,r1,r11 ;0x00680068 ;high tile num and flipping
+;	orr r0,r0,r4,lsl#5
+;	tst r1,#0x8080
+;	str r6,[r3,r10]
+;	beq %f0_no_hp_tile
+;	tst r1,#0x8000 ;High Priority tile #2
+;	strne r0,[r3,r10] ;store two tiles for yes to #2
+;	tst r1,#0x80 ;High Priority tile
+;	streqh r6,[r3,r10]
+;	strneh r0,[r3,r10]
+;0_no_hp_tile
+;	add r5,r6,r5 ;Color 0 tile
+;	str r5,[r3,0x800]
+;	str r0,[r3],#4 ;Store tile
+;	subs r7,r7,#1
+;	bne display_bg_loop
+;
+;	bx lr
+
+;;
+;;	mov r8,lr
+;;	mov r9,#0x0800
+;;	mov r10,#0x1000
+;;	mov r11,#0x2000
+;;	ldr r2,=XGB_VRAM+0x1800
+;;	mov r6,#512+4096*7
+;;
+;;	ldr r3,=AGB_VRAM+26*2048
+;;	bl display_bg2
+;;	mov lr,r8
+;;	ldr r3,=AGB_VRAM+29*2048
+;;display_bg2
+;;	mov r7,#1024
+;;display_bg_loop	
+;;	ldrb r1,[r2,r11]
+;;	ldrb r0,[r2],#1
+;;	;tile color
+;;	and r5,r1,#0x7
+;;	add r5,r5,#0x8
+;;	orr r0,r0,r5,lsl#12
+;;	;high tile num and flipping
+;;	and r4,r1,#0x68
+;;	orr r0,r0,r4,lsl#5
+;;	;High Priority tile
+;;	tst r1,#0x80
+;;	streqh r6,[r3,r10]
+;;	strneh r0,[r3,r10]
+;;	;Color 0 tile
+;;	add r5,r6,r5
+;;	strh r5,[r3,r9]
+;;	;Store tile
+;;	strh r0,[r3],#2
+;;	subs r7,r7,#1
+;;	bne display_bg_loop
+;;
+;;	bx lr
+
+
+;----------------------------------------------------------------------------
+FF46_W;		sprite DMA transfer
+;----------------------------------------------------------------------------
+;	and r0,r0,#0xff		;not needed?
+	and r1,r0,#0xF0
+	adr r2,memmap_tbl
+	ldr r1,[r2,r1,lsr#2]	;in: addy,r1=addy&0xE000 (for rom_R)
+	add addy,r1,r0,lsl#8	;addy=DMA source
+	ldr r2,gboambuff
+
+	mov r1,#40		;number of sprites on the GB
+OAMLoop
+	ldr r0,[addy],#4
+	str r0,[r2],#4
+	subs r1,r1,#1
+	bne OAMLoop
+	
+	mov r0,#1
+	strb r0,gboamdirty
+
+	mov pc,lr
+
+display_sprites
+;----------------------------------------------------------------------------
+OAMfinish;		transfer OAM from GB to GBA
+;----------------------------------------------------------------------------
+PRIORITY EQU 0x800	;0x800=AGB OBJ priority 2
+	ldr addy,active_gboambuff
+	add r9,addy,#0xA0
+	mov r2,#AGB_OAM
+	
+	ldrb r5,gbcmode
+
+	ldrb r0,lcdctrl0frame
+;	ldr r0,active_lcdcbuff
+;	ldrb r0,[r0,#71]	;8x16?
+;	ldrb r0,lcdctrl		;8x16?
+	tst r0,#0x04
+	bne dm4
+dm11
+	ldr r3,[addy],#4
+	ands r0,r3,#0xff
+	beq dm10		;skip if sprite Y=0
+	cmp r0,#159
+	bhi dm10		;skip if sprite Y>159
+
+	sub r0,r0,#8
+	and r0,r0,#0xff
+
+	and r1,r3,#0xff00
+	add r1,r1,#0x2000	;x+32
+	orr r0,r0,r1,lsl#8
+	and r1,r3,#0x60000000	;flip
+	orr r0,r0,r1,lsr#1
+	and r1,r3,#0x80000000	;priority
+	orr r0,r0,r1,lsr#21	;Set Transp OBJ.
+	str r0,[r2],#4		;store OBJ Atr 0,1
+
+;  Bit7   OBJ-to-BG Priority (0=OBJ Above BG, 1=OBJ Behind BG color 1-3)
+;         (Used for both BG and Window. BG color 0 is always behind OBJ)
+;  Bit6   Y flip          (0=Normal, 1=Vertically mirrored)
+;  Bit5   X flip          (0=Normal, 1=Horizontally mirrored)
+;  Bit4   Palette number  **Non CGB Mode Only** (0=OBP0, 1=OBP1)
+;  Bit3   Tile VRAM-Bank  **CGB Mode Only**     (0=Bank 0, 1=Bank 1)
+;  Bit2-0 Palette number  **CGB Mode Only**     (OBP0-7)
+
+;  Bit   Expl.
+;  0-9   Character Name          (0-1023=Tile Number)
+;  10-11 Priority relative to BG (0-3; 0=Highest)
+;  12-15 Palette Number   (0-15) (Not used in 256 color/1 palette mode)
+	cmp r5,#0
+	mov r1,#PRIORITY
+	;gbc vram bank
+	andne r0,r3,#0x08000000
+	orrne r1,r1,r0,lsr#19
+	;gbc color
+	andne r0,r3,#0x07000000
+	orrne r1,r1,r0,lsr#12
+;	;gb color
+	andeq r0,r3,#0x10000000
+	orreq r1,r1,r0,lsr#16
+	;tile
+	and r0,r3,#0x00FF0000
+	orr r1,r1,r0,lsr#16
+	
+	strh r1,[r2],#4		;store OBJ Atr 2
+dm9
+	cmp addy,r9
+	bne dm11
+	bx lr
+dm10
+	mov r0,#0x2a0		;double, y=160
+	str r0,[r2],#8
+	b dm9
+
+
+dm4	;- - - - - - - - - - - - -8x16
+
+dm12
+	ldr r3,[addy],#4
+	ands r0,r3,#0xff
+	beq dm13		;skip if sprite Y=0
+	cmp r0,#159
+	bhi dm13		;skip if sprite Y>159
+
+	sub r0,r0,#8
+	and r0,r0,#0xff
+
+	and r1,r3,#0xff00
+	add r1,r1,#0x2000	;x+32
+	orr r0,r0,r1,lsl#8
+	and r1,r3,#0x60000000	;flip
+	orr r0,r0,r1,lsr#1
+	and r1,r3,#0x80000000	;priority
+	orr r0,r0,r1,lsr#21	;Set Transp OBJ.
+	orr r0,r0,#0x8000	;8x16
+	str r0,[r2],#4		;store OBJ Atr 0,1
+
+	cmp r5,#0
+	mov r1,#PRIORITY
+	;gbc vram bank
+	andne r0,r3,#0x08000000
+	orrne r1,r1,r0,lsr#19
+	;gbc color
+	andne r0,r3,#0x07000000
+	orrne r1,r1,r0,lsr#12
+	;gb color
+	andeq r0,r3,#0x10000000
+	orreq r1,r1,r0,lsr#16
+	;tile
+	and r0,r3,#0x00FF0000
+	orr r1,r1,r0,lsr#16
+	bic r1,r1,#0x0001
+
+	strh r1,[r2],#4		;store OBJ Atr 2
+dm14
+	cmp addy,r9
+	bne dm12
+	bx lr
+dm13
+	mov r0,#0x2a0		;double, y=160
+	str r0,[r2],#8
+	b dm14
+
+
+
+;----------------------------------------------------------------------------
+vcountinterrupt
+;----------------------------------------------------------------------------
+
+do_gba_hdma
+	mov r11,r11
+	ldr r0,=REG_BASE+REG_DM0SAD
+	ldr r1,bigbufferbase2
+;	add r1,r1,#24  ;because first scanline was already displayed
+	ldr r2,=REG_BASE+REG_BG0CNT
+	ldr r3,=0xA6600006
+	stmia r0!,{r1-r3}
+	ldr r1,dispcntbase2
+;	add r1,r1,#2   ;because first scanline was already displayed
+	ldr r2,=REG_BASE+REG_DISPCNT
+	ldr r3,=0xA2600001
+	stmia r0!,{r1-r3}
+	ldr r1,dispcntbase2
+	add r1,r1,#288
+;	add r1,r1,#2   ;because first scanline was already displayed
+	ldr r2,=REG_BASE+REG_WIN0H
+	ldr r3,=0xA2600001
+	stmia r0!,{r1-r3}
+
+	adr r0,end_gba_hdma
+	str r0,vcountfptr
+
+	mov r2,#REG_BASE
+	ldr r0,=0x9728 ;scanline 144+8-1, enable vblank+vcount interrupts
+	str r0,[r2,#REG_DISPSTAT]
+	bx lr
+	
+end_gba_hdma
+	mov r2,#REG_BASE
+	strh r2,[r2,#REG_DM0CNT_H]	;DMA stop
+	strh r2,[r2,#REG_DM1CNT_H]
+	strh r2,[r2,#REG_DM2CNT_H]
+;	strh r2,[r2,#REG_DM3CNT_H]
+
+	ldr r0,=vbldummy
+	str r0,vcountfptr
+
+	mov r0,#0x0008 ;scanline 0, enable vblank interrupt
+	str r0,[r2,#REG_DISPSTAT]
+
+	bx lr
+	
+	
+
+
 ;;----------------------------------------------------------------------------
 ;vcountinterrupt; for palette changes
 ;;----------------------------------------------------------------------------
@@ -783,63 +2403,351 @@ totalblend	DCD 0
 ;	ldmfd sp!,{r4-r7}
 ;	bx lr
 	
+
+
+
+;this code is broken...
+;merge_recent_tiles
+;	ldrb r0,recenttilesfull
+;	movs r0,r0
+;	bxne lr
+;
+;	;This shouldn't happen when VSYNC is on, but it does anyway!  Find out why!
+;	
+;	;Only used when vsync is off, fixes garbage when there are two tile updates before a GBA vblank.
+;	
+;	;psuedocode:
+;	;if len1*2+len2*2>max_len*2, then just give up and flush buffer1
+;	;copy tile numbers and tile data from buffer2 to buffer1, then swap again
+;	
+;	;find length of buffer2
+;	ldr r1,dmarecent_tilenum  ;buffer2
+;	sub r1,r1,#2
+;strlen1
+;	ldrh r0,[r1,#2]!
+;	tst r0,#0x8000
+;	beq strlen1
+;	ldr r0,dmarecent_tilenum  ;buffer2
+;	subs r0,r1,r0
+;	;if buffer2 is empty, just swap.
+;	beq just_unswap
+;	
+;	;now r0=length of buffer2*2, r1=buffer2+r0
+;	
+;	;find length of buffer1
+;	stmfd sp!,{r2-addy,lr}
+;	ldr r3,recent_tilenum
+;	sub r4,r3,#2
+;strlen2
+;	ldrh r6,[r4,#2]!
+;	tst r6,#0x8000
+;	beq strlen2
+;	sub r5,r4,r3
+;	add r6,r0,r5
+;	cmp r6,#MAX_RECENT_TILES*2
+;	bgt merge_giveup
+;
+;	;r0 = length of buffer2*2
+;	;r5 = length of buffer1*2
+;	
+;	ldr r0,recent_tilenum
+;	ldr r1,recent_tiles
+;	add r0,r0,r5
+;	add r1,r1,r5,lsl#3
+;	ldr r2,dmarecent_tilenum
+;	ldr r3,dmarecent_tiles
+;	;r0 = dest inside buffer2
+;	;r1 = dest position inside buffer2
+;	;r2 = src inside buffer1
+;	;r3 = src position inside buffer1
+;	
+;	
+;	
+;	ldr r2,dmarecent_tiles
+;	add r0,r2,r0,lsl#3
+;	ldr r2,recent_tiles
+;	
+;	;copy!
+;	ldrh r6,[r2]
+;	mov r7,#0x8000 ;mark as empty
+;	strh r7,[r2],#2
+;mergeloop
+;	strh r6,[r0],#2
+;	ldmia r3!,{r6,r7,r8,r9}
+;	stmia r1!,{r6,r7,r8,r9}
+;	ldrh r6,[r2],#2
+;	subs r5,r5,#2
+;	bne mergeloop
+;	ldmfd sp!,{r2-addy,lr}
+;	b just_unswap
+;merge_giveup
+;	bl flush_recent_tiles
+;	ldmfd sp!,{r2-addy,pc}
+
+
+;----------------------------------------------------------------------------
+newframe_vblank	;called at line 144	(??? safe to use)
+;----------------------------------------------------------------------------
+	stmfd sp!,{r0-r12,lr}
+
+;	ldrb r0,windowY
+;	strb r0,frame_windowy
+
+	;Finish buffers: Part 1  (remember to do part 2)
+;	mov r11,r11
+	bl bufferfinish
+
+;	;finish dispcontrol buffer
+;	ldr addy,lcdcbuff
+;	ldrb r1,lcdctrl
+;	ldrb r0,lcdctrlline
+;	mov r2,#144
+;	bl fill_byte_buff
+;	
+;	;finish yscroll buffer
+;	ldr addy,yscrollbuff
+;	ldrb r1,scrollY
+;	ldrb r0,yscrollline
+;	mov r2,#144
+;	bl fill_byte_buff
+;	
+;	;finish xscroll buffer
+;	ldr addy,xscrollbuff
+;	ldrb r1,scrollX
+;	ldrb r0,xscrollline
+;	mov r2,#144
+;	bl fill_byte_buff
+;
+;	;finish windowx buffer
+;	ldr addy,wxbuff
+;	ldrb r1,windowX
+;	ldrb r0,wxline
+;	mov r2,#144
+;	bl fill_byte_buff
+;	
+;
+;	mov r0,#0
+;	str r0,lcdctrlline ;also writes yscrollline, xscrollline
+
+
+	;disable GBA vblank interrupts while swapping buffers
+	ldr addy,=REG_IE+REG_BASE
+	ldrh r2,[addy]
+	bic r2,r2,#1
+	strh r2,[addy]
+	
+	;---
+	;check for SGB MASKING
+	;---
+	ldrb r0,sgb_mask
+	movs r0,r0
+	bne no_swap
+
+	;rotate out ui_border visibility flags
+	ldrb r0,my_ui_moved
+	strb r0,my_ui_moved2
+	ldrb r0,_ui_moved
+	strb r0,my_ui_moved
+	ldrb r0,_ui_border_visible
+	bl update_ui_border_masks
+
+	;copy lcdctrl0's mid-frame status
+	ldrb r0,lcdctrl0midframe
+	strb r0,lcdctrl0frame
+	
+	;swap "big" buffer
+	ldr r0,bigbufferbase
+	ldr r1,bigbufferbase2
+	str r1,bigbufferbase
+	str r0,bigbufferbase2
+
+	;swap dispcnt+window buffer
+	ldr r0,dispcntbase
+	ldr r1,dispcntbase2
+	str r1,dispcntbase
+	str r0,dispcntbase2
+
 	
 
+;	;swap xscroll buffer
+;	ldr r0,xscrollbuff
+;	ldr r1,active_xscrollbuff
+;	str r1,xscrollbuff
+;	str r0,active_xscrollbuff
+;
+;	;swap yscroll buffer
+;	ldr r0,yscrollbuff
+;	ldr r1,active_yscrollbuff
+;	str r1,yscrollbuff
+;	str r0,active_yscrollbuff
+;
+;	;swap control buffer
+;	ldr r0,lcdcbuff
+;	ldr r1,active_lcdcbuff
+;	str r1,lcdcbuff
+;	str r0,active_lcdcbuff
+;	
+;	;swap windowx buffer
+;	ldr r0,wxbuff
+;	ldr r1,active_wxbuff
+;	str r1,wxbuff
+;	str r0,active_wxbuff
+
+;	;copy window coordinates
+;	ldrb r0,frame_windowy
+;	strb r0,active_windowy
+
+	;swap gb oam buffer if not dirty
+	ldrb r0,gboamdirty
+	movs r0,r0
+	beq gbaoamclean
+	cmp r0,#2 ;use copy instead of buffer swap?
+
+	ldrne r0,gboambuff
+	ldrne r1,active_gboambuff
+	strne r1,gboambuff
+	strne r0,active_gboambuff
+	
+	bleq copyoam
+	
+	
+	mov r0,#0
+	strb r0,gboamdirty
+gbaoamclean
+	bl_long copy_gbc_palette
+	
+	;new code
+;	if v=1 then
+;		add tiles to buffer
+;		B=1
+;		if buffer becomes full, D=1
+;		do not wait for vblank
+;	else
+;		D=1
+;		wait for vblank
+;	v=0
+	
+	ldrb r0,novblankwait_
+	cmp r0,#1
+	;fast mode overrides vblank system
+	ldrneb r0,vblank_happened
+	movs r0,r0
+	beq dirty_ok_and_wait
+	
+	bl gbc_chr_update
+	mov r0,#1
+	strb r0,consume_buffer
+	
+	mov r0,#0
+	strb r0,vblank_happened
+	
+reenable_vblank
+	;reenable GBA vblank interrupt
+	ldr addy,=REG_IE+REG_BASE
+	ldrh r2,[addy]
+	orr r2,r2,#1
+	strh r2,[addy]
+
+	b after_wait
+dirty_ok_and_wait
+	mov r0,#1
+	strb r0,consume_dirty
+
+	;reenable GBA vblank interrupt
+	ldr addy,=REG_IE+REG_BASE
+	ldrh r2,[addy]
+	orr r2,r2,#1
+	strh r2,[addy]
+
+	;VSYNC!
+	mov r0,#1				;always wait
+	mov r1,#1				;VBL wait
+	swi 0x040000			; Turn of CPU until IRQ
+
+	mov r0,#0
+	strb r0,vblank_happened
+	
+after_wait
+
+	;Finish buffers: Part 2  (after doing part 1)
+;	mov r11,r11
+	bl newframeinit
+
+	;slow motion? Vsync again...
+	ldrb r0,novblankwait_
+	cmp r0,#2
+	
+	moveq r0,#1
+	moveq r1,#1
+	swieq 0x040000
+	moveq r0,#0
+	strb r0,vblank_happened
+
+	ldmfd sp!,{r0-r12,pc}
+
+no_swap
+	b reenable_vblank
+;	
+;	;sgb display is masked off...
+;	ldrb r0,novblankwait_
+;	cmp r0,#1
+
+	
+	
+	
 ;----------------------------------------------------------------------------
 newframe	;called at line 0	(r0-r9 safe to use)
 ;----------------------------------------------------------------------------
 	str lr,[sp,#-4]!
-
-	bl OAMfinish
+	
+;	bl OAMfinish
 ;-----------------------
-	ldr r0,ctrl1old
-	ldr r1,ctrl1line
-	mov addy,#159
-	ldr r3,chrold
-	ldr r5,chrold2
-	bl ctrl1finish
+;	ldr r0,ctrl1old
+;	ldr r1,ctrl1line
+;	mov addy,#159
+;	ldr r3,chrold
+;	ldr r5,chrold2
+;	bl ctrl1finish
 ;------------------------
-	ldr r0,scrollXold
-	ldr r1,scrollXline
-	mov addy,#159
-	bl scrollXfinish
+;	ldr r0,scrollXold
+;	ldr r1,scrollXline
+;	mov addy,#159
+;	bl scrollXfinish
 ;--------------------------
-	ldr r0,scrollYold
-	ldr r1,scrollYline
-	mov addy,#159
-	bl scrollYfinish
+;	ldr r0,scrollYold
+;	ldr r1,scrollYline
+;	mov addy,#159
+;	bl scrollYfinish
 ;--------------------------
-	ldr r0,windowXold
-	ldr r1,windowXline
-	mov addy,#159
-	bl windowXfinish
+;	ldr r0,windowXold
+;	ldr r1,windowXline
+;	mov addy,#159
+;	bl windowXfinish
 ;--------------------------
-	ldr r0,windowYold
-	ldr r1,windowYline
-	mov addy,#159
-	bl windowYfinish
+;	ldr r0,windowYold
+;	ldr r1,windowYline
+;	mov addy,#159
+;	bl windowYfinish
 ;--------------------------
-	mov r0,#0
-	str r0,ctrl1line
-	str r0,scrollXline
-	str r0,scrollYline
-	str r0,windowXline
-	str r0,windowYline
+;	mov r0,#0
+;	str r0,ctrl1line
+;	str r0,scrollXline
+;	str r0,scrollYline
+;	str r0,windowXline
+;	str r0,windowYline
 ;--------------------------
 
 ;	ldrb r2,windowX
 ;	strb r2,windowXbuf
-
-	ldr r0,scrollbuff
-	ldr r1,dmascrollbuff
-	str r1,scrollbuff
-	str r0,dmascrollbuff
-
-	ldr r0,oambuffer
-	str r0,dmaoambuffer
-
-	bl transfer_palette
-
+;
+;	ldr r0,scrollbuff
+;	ldr r1,dmascrollbuff
+;	str r1,scrollbuff
+;	str r0,dmascrollbuff
+;
+;	ldr r0,oambuffer
+;	str r0,dmaoambuffer
+;
 	ldr pc,[sp],#4
 
 ;----------------------------------------------------------------------------
@@ -850,95 +2758,34 @@ FF40_R;		LCD Control
 ;----------------------------------------------------------------------------
 FF40_W;		LCD Control
 ;----------------------------------------------------------------------------
-	stmfd sp!,{r3,r4,r5,lr}
+;	mov r11,r11
 	ldrb r1,lcdctrl
-	strb r0,lcdctrl
-	eor r1,r1,r0
-	and r1,r1,r0
-	tst r1,#0x80		;Is LCD turned on?
-	ldrne addy,=line145_to_end
-	strne addy,nexttimeout
-	movne r1,#152
-	strne r1,scanline
+	cmp r0,r1
+	bxeq lr
+
+	eor r2,r1,r0
+	and r2,r2,r0
+	tst r2,#0x80		;Is LCD turned on?
+	ldrne r2,=line145_to_end
+	strne r2,nexttimeout
+	movne r2,#152
+	strneb r2,scanline
 	
-	ldrb r1,gbmode
-	cmp r1,#0
-	ldrne r1,=0x14011401   ;bg0, win
-	ldrne r5,=0x16021603   ;bg0back, winback
-	ldreq r1,=0x08010801   ;bg0, win
-	ldreq r5,=0x0A020A03   ;bg0back, winback
-	tst r0,#0x10		;Which charset?
-	addeq r1,r1,#0x00000004
-	addeq r1,r1,#0x00040000
-	tst r0,#0x08		;BG tilemap select?
-	addne r1,r1,#0x00000100
-	addne r5,r5,#0x00000100
-	tst r0,#0x40		;WIN tilemap select?
-	addne r1,r1,#0x01000000
-	addne r5,r5,#0x01000000
-	adr r2,chrold
-	swp r3,r1,[r2]		;r3=lastval
-	adr r2,chrold2
-	swp r5,r5,[r2]		;r3=lastval
+	stmfd sp!,{r0,lr}
+	bl tobuffer
+	ldr r0,[sp]
+	strb r0,lcdctrl
+	bl newmode
+;	mov r2,r1,lsr#16
+;	cmp r2,#0x0300
+;	bxeq r1
+	ldmfd sp!,{r0,pc}
 
-	ldr r1,=0x4040		;1d sprites, WIN1 enable
-
-	tst r0,#0x80		;LCD en?
-	beq nodisp
-	tst r0,#0x01		;bg en?
-	orrne r1,r1,#0x0500
-	tst r0,#0x20		;win en?
-	orrne r1,r1,#0x2A00	;GBA Win0 & GBA BG1
-	tst r0,#0x02		;obj en?
-	orrne r1,r1,#0x1000
-nodisp
-	adr r2,ctrl1old
-	swp r0,r1,[r2]		;r0=lastval
-
-	adr r2,ctrl1line
-	ldr addy,scanline	;addy=scanline
-	add addy,addy,#8	;GB display begins 8 pixels down (maybe 7 is good?).
-	cmp addy,#159
-	movhi addy,#159
-	swp r1,addy,[r2]	;r1=lastline, lastline=scanline
-	bl ctrl1finish
-	ldmfd sp!,{r3,r4,r5,pc}
-
-ctrl1finish
-	ldr r2,=ui_visible
-	ldr r2,[r2]
-	cmp r2,#0
-	beq ctrl1finish_no_ui_visible
-	;if UI visible, make BG3 visible
-	orr r0,r0,#0x0800
-	bic r5,r5,#0xFF000000
-	bic r5,r5,#0x00FF0000
-	orr r5,r5,#0x5A000000
-	orr r5,r5,#0x000C0000
-ctrl1finish_no_ui_visible
-	ldr r4,=BG0CNTBUFF
-	ldr r2,=DISPCNTBUFF
-	add r1,r2,r1,lsl#1
-	add r2,r2,addy,lsl#1
-	add r4,r4,addy,lsl#3
-	add r4,r4,#8
-ct1	strh r0,[r2],#-2	;fill backwards from scanline to lastline
-	str r5,[r4,#-4]!		;fill backwards from scanline to lastline
-	str r3,[r4,#-4]!		;fill backwards from scanline to lastline
-	cmp r2,r1
-	bpl ct1
-
-	mov pc,lr
-
-chrold		DCD 0		;last write
-chrold2		DCD 0		;last write2
-ctrl1old	DCD 0x0C40	;last write
-ctrl1line	DCD 0		;when?
 ;----------------------------------------------------------------------------
 FF41_R;		LCD Status
 ;----------------------------------------------------------------------------
 	ldrb r0,lcdstat
-	ldr r1,scanline
+	ldrb r1,scanline
 	ldrb r2,lcdyc
 	cmp r1,r2
 	orreq r0,r0,#4		;scanline=LYC
@@ -974,32 +2821,18 @@ FF42_R;		SCY - Scroll Y
 ;----------------------------------------------------------------------------
 FF42_W;		SCY - Scroll Y
 ;----------------------------------------------------------------------------
+;	mov r11,r11
+	ldrb r1,scrollY
+	cmp r0,r1
+	bxeq lr
+	
+	stmfd sp!,{r0,lr}
+	bl tobuffer
+	ldr r0,[sp]
 	strb r0,scrollY
-	adr r1,scrollYold
-	swp r0,r0,[r1]		;r0=lastval
+	ldmfd sp!,{r0,lr}
+	b scrollx_entry
 
-	ldr addy,scanline	;addy=scanline
-	add addy,addy,#8
-	cmp addy,#159
-	movhi addy,#159
-	adr r2,scrollYline
-	swp r1,addy,[r2]	;r1=lastline, lastline=scanline
-scrollYfinish			;newframe jumps here
-	sub r0,r0,#8
-	ldr r2,scrollbuff
-	add r2,r2,#2		;r2+=2, bg Y write
-	add r1,r2,r1,lsl#4
-	add addy,addy,#1
-	add r2,r2,addy,lsl#4
-sy1
-	strh r0,[r2,#-8]!	;fill backwards from scanline to lastline
-	strh r0,[r2,#-8]!	;fill backwards from scanline to lastline
-	cmp r2,r1
-	bgt sy1
-	mov pc,lr
-
-scrollYold DCD 0 ;last write
-scrollYline DCD 0 ;..was when?
 ;----------------------------------------------------------------------------
 FF43_R;		SCX - Scroll X
 ;----------------------------------------------------------------------------
@@ -1008,38 +2841,30 @@ FF43_R;		SCX - Scroll X
 ;----------------------------------------------------------------------------
 FF43_W;		SCX - Scroll X
 ;----------------------------------------------------------------------------
+;	mov r11,r11
+	ldrb r1,scrollX
+	cmp r0,r1
+	bxeq lr
+	
+	stmfd sp!,{r0,lr}
+	bl tobuffer
+	ldr r0,[sp]
 	strb r0,scrollX
-;	ldrb r0,scrollX
-	adr r1,scrollXold
-	swp r0,r0,[r1]		;r0=lastval
+	ldmfd sp!,{r0,lr}
 
-	adr r2,scrollXline
-	ldr addy,scanline	;addy=scanline
-	add addy,addy,#8
-	cmp addy,#159
-	movhi addy,#159
-	swp r1,addy,[r2]	;r1=lastline, lastline=scanline
-scrollXfinish			;newframe jumps here
-	sub r0,r0,#40
-	ldr r2,scrollbuff
-;	add r2,r2,#0		;r2+=0, bg X write
-	add r1,r2,r1,lsl#4
-	add addy,addy,#1
-	add r2,r2,addy,lsl#4
-sx1	strh r0,[r2,#-8]!	;fill backwards from scanline to lastline
-	strh r0,[r2,#-8]!	;fill backwards from scanline to lastline
-	cmp r2,r1
-	bgt sx1
-	mov pc,lr
+scrollx_entry
+	ldrb r0,rendermode
+	cmp r0,#1
+	blt mode0_update_scroll
+	bgt mode2_update_scroll
+	bx lr
 
-scrollXold DCD 0 ;last write
-scrollXline DCD 0 ;..was when?
 ;----------------------------------------------------------------------------
 FF44_R;      LCD Scanline
 ;----------------------------------------------------------------------------
    ldrb r0,lcdctrl
    ands r0,r0,#0x80
-   ldrne r0,scanline
+   ldrneb r0,scanline
 ;   ldr r0,scanline
    mov pc,lr
 ;;----------------------------------------------------------------------------
@@ -1062,53 +2887,82 @@ FF44_W;		LCD Scanline
 ;----------------------------------------------------------------------------
 FF45_R;		LCD Y Compare
 ;----------------------------------------------------------------------------
-	ldrb r0,lcdyc_r
+	ldrb r0,lcdyc
 	mov pc,lr
 ;----------------------------------------------------------------------------
 FF45_W;		LCD Y Compare
 ;----------------------------------------------------------------------------
-	strb r0,lcdyc_r
-;	cmp r0,#0
-;	moveq r0,#153
 	strb r0,lcdyc
 	mov pc,lr
 ;----------------------------------------------------------------------------
 FF47_R;		BGP - BG Palette Data
 ;----------------------------------------------------------------------------
-	ldrb r0,gbpalette
+	ldrb r0,bgpalette
 	mov pc,lr
 ;----------------------------------------------------------------------------
 FF47_W;		BGP - BG Palette Data  (GB MODE ONLY)
 ;----------------------------------------------------------------------------
-	strb r0,gbpalette
+	strb r0,bgpalette
+	
+	ldrb r1,gbcmode
+	cmp r1,#0
+	bxne lr
+	ldrb r1,sgbmode
+	cmp r1,#0
+	bne_long update_sgb_bg_palette
 	
 	ldr r2,=gbc_palette
-	ldr addy,=MAPPED_RGB
+	ldr addy,=SGB_PALETTE
 	str lr,[sp,#-4]!
 	bl dopalette
 	ldr lr,[sp],#4
 	
 	ldr r2,=gbc_palette+4*2
-	ldr addy,=MAPPED_RGB+16
+	ldr addy,=SGB_PALETTE+16
 dopalette
-	ldrb r1,gbmode
-	cmp r1,#0
-	bxne lr
-
 	and r1,r0,#0x03
-	ldr r1,[addy,r1,lsl#2]
+	add r1,addy,r1,lsl#1
+	ldrh r1,[r1]
 	strh r1,[r2]		;store in agb palette
 	and r1,r0,#0x0C
-	ldr r1,[addy,r1]
+	add r1,addy,r1,lsr#1
+	ldrh r1,[r1]
 	strh r1,[r2,#2]		;store in agb palette
 	and r1,r0,#0x30
-	ldr r1,[addy,r1,lsr#2]
+	add r1,addy,r1,lsr#3
+	ldrh r1,[r1]
 	strh r1,[r2,#4]		;store in agb palette
 	and r1,r0,#0xC0
-	ldr r1,[addy,r1,lsr#4]
+	add r1,addy,r1,lsr#5
+	ldrh r1,[r1]
 	strh r1,[r2,#6]		;store in agb palette
 
-	mov pc,lr
+	bx lr	
+
+dopalette_invert
+	and r1,r0,#0x03
+	eor r1,r1,#0x03
+	add r1,addy,r1,lsl#1
+	ldrh r1,[r1]
+	strh r1,[r2]		;store in agb palette
+	and r1,r0,#0x0C
+	eor r1,r1,#0x0C
+	add r1,addy,r1,lsr#1
+	ldrh r1,[r1]
+	strh r1,[r2,#2]		;store in agb palette
+	and r1,r0,#0x30
+	eor r1,r1,#0x30
+	add r1,addy,r1,lsr#3
+	ldrh r1,[r1]
+	strh r1,[r2,#4]		;store in agb palette
+	and r1,r0,#0xC0
+	eor r1,r1,#0xC0
+	add r1,addy,r1,lsr#5
+	ldrh r1,[r1]
+	strh r1,[r2,#6]		;store in agb palette
+
+	bx lr	
+
 ;----------------------------------------------------------------------------
 FF48_R;		OBP0 - OBJ 0 Palette Data
 ;----------------------------------------------------------------------------
@@ -1118,8 +2972,15 @@ FF48_R;		OBP0 - OBJ 0 Palette Data
 FF48_W;		OBP0 - OBJ 0 Palette Data
 ;----------------------------------------------------------------------------
 	strb r0,ob0palette
+	ldrb r1,gbcmode
+	cmp r1,#0
+	bxne lr
+	ldrb r1,sgbmode
+	cmp r1,#0
+	bne_long update_sgb_obj0_palette
+
 	ldr r2,=gbc_palette+64
-	ldr addy,=MAPPED_RGB+32
+	ldr addy,=SGB_PALETTE+16
 	b dopalette
 ;----------------------------------------------------------------------------
 FF49_R;		OBP1 - OBJ 1 Palette Data
@@ -1130,8 +2991,16 @@ FF49_R;		OBP1 - OBJ 1 Palette Data
 FF49_W;		OBP1 - OBJ 1 Palette Data
 ;----------------------------------------------------------------------------
 	strb r0,ob1palette
+
+	ldrb r1,gbcmode
+	cmp r1,#0
+	bxne lr
+	ldrb r1,sgbmode
+	cmp r1,#0
+	bne_long update_sgb_obj1_palette
+
 	ldr r2,=gbc_palette+64+8
-	ldr addy,=MAPPED_RGB+48
+	ldr addy,=SGB_PALETTE+24
 	b dopalette
 ;----------------------------------------------------------------------------
 FF4A_R;		WINY - Window Y
@@ -1141,65 +3010,26 @@ FF4A_R;		WINY - Window Y
 ;----------------------------------------------------------------------------
 FF4A_W;		WINY - Window Y
 ;----------------------------------------------------------------------------
+;	mov r11,r11
+	ldrb r1,windowY
+	cmp r0,r1
+	bxeq lr
+
+	stmfd sp!,{r0,lr}
+	bl tobuffer
+	ldr r0,[sp]
 	strb r0,windowY
-	adr r1,windowYold
-	swp r0,r0,[r1]		;r0=lastval
+	bl newmode
+	ldmfd sp!,{r0,pc}
 
-	ldr addy,scanline	;addy=scanline
-	add addy,addy,#8
-	cmp addy,#159
-	movhi addy,#159
-	adr r2,windowYline
-	swp r1,addy,[r2]	;r1=lastline, lastline=scanline
-	stmfd sp!,{r3,r4,r5,lr}
-	bl windowYfinish
-	ldmfd sp!,{r3,r4,r5,pc}
-;-------------------------------
-windowYfinish			;newframe jumps here
-;wininitY			;NewFrame jumps here
-	add r4,r0,#8
-	cmp r4,#8
-	movlt r4,#8
-	cmpge r4,#152
-	movgt r4,#152
-	
-	mov r4,r4,lsl#8
-	orr r4,r4,#0x98
-	
-	rsb r0,r0,#0
-	sub r0,r0,#8
-	mov r5,r0
-	
-	ldr r2,=ui_visible  ;if UI visible, use 0 as y position
-	ldr r2,[r2]
-	cmp r2,#0
-	ldrne r5,=ui_y
-	ldrne r5,[r5]
-
-	ldr r2,scrollbuff
-	ldr r3,=WINBUFF+4+160*8
-	add r2,r2,#6		;r2+=6, win Y write
-
-	add r1,r2,r1,lsl#4	;r1=base
-	add r2,r2,#160*16	;r2=end2
-;	add r3,r3,#160*8
-wy1
-	strh r0,[r1],#8
-	strh r5,[r1],#8
-	strh r4,[r3,#-8]!	;fill backwards from scanline to lastline
-	cmp r1,r2
-	blo wy1
-	mov pc,lr
-windowYold DCD 0 ;last write
-windowYline DCD 0 ;..was when?
 ;----------------------------------------------------------------------------
 FF4F_W;		VBK - VRAM Bank - CGB Mode Only
 ;----------------------------------------------------------------------------
-	ldrb r1,gbmode
+	ldrb r1,gbcmode
 	cmp r1,#0
 	moveq r0,#0
 	
-	and r0,r0,#1
+	ands r0,r0,#1
 	strb r0,vrambank
 	
 	
@@ -1210,19 +3040,24 @@ FF4F_W;		VBK - VRAM Bank - CGB Mode Only
  |
 	ldr addy,=XGB_VRAM-0x8000
  ]
-	add addy,addy,r0,lsl#13	
+	addne addy,addy,r0,lsl#13	
 	str addy,memmap_tbl+32
 	mov addy,#AGB_VRAM
-	add addy,addy,r0,lsl#13
-	sub addy,addy,#0x2000
+	addne addy,addy,r0,lsl#13
+;	sub addy,addy,#0x2000
 	str addy,agb_vrambank
+	ldr addy,=DIRTY_ROWS
+	addne addy,addy,#24
+	str addy,dirty_rows
+	ldr addy,=DIRTY_TILES
+	addne addy,addy,#384
+	str addy,dirty_tiles
 	mov pc,lr
 ;----------------------------------------------------------------------------
 FF4F_R;		VBK - VRAM Bank - CGB Mode Only
 ;----------------------------------------------------------------------------
 	ldrb r0,vrambank
 	mov pc,lr
-
 
 ;----------------------------------------------------------------------------
 FF4B_R;		WINX - Window X
@@ -1232,59 +3067,17 @@ FF4B_R;		WINX - Window X
 ;----------------------------------------------------------------------------
 FF4B_W;		WINX - Window X
 ;----------------------------------------------------------------------------
-	and r0,r0,#0xff		;not needed?
+;	mov r11,r11
+	ldrb r1,windowX
+	cmp r0,r1
+	bxeq lr
+	
+	stmfd sp!,{r0,lr}
+	bl tobuffer
+	ldr r0,[sp]
 	strb r0,windowX
-	adr r1,windowXold
-	swp r0,r0,[r1]		;r0=lastval
-	
-	adr r2,windowXline
-	ldr addy,scanline	;addy=scanline
-	add addy,addy,#8
-	cmp addy,#159
-	movhi addy,#159
-	swp r1,addy,[r2]	;r1=lastline, lastline=scanline
-	stmfd sp!,{r3,r4,r5,lr}
-	bl windowXfinish
-	ldmfd sp!,{r3,r4,r5,pc}
-
-windowXfinish			;newframe jumps here
-	add r4,r0,#33
-	cmp r4,#40
-	movlt r4,#40
-	cmpge r4,#200
-	movgt r4,#200
-	
-	mov r4,r4,lsl#8
-	orr r4,r4,#0xC8
-	
-	rsb r0,r0,#0
-	sub r0,r0,#33		;window x-7
-	mov r5,r0
-	
-	ldr r2,=ui_visible  ;if UI visible, use 0 as x position
-	ldr r2,[r2]
-	cmp r2,#0
-	ldrne r5,=ui_x
-	ldrne r5,[r5]
-
-	ldr r2,scrollbuff
-	add r2,r2,#4		;r2+=4, win X write
-	add r1,r2,r1,lsl#4
-	add addy,addy,#1
-	add r2,r2,addy,lsl#4
-	ldr r3,=WINBUFF
-	add r3,r3,addy,lsl#3
-wx1	
-	strh r5,[r2,#-8]!	;fill backwards from scanline to lastline
-	strh r0,[r2,#-8]!	;fill backwards from scanline to lastline
-	strh r4,[r3,#-8]!	;fill backwards from scanline to lastline
-	
-	cmp r2,r1
-	bgt wx1
-	mov pc,lr
-
-windowXold DCD 0 ;last write
-windowXline DCD 0 ;..was when?
+	bl newmode
+	ldmfd sp!,{r0,pc}
 
 ;----------------------------------------------------------------------------
 vram_W2
@@ -1302,43 +3095,56 @@ vram_W
 ;----------------------------------------------------------------------------
 ;VRAM_chr;	8000-97FF
 ;----------------------------------------------------------------------------
-	bic addy,addy,#1
-	ldrb r0,[r2,addy]!	;read 1st plane
-	ldrb r1,[r2,#1]		;read 2nd plane
-	sub addy,addy,#0x8000
+	sub r1,addy,#0x8000
+	ldr r2,dirty_rows
+	strb r2,[r2,r1,lsr#8]
+	ldr r2,dirty_tiles
+	strb r2,[r2,r1,lsr#4]
+	bx lr
+;	
+;
+;	bic addy,addy,#1
+;	ldrb r0,[r2,addy]!	;read 1st plane
+;	ldrb r1,[r2,#1]		;read 2nd plane
+;	sub addy,addy,#0x8000
+;
+;	adr r2,chr_decode
+;	ldr r0,[r2,r0,lsl#2]
+;	ldr r1,[r2,r1,lsl#2]
+;	orr r0,r0,r1,lsl#1
+;
+;	add addy,addy,addy
+;
+;;f(2x) =
+;;{
+;;	0...FFF: sprite 0, bg 0000
+;;	1000...1FFF: sprite 1000, bg 1000, bg 9000
+;;       2000...2FFF: bg 8000
+;;}
+;	ldr r2,agb_vrambank		;AGB BG tileset
+;	tst addy,#0x2000
+;	addeq r1,r2,#0x10000	;0x06010000=OBJ
+;	streq r0,[r1,addy]		;OBJ
+;	addne r2,r2,#0x6000
+;;	addeq r2,r2,#0x0000		;0x06004000/8000=BG
+;	str r0,[r2,addy]		;BG
+;
+;	tst addy,#0x1000
+;	addne r2,r2,#0x8000
+;	strne r0,[r2,addy]		;BG
+;
+;	mov pc,lr
 
-	adr r2,chr_decode
-	ldr r0,[r2,r0,lsl#2]
-	ldr r1,[r2,r1,lsl#2]
-	orr r0,r0,r1,lsl#1
 
-	add addy,addy,addy
 
-;f(2x) =
-;{
-;	0...FFF: sprite 0, bg 4000
-;	1000...1FFF: sprite 1000, bg 5000, bg D000
-;       2000...2FFF: bg C000
-;}
-
-	ldr r2,agb_vrambank		;AGB BG tileset
-	tst addy,#0x2000
-	addeq r1,r2,#0x12000	;0x06010000=OBJ
-	streq r0,[r1,addy]		;OBJ
-	addne r2,r2,#0x6000
-	addeq r2,r2,#0x4000		;0x06004000/8000=BG
-	str r0,[r2,addy]		;BG
-
-	add r2,r2,#0x2000
-	tst addy,#0x1000
-	addne r2,r2,#0x2000
-	strne r0,[r2,addy]		;BG
-
-	mov pc,lr
 ;----------------------------------------------------------------------------
 VRAM_name0	;(9800-9FFF)
 ;----------------------------------------------------------------------------
-	ldrb r2,gbmode
+;	bx lr
+
+;3,1,3,1,3,1,3,1, 1,3,1,1,1, 1,1,1,1,1, 3, 1,1,1,3 1,1,3 
+	
+	ldrb r2,gbcmode
 	cmp r2,#0
  [ RESIZABLE
 	ldr r2,xgb_vram
@@ -1350,51 +3156,35 @@ VRAM_name0	;(9800-9FFF)
 	addne r2,r2,#0x2000
 	ldrneb r1,[r2,addy]
 	moveq r1,#0
-	and r2,r1,#0x7
-	mov r2,r2,lsl#12
-	orr r0,r0,r2
-;	and r2,r1,#0x8
-;	mov r2,r2,lsl#5
-;	orr r0,r0,r2
-;	and r2,r1,#0x60
-;	mov r2,r2,lsl#5
-;	orr r0,r0,r2
+
+	tst addy,#0x400
+	ldr r2,=AGB_VRAM+26*2048
+	addne r2,r2,#3*2048
+	bic addy,addy,#0xFC00
+	add addy,r2,addy,lsl#1
+
 	and r2,r1,#0x68
-	mov r2,r2,lsl#5
-	orr r0,r0,r2
-	add r0,r0,#0x00008100
-
-;gbc byte 2
-;  Bit 0-2  Background Palette number  (BGP0-7)
-;  Bit 3    Tile VRAM Bank number      (0=Bank 0, 1=Bank 1)
-;  Bit 4    Not used
-;  Bit 5    Horizontal Flip            (0=Normal, 1=Mirror horizontally)
-;  Bit 6    Vertical Flip              (0=Normal, 1=Mirror vertically)
-;  Bit 7    BG-to-OAM Priority         (0=Use OAM priority bit, 1=BG Priority)
-
-;gba format
-;  0-9   Tile Number     (0-1023)
-;  10    Horizontal Flip (0=Normal, 1=Mirrored)
-;  11    Vertical Flip   (0=Normal, 1=Mirrored)
-;  12-15 Palette Number  (0-15)    (Not used in 256 color/1 palette mode)
+	orr r0,r0,r2,lsl#5
+	and r2,r1,#0x7
+	add r2,r2,#0x8
+	orr r0,r0,r2,lsl#12
 	
-;	ldrb r1,vrambank
-;	tst r1,#1
-;	movne pc,lr  ;hack for GBC mode...
-
-	ldrne r2,=AGB_BG
-	ldreq r2,=AGB_BG_GBMODE 
-	and r1,r1,#0x07
-;	add r1,r1,#0x01
+	;store tile
+	strh r0,[addy]
 	
-	bic addy,addy,#0xf800	;AND $07ff
-	add addy,addy,addy	;lsl#1
-
-	strh r0,[r2,addy]	;write tile#
-	addne addy,addy,#0x1000
-	strneh r1,[r2,addy]	;write background tile#
+	;test for high priority now since r1 gets destroyed
+	tst r1,#0x80
+	;Setup and store color 0 tile
+	add r2,r2,#512+4096*7
+	mov r1,#0x800
+	strh r2,[addy,r1]
 	
-	mov pc,lr
+	mov r1,#0x1000
+	;if was not a high priority tile, use a transparent tile.
+	biceq r0,r2,#0xFF
+	;store high priority tile
+	strh r0,[addy,r1]
+	bx lr
 
 ;----------------------------------------------------------------------------
 VRAM_nameD	;(9800-9FFF)    Bloody Hack for Push16.
@@ -1537,16 +3327,105 @@ FF6B_W	;OCPD - OBJ Color Palette Data
 ;;	strb r0,[addy,r2]
 ;;	bx lr
 
-oambuffer	DCD OAM_BUFFER1,OAM_BUFFER2
-dmaoambuffer	DCD OAM_BUFFER2
+copyoam
+	stmfd sp!,{r0,r1,r2,addy,lr}
+	ldr r1,gboambuff
+	ldr r0,active_gboambuff
+	mov r2,#160/4
+	bl_long copy_
+	ldmfd sp!,{r0,r1,r2,addy,pc}
+
+OAM_R
+	cmp addy,#0xFE00
+	bmi echo_R
+	ldr r1,gboambuff
+	ldrb r0,[r1,r2]
+	mov pc,lr
+OAM_W
+	cmp addy,#0xFE00
+	bmi echo_W
+	mov r1,#2
+	strb r1,gboamdirty
+	ldr r1,gboambuff
+	strb r0,[r1,r2]
+	mov pc,lr
+
+
+
+dispcntbase	DCD DISPCNTBUFF
+dispcntbase2	DCD DISPCNTBUFF2
+bigbufferbase	DCD BG0CNT_SCROLL_BUFF
+bigbufferbase2	DCD BG0CNT_SCROLL_BUFF2
+
+my_ui_moved	DCB 0
+my_ui_moved2	DCB 0
+	DCB 0
+	DCB 0
+
+	;r1=bigbuffer
+	;r2=bg01cnt
+	;r3=bg23cnt
+	;r4=xyscroll
+	;r5=xyscroll2
+
+	;dispcntdata
+	;windata
+	;dispcntaddr
+
+
+gboambuff	DCD GBOAMBUFF1
+active_gboambuff	DCD GBOAMBUFF2
+;xscrollbuff DCD XSCROLLBUFF1
+;active_xscrollbuff DCD XSCROLLBUFF2
+;yscrollbuff DCD YSCROLLBUFF1
+;active_yscrollbuff DCD YSCROLLBUFF2
+;wxbuff DCD WXBUFF1
+;active_wxbuff DCD WXBUFF2
+;lcdcbuff DCD LCDCBUFF1
+;active_lcdcbuff DCD LCDCBUFF2
+
+;recent_tiles	DCD RECENT_TILES1
+;dmarecent_tiles	DCD RECENT_TILES2
+;recent_tilenum	DCD RECENT_TILENUM1
+;dmarecent_tilenum	DCD RECENT_TILENUM2
+dirty_tiles	DCD DIRTY_TILES
+dirty_rows	DCD DIRTY_ROWS
+
+;frame_windowy	DCB 0
+;active_windowy	DCB 0
+gboamdirty	DCB 0
+	DCB 0
+	DCB 0
+	DCB 0
+
+consume_dirty	DCB 0
+consume_buffer	DCB 0
+vblank_happened	DCB 0
+	DCB 0
 
 gbc_palette	% 128	;CGB $FF68-$FF6D???
+gbc_palette2	% 128
 
-scrollbuff	DCD SCROLLBUFF1
-dmascrollbuff	DCD SCROLLBUFF2
+;lcdctrlline DCB 0
+;yscrollline DCB 0
+;xscrollline DCB 0
+;wxline DCB 0
 
-windowYbuf	DCB 0
-windowXbuf	DCB 0,0,0
+
+
+agb_vrambank	DCD 0
+
+;----------------------------------------------------------------------------
+;no, you're not going in a READ_ONLY area!
+palettebank	DCD 0
+fpstext DCB "FPS:    "
+fpsenabled DCB 0
+fpschk	DCB 0
+gammavalue DCB 0
+		DCB 0
+;----------------------------------------------------------------------------
+
+
 ;----------------------------------------------------------------------------
 	AREA wram_globals1, CODE, READWRITE
 
@@ -1557,24 +3436,55 @@ AGBinput		;this label here for main.c to use
 EMUinput	DCD 0 ;EMUjoypad (this is what GB sees)
 
 lcdstate
+	DCB 0 ;lcdctrl  ff40
+	DCB 0 ;lcdstat
 	DCB 0 ;scrollX
 	DCB 0 ;scrollY
-	DCB 0 ;windowX
-	DCB 0 ;windowY
-	DCB 0 ;lcdyc_r
+	
+	DCB 0 ;scanline
 	DCB 0 ;lcdyc
-	DCB 0 ;lcdstat
-	DCB 0 ;lcdctrl
-	DCB 0 ;lcdctrl0frame	;state of $2000 at frame start
-	DCB 0 ;ppuctrl1
-	DCB 0 ;gbpalette
+	DCB 0 ;[unused] dma start address
+	DCB 0 ;bgpalette
+
 	DCB 0 ;ob0palette
 	DCB 0 ;ob1palette
+	DCB 0 ;windowX
+	DCB 0 ;windowY
+	
+	DCB 0 ;BCPS_index  ;actually ff68
+	DCB 0 ;doublespeed
+	DCB 0 ;OCPS_index  ;actually ff6a
 	DCB 0 ;vrambank
-	DCB 0 ;palette_index
+
+	DCD 0 ;dma_src, dma_dest
+
+	DCD 0 ;bigbuffer
+	DCD 0 ;bg01cnt
+	DCD 0 ;bg23cnt
+	DCD 0 ;xyscroll
+	DCD 0 ;xyscroll2
+	DCD 0 ;dispcntdata
+	DCD 0 ;windata
+	DCD 0 ;dispcntaddr
+	DCD 0 ;windowyscroll
+	DCD 0 ;buffer_lastscanline
+	
+	DCB 0 ;lcdctrl0midframe
+lcdctrl0frame_
+	DCB 0 ;lcdctrl0frame
+	DCB 0 ;rendermode
+ui_border_visible	DCB 0 ;_ui_border_visible
+	DCD 0 ;ui_border_cnt_bic
+	DCD 0 ;ui_border_cnt_orr
+	DCD 0 ;ui_border_scroll2
+	DCD 0 ;ui_border_scroll3
+ui_x	DCD 0 ;_ui_x
+ui_y	DCD 0 ;_ui_y
+ui_moved	DCB 0 ;_ui_moved
 	DCB 0
-	DCD 0 ;dma_src
-	DCD 0 ;agb_vrambank
+	DCB 0
+	DCB 0
+
 ;...update load/savestate if you move things around in here
 ;----------------------------------------------------------------------------
 	END

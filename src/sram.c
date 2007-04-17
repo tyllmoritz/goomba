@@ -1,5 +1,16 @@
 #include "includes.h"
 
+#if SRAM_SIZE==32
+	//for 32k SRAM
+	#define GBC_SRAM_POS 0x6000
+#else
+	//for 64k SRAM
+	#define GBC_SRAM_POS 0xE000
+#endif
+
+
+
+
 #define STATEID 0x57a731d8
 
 #define STATESAVE 0
@@ -14,6 +25,10 @@ u8 *buffer1;
 u8 *buffer2;
 u8 *buffer3;
 
+#if LITTLESOUNDDJ
+u8 *M3_SRAM_BUFFER =(u8*)0x9FE0000;
+void *M3_COMPRESS_BUFFER = (u32*)0x9FD0000;
+#endif
 
 /*
 extern u8 Image$$RO$$Limit;
@@ -100,7 +115,7 @@ void flush_end_sram()
 {
 	u8* sram=MEM_SRAM;
 	int i;
-	for (i=0xE000;i<0x10000;i++)
+	for (i=GBC_SRAM_POS;i<0x10000;i++)
 	{
 		sram[i]=0;
 	}
@@ -123,7 +138,7 @@ void getsram() {		//copy GBA sram to BUFFER1
 
 	p=(u32*)buff1;
 	if(*p!=STATEID) {	//if sram hasn't been copied already
-		bytecopy(buff1,sram,0xe000);	//copy everything to buffer1
+		bytecopy(buff1,sram,GBC_SRAM_POS);	//copy everything to buffer1
 		if(*p!=STATEID) {	//valid savestate data?
 			*p=STATEID;	//nope.  initialize
 			*(p+1)=0;
@@ -136,7 +151,7 @@ void getsram() {		//copy GBA sram to BUFFER1
 u32 checksum(u8 *p) {
 	u32 sum=0;
 	int i;
-	u32 addthis;
+//	u32 addthis;
 	u8* end=(u8*)INSTANT_PAGES[1];
 	u8 endchar=end[-1];
 	for(i=0;i<128;i++) {
@@ -195,7 +210,7 @@ int updatestates(int index,int erase,int type) {
 	u8 *src=buffer1;
 	u8 *dst;
 	u8 *newdst;
-//	u8 *mem_end=buffer1+0xE000;
+//	u8 *mem_end=buffer1+GBC_SRAM_POS;
 	stateheader *newdata=(stateheader*)buffer3;
 
 	src+=4;//skip STATEID
@@ -217,7 +232,7 @@ int updatestates(int index,int erase,int type) {
 	if(!erase) {
 		i=newdata->size;
 		total+=i;
-		if(total>0xe000) //**OUT OF MEMORY**
+		if(total>GBC_SRAM_POS) //**OUT OF MEMORY**
 			return 0;
 		newdst=(u8*)newdata + i;
 		srcsize=((stateheader*)src)->size;
@@ -250,7 +265,7 @@ int updatestates(int index,int erase,int type) {
 	//copy everything to GBA sram
 
 	totalstatesize=total;
-	while(total<0xe000)
+	while(total<GBC_SRAM_POS)
 	{
 		*dst++=0;
 		total++;
@@ -553,7 +568,7 @@ int backup_gb_sram(int called_from)
 	if(!using_flashcart())
 		return 1;
 	
-	if (called_from==1 && g_sramsize==3) //called from UI and 32K sram size
+	if (called_from==1 && g_sramsize==3 ) //called from UI and 32K sram size
 	{
 		i=findstate(chk,SRAMSAVE,&sh);//find out where to save
 		if(i>=0)
@@ -572,13 +587,44 @@ int backup_gb_sram(int called_from)
 		return 1;
 	}
 	
+	#if LITTLESOUNDDJ
+	if (called_from==1 && g_sramsize==4 )
+	{
+		i=findstate(chk,SRAMSAVE,&sh);//find out where to save
+		if(i>=0)
+		{
+			u8 * old_buffer2 = buffer2;
+			u8 * old_buffer3 = buffer3;
+			buffer3=buffer2;
+			
+			memcpy(buffer3,sh,sizeof(stateheader));//use old info, in case the rom for this sram is gone and we can't look up its name.
+			lzo1x_1_compress(M3_SRAM_BUFFER,0x20000,buffer3 + sizeof(stateheader),&compressedsize,M3_COMPRESS_BUFFER);	//workspace needs to be 64k
+			sh=(stateheader*)buffer3;
+			sh->size=(compressedsize+sizeof(stateheader)+3)&~3;	//size of compressed state+header, word aligned
+			sh->uncompressed_size=0x20000;	//size of compressed state
+			if (!updatestates(i,0,SRAMSAVE))
+			{
+				buffer2 = old_buffer2;
+				buffer3 = old_buffer3;
+				writeerror();
+				
+				
+				return 0;
+			}
+			buffer2 = old_buffer2;
+			buffer3 = old_buffer3;
+		}
+		return 1;
+	}
+	#endif
+	
 	i=findstate(0,CONFIGSAVE,(stateheader**)&cfg);	//find config
 	
 	
 	if (called_from==1 && chk==sram_owner)
 	{
 		//copy GBX_SRAM to MEM_SRAM, because some instructions don't properly modify GBA SRAM
-		bytecopy(MEM_SRAM+0xE000,XGB_SRAM,0x2000);
+		bytecopy(MEM_SRAM+GBC_SRAM_POS,XGB_SRAM,0x2000);
 	}
 	
 	if(i>=0 && cfg->sram_checksum) {	//SRAM is occupied?
@@ -588,7 +634,7 @@ int backup_gb_sram(int called_from)
 			int save_size=0x2000;
 
 			memcpy(buffer3,sh,sizeof(stateheader));//use old info, in case the rom for this sram is gone and we can't look up its name.
-			lzo1x_1_compress(MEM_SRAM+0xe000,save_size,buffer3+sizeof(stateheader),&compressedsize,buffer2);	//workspace needs to be 64k
+			lzo1x_1_compress(MEM_SRAM+GBC_SRAM_POS,save_size,buffer3+sizeof(stateheader),&compressedsize,buffer2);	//workspace needs to be 64k
 			sh=(stateheader*)buffer3;
 			sh->size=(compressedsize+sizeof(stateheader)+3)&~3;	//size of compressed state+header, word aligned
 			
@@ -616,6 +662,8 @@ void save_new_sram() {
 	if (g_sramsize==1) sramsize=0x2000;
 	else if (g_sramsize==2) sramsize=0x2000;
 	else if (g_sramsize==3) sramsize=0x8000;
+	else if (g_sramsize==4) sramsize=0x8000;
+	else if (g_sramsize==5) sramsize=512;
 	compressstate(sramsize,SRAMSAVE,XGB_SRAM,buffer2);
 	updatestates(65536,0,SRAMSAVE);
 }
@@ -640,7 +688,7 @@ void get_saved_sram(void)
 		//probably shouldn't do this
 /*
 		if(i>=0) if(chk==cfg->sram_checksum) {	//SRAM is already ours
-			bytecopy(XGB_SRAM,MEM_SRAM+0xe000,0x2000);
+			bytecopy(XGB_SRAM,MEM_SRAM+GBC_SRAM_POS,0x2000);
 			if(j<0) save_new_sram();	//save it if we need to
 			return;
 		}
@@ -649,20 +697,32 @@ void get_saved_sram(void)
 		
 		if(j>=0) {//packed SRAM exists: unpack into XGB_SRAM
 			statesize=sh->size-sizeof(stateheader);
+			#if LITTLESOUNDDJ
+			if (g_sramsize!=4)
+			{
+				lzo1x_decompress((u8*)(sh+1),statesize,XGB_SRAM,&statesize,NULL);
+			}
+			else
+			{
+				lzo1x_decompress((u8*)(sh+1),statesize,buffer2,&statesize,NULL);
+				memcpy(M3_SRAM_BUFFER,buffer2,0x20000);
+			}
+			#else
 			lzo1x_decompress((u8*)(sh+1),statesize,XGB_SRAM,&statesize,NULL);
+			#endif
 		} else { //pack new sram and save it.
 			save_new_sram();
 		}
 		
 		//For 32k SRAM, don't bother storing anything in real SRAM, in fact, flush it out.
-		if (g_sramsize==3)
+		if (g_sramsize==3 || g_sramsize==4)
 		{
 			no_sram_owner();
 		}
 		else
 		{
 			//otherwise, use the sram saving system
-			bytecopy(MEM_SRAM+0xe000,XGB_SRAM,0x2000);
+			bytecopy(MEM_SRAM+GBC_SRAM_POS,XGB_SRAM,0x2000);
 			register_sram_owner();//register new sram owner
 		}
 	}
@@ -693,7 +753,7 @@ void setup_sram_after_loadstate() {
 		if(i>=0) if(chk!=cfg->sram_checksum) {//if someone else was using sram, save it
 			backup_gb_sram(0);
 		}
-		bytecopy(MEM_SRAM+0xe000,XGB_SRAM,0x2000);		//copy gb sram to real sram
+		bytecopy(MEM_SRAM+GBC_SRAM_POS,XGB_SRAM,0x2000);		//copy gb sram to real sram
 		i=findstate(chk,SRAMSAVE,(stateheader**)&cfg);	//does packed SRAM for this rom exist?
 		if(i<0)						//if not, create it
 			save_new_sram();
@@ -766,7 +826,7 @@ void writeconfig() {
 		memcpy(buffer3,&configtemplate,sizeof(configdata));
 		cfg=(configdata*)buffer3;
 	}
-	cfg->bordercolor=bcolor;					//store current border type
+//	cfg->bordercolor=bcolor;					//store current border type
 	cfg->palettebank=palettebank;				//store current DMG palette
 	j = stime & 0x3;							//store current autosleep time
 //	j |= (gbadetect & 0x1)<<3;					//store current gbadetect setting
@@ -789,7 +849,7 @@ void readconfig() {
 
 	i=findstate(0,CONFIGSAVE,(stateheader**)&cfg);
 	if(i>=0) {
-		bcolor=cfg->bordercolor;
+//		bcolor=cfg->bordercolor;
 		palettebank=cfg->palettebank;
 		i = cfg->misc;
 		stime = i & 0x3;						//restore current autosleep time
@@ -802,7 +862,7 @@ void readconfig() {
 /*
 void clean_gb_sram() {
 	int i;
-	u8 *gb_sram_ptr = MEM_SRAM+0xe000;
+	u8 *gb_sram_ptr = MEM_SRAM+GBC_SRAM_POS;
 	configdata *cfg;
 
 	if(!using_flashcart())

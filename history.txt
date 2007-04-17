@@ -1,5 +1,11 @@
 Goomba revision history
 -=-=-=-=-=-=-=-=-=-=-=-
+Some alpha versions - 2007-4-17
+   Rewrote graphics engine
+   Rewrote graphics engine again
+   Super Game Boy support
+   CPU optimizations
+
 Alpha 6 - 2006-02-17 (Dwedit)
    Fixed MBC2 SRAM bugs
 
