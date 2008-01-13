@@ -1,11 +1,11 @@
 #ifndef __CONFIG_H__
 #define __CONFIG_H__
 
-#define GCC 0
+#define GCC 1
 
 #define SRAM_SIZE 64
 
-#define VERSION "1-13-08"
+#define VERSION "4-17-07"
 
 #define LITTLESOUNDDJ 0
 //Little Sound DJ Hack requires M3/G6/Supercard

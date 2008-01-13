@@ -1,0 +1,16 @@
+@I need to do this to get around limitations of gnu assembler
+	#include "equates.h"
+	#include "gbz80mac.h"
+	
+	.global MULTIBOOT_LIMIT
+	
+	#include "gbz80.s"
+	#include "memory.s"
+	#include "cart.s"
+	#include "mappers.s"
+	#include "lcd.s"
+	#include "io.s"
+	#include "sound.s"
+	#include "sgb.s"
+
+	.end

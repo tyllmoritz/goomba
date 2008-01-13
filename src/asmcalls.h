@@ -1,7 +1,7 @@
 #ifndef __ASMCALLS_H__
 #define __ASMCALLS_H__
 
-#include "fs.h"
+//#include "fs.h"
 //#include "cache.h"
 
 extern u8 ui_border_visible;
@@ -47,7 +47,8 @@ extern u8 g_hackflags;
 extern u32 num_speedhacks;
 extern u16 speedhacks[256];
 
-extern u8 gb_mode;
+extern u8 gbc_mode;
+extern u8 sgb_mode;
 extern u8 doubletimer;
 
 extern u32 dontstop;
@@ -61,8 +62,10 @@ extern u8 XGB_SRAM[0x8000];
 extern u8 XGB_VRAM[0x4000];
 extern u8 GBC_EXRAM[0x6000];
 
+#if RESIZABLE
 extern u8 *XGB_sram, *XGB_vram, *GBC_exram, *END_of_exram;
 extern u32 XGB_sramsize,XGB_vramsize,GBC_exramsize;
+#endif
 
 //apack.s
 void depack(u8 *source, u8 *destination);
