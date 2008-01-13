@@ -33,6 +33,13 @@
 
  AREA rom_code, CODE, READONLY ;-- - - - - - - - - - - - - - - - - - - - - -
 
+;	EXPORT breakpoint
+;breakpoint
+;	mov r11,r11
+;	bx lr
+
+
+
 vbaprint
 	swi 0xFF0000		;!!!!!!! Doesn't work on hardware !!!!!!!
 	bx lr

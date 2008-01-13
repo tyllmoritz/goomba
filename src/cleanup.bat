@@ -10,6 +10,6 @@ del minilzo.s
 del gba_nds_fat.s
 del filemenu.s
 del cache.s
-
+del speedhack.s
 
 del gbabin\*.o

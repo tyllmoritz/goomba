@@ -15,8 +15,8 @@
 
 	IMPORT max_multiboot_size ;from mbclient.c
 
-	EXPORT font
-	EXPORT fontpal
+	EXPORT font_lz77
+	EXPORT fontpal_bin
 ;------------------------------------------------------------
 head
  	b __main
@@ -199,9 +199,9 @@ headcopy
 	DCB 0x64			;complement check
 	DCW 0				;unused
  ]
-font
+font_lz77
 	INCBIN font.lz77
 ;	INCBIN font.bin
-fontpal
+fontpal_bin
 	INCBIN fontpal.bin
 	END

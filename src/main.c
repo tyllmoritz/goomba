@@ -12,6 +12,7 @@ char save_slot;
 
 u32 oldinput;
 u8 *textstart;//points to first GB rom (initialized by boot.s)
+u8 *ewram_start;//points to first NES rom (initialized by boot.s)
 int roms;//total number of roms
 int selectedrom=0;
 #if POGOSHELL
@@ -29,9 +30,58 @@ u32 max_multiboot_size;		//largest possible multiboot transfer (init'd by boot.s
 //The formula is an upper bound LZO estimate on worst case compression
 //#define WORSTCASE ((82048)+(82048)/64+16+4+64)
 
+#if GCC
+u32 copiedfromrom=0;
+int main()
+{
+	//this function does what boot.s used to do
+//	extern u8 __end__[];
+	extern u8 __load_stop_iwram9[]; //using this instead of __end__, because it's also cart compatible
+	extern u8 __iwram_lma[];
+	
+	u32 end_addr=(u32)(&__load_stop_iwram9);
+	
+	extern u32 MULTIBOOT_LIMIT;
+	bool is_multiboot = (copiedfromrom==0)&&(end_addr<0x08000000);
+	
+	if (is_multiboot)
+	{
+		//copy appended data to __iwram_lma
+		u8* append_src=(u8*)end_addr;
+		u8* append_dest=(u8*)(&__iwram_lma);
+		u8* EWRAM_end=(u8*)0x02040000;
+		memmove(append_dest,append_src,EWRAM_end-append_src);
+		textstart=append_dest;
+		ewram_start=append_dest;
+		max_multiboot_size=((u32)(MULTIBOOT_LIMIT))-((u32)(ewram_start));
+	}
+	else //running from cart
+	{
+		//is it compiled for multiboot?
+		if (end_addr<0x08000000)
+		{
+			textstart=(u8*)((end_addr)-0x02000000+0x08000000);
+			ewram_start=(u8*)(((u32)__iwram_lma));
+			max_multiboot_size=((u32)(MULTIBOOT_LIMIT))-((u32)(ewram_start));
+		}
+		else
+		{
+			textstart=(u8*)(end_addr);
+			ewram_start=(u8*)0x02000000;
+			max_multiboot_size=0;
+		}
+	}
+	max_multiboot_size=((u32)(MULTIBOOT_LIMIT))-((u32)(ewram_start));
+	C_entry();
+	return 0;
+}
+
+#endif
+
+
 void loadfont()
 {
-	LZ77UnCompVram(&font,(u16*)0x600C000);
+	LZ77UnCompVram(&font_lz77,(u16*)0x600C000);
 }
 
 #if LITTLESOUNDDJ
@@ -108,6 +158,16 @@ void C_entry()
 	pogoshell=((temp & 0xFE000000) == 0x08000000)?1:0;
 #endif
 
+#if !GCC
+	ewram_start=(u8*)&Image$$RO$$Limit;
+	if (ewram_start>=(u8*)0x08000000)
+	{
+		ewram_start=(u8*)0x02000000;
+	}
+#endif
+
+
+
 #if LITTLESOUNDDJ
 	enable_ram();
 #endif
@@ -117,22 +177,15 @@ void C_entry()
 	if(*timeregs & 1) rtc=1;
 	gbaversion=CheckGBAVersion();
 	vblankfptr=&vbldummy;
+	GFX_init_irq();
 //	vcountfptr=&vbldummy;
 #if RUMBLE
 	SerialIn = 0;
 #endif
 
-	//clear VRAM
-	memset((void*)0x06000000,0,0x18000);
-	
-
-	GFX_init();
-
 	// The maximal space
 #if CARTSRAM
 	{
-		u8* ewram_start=&Image$$RO$$Limit;
-		if ( ((u32)ewram_start)&0x08000000 ) ewram_start = (u8*)0x02000000;
 		buffer1=(ewram_start);
 		buffer2=(ewram_start+0x10000);
 		buffer3=(ewram_start+0x20000);
@@ -198,17 +251,31 @@ void C_entry()
 		}
 #endif
 	}
+	
+	//Fade either from white, or from whatever bitmap is visible
 	if(REG_DISPCNT==FORCE_BLANK)	//is screen OFF?
+	{
 		REG_DISPCNT=0;				//screen ON
+	}	
+	//start up graphics
 	*MEM_PALETTE=0x7FFF;			//white background
 	REG_BLDMOD=0x00ff;				//brightness decrease all
-	for(i=0;i<17;i++) {
-		REG_BLDY=i;					//fade to black
+	for (i=0;i<17;i++)
+	{
+		REG_BLDY=i;
 		waitframe();
 	}
 	*MEM_PALETTE=0;					//black background (avoids blue flash when doing multiboot)
 	REG_DISPCNT=0;					//screen ON, MODE0
+
+	//clear VRAM
+	memset((void*)0x06000000,0,0x18000);
+	//Start up interrupt system
+	GFX_init();
 	vblankfptr=&vblankinterrupt;
+	
+
+
 //	vcountfptr=&vcountinterrupt;
 #if CARTSRAM
 	lzo_init();	//init compression lib for savestates
@@ -231,7 +298,7 @@ void C_entry()
 
 	//load font+palette
 	loadfont();
-	memcpy((void*)0x50000A0,&fontpal,64);
+	memcpy((void*)0x50000A0,&fontpal_bin,64);
 #if CARTSRAM
 	readconfig();
 #endif
@@ -304,14 +371,13 @@ void rommenu(void)
 	cls(3);
 	ui_x=0x100;
 
-	setdarknessgs(16);
+	setdarkness(16);
 	resetSIO((joycfg&~0xff000000) + 0x40000000);//back to 1P
 	
 #if MOVIEPLAYER
 	usingcache=MOVIEPLAYERDEBUG;
 	usinggbamp=0;
 #endif
-	
 	make_ui_visible();
 #if CARTSRAM
 	if (!backup_gb_sram(0))
@@ -373,7 +439,7 @@ void rommenu(void)
 				move_ui();
 				waitframe();
 			}
-			setdarknessgs(7);			//Lighten screen
+			setdarkness(7);			//Lighten screen
 		}
 		do {
 			key=getinput();
@@ -402,7 +468,7 @@ void rommenu(void)
 		} while(romz>1 && !(key&(A_BTN+B_BTN+START)));
 		for(i=1;i<9;i++)
 		{
-			setdarknessgs(8-i);		//Lighten screen
+			setdarkness(8-i);		//Lighten screen
 			ui_x=i*32;
 			move_ui();
 			run(0);
@@ -551,18 +617,22 @@ void drawtextl(int row,char *str,int hilite,int len)
 		here[i]=0x5000;
 }
 
-void setdarknessgs(int dark)
+void setdarkness(int dark)
 {
+	darkness=dark;
+/*
 	int ui_layer_bit=(ui_border_visible==3 ? 4 : 8);
 	REG_BLDMOD=0x1FF ^ ui_layer_bit;
 	REG_BLDY=dark;					//Darken screen
 	REG_BLDALPHA=(0x10-dark)<<8;	//set blending for OBJ affected BG0
+*/
 }
 
 void setbrightnessall(int light)
 {
-	REG_BLDMOD=0x00bf;				//brightness increase all
-	REG_BLDY=light;
+	darkness=light|0x80;
+//	REG_BLDMOD=0x00bf;				//brightness increase all
+//	REG_BLDY=light;
 }
 
 void make_ui_visible()

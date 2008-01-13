@@ -7,6 +7,8 @@ int selected;//selected menuitem.  used by all menus.
 int mainmenuitems;//? or CARTMENUITEMS, depending on whether saving is allowed
 u32 oldkey;//init this before using getmenuinput
 
+#define ARRSIZE(xxxx) (sizeof((xxxx))/sizeof((xxxx)[0]))
+
 int savestate(void* dest){return 0;}
 void loadstate(int foo, void* dest){}
 
@@ -18,21 +20,65 @@ void quicksave(){} void quickload(){}
 //void multiboot(){}
 #endif
 
+char str[32]; //ZOMG global variable!
+int print_2_func(int row, const char *src1, const char *src2);
+int print_1_func(int row, const char *src1, const char *src2);
+int strmerge_str(int unused, const char *src1, const char *src2);
+int text2_str(int row);
+int text1_str(int row);
+//#if CHEATFINDER
+//int print_cheatfinder_line_func(int row, const char *oper, int value);
+//#endif
 
-#define MENU2ITEMS 8+SPEEDHACKS			//othermenu items
-#define MENU3ITEMS 2			//displaymenu items
+int print_1_func(int row,const char *src1,const char *src2)
+{
+	row=strmerge_str(row,src1,src2);
+	return text1_str(row);
+}
 
-//mainmenuitems when running from cart (not multiboot)
-#define CARTMENUITEMS 7+MULTIBOOT+GOMULTIBOOT+(CARTSRAM*3)
-#define MULTIBOOTMENUITEMS 7+MULTIBOOT	//"" when running from multiboot
+int print_2_func(int row,const char *src1,const char  *src2)
+{
+	row=strmerge_str(row,src1,src2);
+	return text2_str(row);
+}
+int strmerge_str(int unused, const char  *src1,const char  *src2) {
+	char *dst=str;
+	if(dst!=src1)
+		strcpy(dst,src1);
+	strcat(dst,src2);
+	return unused;
+}
 
-const char MENUXITEMS[]={CARTMENUITEMS,MULTIBOOTMENUITEMS,MENU2ITEMS,MENU3ITEMS};
+int text1_str(int row)
+{
+	drawtext(row+10-mainmenuitems/2,str,selected==row);
+	return row+1;
+}
+int text2_str(int row)
+{
+	drawtext(35+row+2,str,selected==row);
+	return row+1;
+}
+
+#define print_1(xxxx,yyyy) row=print_1_func(row,(xxxx),(yyyy))
+#define print_2(xxxx,yyyy) row=print_2_func(row,(xxxx),(yyyy))
+#define print_1_1(xxxx) row=text(row,(xxxx));
+#define print_2_1(xxxx) row=text2(row,(xxxx));
+
+//#define MENU2ITEMS 8+SPEEDHACKS			//othermenu items
+//#define MENU3ITEMS 3			//displaymenu items
+//
+////mainmenuitems when running from cart (not multiboot)
+//#define CARTMENUITEMS 7+MULTIBOOT+GOMULTIBOOT+(CARTSRAM*3)
+//#define MULTIBOOTMENUITEMS 7+MULTIBOOT	//"" when running from multiboot
+//
+//const char MENUXITEMS[]={CARTMENUITEMS,MULTIBOOTMENUITEMS,MENU2ITEMS,MENU3ITEMS};
 
 const fptr multifnlist[]={autoBset,autoAset,ui3,ui2,
 #if MULTIBOOT
 multiboot,
 #endif
-sleep,restart,exit};
+sleep_,restart,exit_};
 
 const fptr fnlist1[]={autoBset,autoAset,ui3,ui2,
 #if MULTIBOOT
@@ -41,21 +87,25 @@ multiboot,
 #if CARTSRAM
 savestatemenu,loadstatemenu,managesram,
 #endif
-sleep,
+sleep_,
 #if GOMULTIBOOT
 go_multiboot,
 #endif
-restart,exit};
+restart,exit_};
 
 const fptr fnlist2[]={vblset,fpsset,sleepset,swapAB,autostateset,
 #if SPEEDHACKS
 find_speedhacks,
 #endif
 timermode,gbtype,gbatype};
-const fptr fnlist3[]={chpalette,brightset};
+const fptr fnlist3[]={chpalette,brightset,sgbpalnum};
 
 const fptr* fnlistX[]={fnlist1,multifnlist,fnlist2,fnlist3};
 const fptr drawuiX[]={drawui1,drawui1,drawui2,drawui3};
+const char MENUXITEMS[]=
+{
+	ARRSIZE(fnlist1),ARRSIZE(multifnlist),ARRSIZE(fnlist2),ARRSIZE(fnlist3)
+};
 
 
 u32 getmenuinput(int menuitems)
@@ -118,7 +168,7 @@ void ui()
 			cls(3);
 			drawtext(9,"         Saving...",0);
 			usefade=0;
-			setdarknessgs(7);
+			setdarkness(7);
 			save_sram_CF(SramName);	
 		}
 	}
@@ -130,7 +180,7 @@ void ui()
 		for(i=0;i<8;i++)
 		{
 			waitframe();
-			setdarknessgs(i);		//Darken game screen
+			setdarkness(i);		//Darken game screen
 			ui_x=224-i*32; move_ui();
 		}
 	}
@@ -172,7 +222,7 @@ void ui()
 	for(i=1;i<9;i++)
 	{
 		waitframe();
-		setdarknessgs(8-i);	//Lighten screen
+		setdarkness(8-i);	//Lighten screen
 		ui_x=i*32; move_ui();
 	}
 	while(key&(B_BTN)) {
@@ -217,18 +267,18 @@ void ui2()
 }
 void ui3()
 {
-	setdarknessgs(0);
+	setdarkness(0);
 	subui(3);
-	setdarknessgs(8);
+	setdarkness(8);
 }
 
-void text(int row,char *str)
-{
+int text(int row,char *str) {
 	drawtext(row+10-mainmenuitems/2,str,selected==row);
+	return row+1;
 }
-void text2(int row,char *str)
-{
+int text2(int row,char *str) {
 	drawtext(35+row+2,str,selected==row);
+	return row+1;
 }
 
 
@@ -252,91 +302,72 @@ char *const paltxt[16]={"Yellow","Grey","Multi1","Multi2","Zelda","Metroid",
 				"BionicCom","CV Adv","Dr.Mario","Kirby","DK Land"};
 char *const gbtxt[]={"GB","Perfer SGB over GBC","Perfer GBC over SGB","GBC+SGB"};
 char *const clocktxt[]={"None","Timers","Full"};
-char *const emuname = "Goomba Color ";
+#define EMUNAME "Goomba Color"
+//char *const emuname = "Goomba Color ";
+char *const palnumtxt[]={"0","1","2","3"};
 
 void drawui1()
 {
 	int row=0;
-	char str[30];
-
 	cls(1);
-	drawtext(19,"by Flubba and Dwedit",0);
-	strmerge(str,emuname, VERSION " on ");
-	strmerge(str,str,hostname[gbaversion]);
+	strmerge(str,EMUNAME " " VERSION " on ",hostname[gbaversion]);
 	drawtext(18,str,0);
+	drawtext(19,"by Flubba and Dwedit",0);
 
-	strmerge(str,"B autofire: ",autotxt[autoB]);
-	text(row++,str);
-	strmerge(str,"A autofire: ",autotxt[autoA]);
-	text(row++,str);
-	text(row++,"Display->");
-	text(row++,"Other Settings->");
+	print_1("B autofire: ",autotxt[autoB]);
+	print_1("A autofire: ",autotxt[autoA]);
+	print_1_1("Display->");
+	print_1_1("Other Settings->");
 #if MULTIBOOT
-	text(row++,"Link Transfer");
+	print_1_1("Link Transfer");
 #endif
-	if(mainmenuitems==MULTIBOOTMENUITEMS) {
-		text(row++,"Sleep");
+	if(mainmenuitems==ARRSIZE(multifnlist)) {
+		print_1_1("Sleep");
 	} else {
 #if CARTSRAM
-		text(row++,"Save State->");
-		text(row++,"Load State->");
-		text(row++,"Manage SRAM->");
+		print_1_1("Save State->");
+		print_1_1("Load State->");
+		print_1_1("Manage SRAM->");
 #endif
-		text(row++,"Sleep");
+		print_1_1("Sleep");
 #if GOMULTIBOOT
-		text(row++,"Go Multiboot");
+		print_1_1("Go Multiboot");
 #endif
 	}
-	text(row++,"Restart");
-	text(row++,"Exit");
+	print_1_1("Restart");
+	print_1_1("Exit");
 }
 
 void drawui2()
 {
-	char str[30];
 	int row=0;
-
 	cls(2);
 	drawtext(32,"       Other Settings",0);
-	strmerge(str,"VSync: ",vsynctxt[novblankwait]);
-	text2(row++,str);
-	strmerge(str,"FPS-Meter: ",autotxt[fpsenabled]);
-	text2(row++,str);
-	strmerge(str,"Autosleep: ",sleeptxt[stime]);
-	text2(row++,str);
-	strmerge(str,"Swap A-B: ",autotxt[(joycfg>>10)&1]);
-	text2(row++,str);
-	strmerge(str,"Autoload state: ",autotxt[autostate&1]);
-	text2(row++,str);
+	print_2("VSync: ",vsynctxt[novblankwait]);
+	print_2("FPS-Meter: ",autotxt[fpsenabled]);
+	print_2("Autosleep: ",sleeptxt[stime]);
+	print_2("Swap A-B: ",autotxt[(joycfg>>10)&1]);
+	print_2("Autoload state: ",autotxt[autostate&1]);
 #if SPEEDHACKS
-	strmerge(str,"Speed Hacks: ",autotxt[2==(g_hackflags&2)]);
-	text2(row++,str);
+	print_2("Speed Hacks: ",autotxt[2==(g_hackflags&2)]);
 #endif
-	strmerge(str,"Double Speed: ",clocktxt[doubletimer]);
-	text2(row++,str);
-	strmerge(str,"Game Boy: ",gbtxt[request_gb_type]);
-	text2(row++,str);
-	strmerge(str,"GBC game sees GBA: ",autotxt[request_gba_mode]);
-	text2(row++,str);
+	print_2("Double Speed: ",clocktxt[doubletimer]);
+	print_2("Game Boy: ",gbtxt[request_gb_type]);
+	print_2("Identify as GBA: ",autotxt[request_gba_mode]);
 }
 
 void drawui3()
 {
-	char str[30];
 	int row=0;
-	
 	cls(2);
 	drawtext(32,"      Display Settings",0);
-	strmerge(str,"Palette: ",paltxt[palettebank]);
-	text2(row++,str);
-	strmerge(str,"Gamma: ",brightxt[gammavalue]);
-	text2(row++,str);
+	print_2("Palette: ",paltxt[palettebank]);
+	print_2("Gamma: ",brightxt[gammavalue]);
+	print_2("SGB Palette Number: ",palnumtxt[sgb_palette_number]);
 }
 
 void drawclock()
 {
-
-    char str[30];
     char *s=str+20;
     int timer,mod;
 
@@ -447,12 +478,18 @@ void restart()
 	writeconfig();					//save any changes
 #endif
 	scrolll(1);
+#if GCC
+	extern u8 __sp_usr[];
+	u32 newstack=(u32)(&__sp_usr);
+	__asm__ volatile ("mov sp,%0": :"r"(newstack));
+#else
 	__asm {mov r0,#0x3007f00}		//stack reset
 	__asm {mov sp,r0}
+#endif
 	rommenu();
 }
 
-void exit()
+void exit_()
 {
 #if CARTSRAM
 	writeconfig();					//save any changes
@@ -465,11 +502,11 @@ void exit()
 	doReset();
 }
 
-void sleep()
+void sleep_()
 {
 	fadetowhite();
 	suspend();
-	setdarknessgs(7);				//restore screen
+	setdarkness(7);				//restore screen
 	while((~REG_P1)&0x3ff) {
 		waitframe();				//(polling REG_P1 too fast seems to cause problems)
 	}
@@ -478,7 +515,7 @@ void fadetowhite()
 {
 	int i;
 	for(i=7;i>=0;i--) {
-		setdarknessgs(i);			//go from dark to normal
+		setdarkness(i);			//go from dark to normal
 		waitframe();
 	}
 	for(i=0;i<17;i++) {				//fade to white
@@ -492,7 +529,7 @@ void scrolll(int f)
 	int i;
 	for(i=0;i<9;i++)
 	{
-		if(f) setdarknessgs(8+i);	//Darken screen
+		if(f) setdarkness(8+i);	//Darken screen
 		ui_x=i*32; move_ui();
 		waitframe();
 	}
@@ -546,6 +583,10 @@ void gbatype()
 {
 	request_gba_mode=!request_gba_mode;
 }
+void sgbpalnum()
+{
+	sgb_palette_number=(sgb_palette_number+1)&3;
+}
 void timermode()
 {
 	doubletimer=(doubletimer+1) % 3;
@@ -556,13 +597,13 @@ void timermode()
 #if GOMULTIBOOT
 void go_multiboot()
 {
-	char *src, *dest;
+	u8 *src, *dest;
 	int size;
 	int key;
 	int romsize;
 
-	src=(char*)findrom(selectedrom);
-	dest=(char *)&Image$$RO$$Limit;
+	src=(u8*)findrom(selectedrom);
+	dest=ewram_start;
 	romsize = (0x8000 << (*(src+0x148)));
 	
 	size=max_multiboot_size-((int) dest-0x02000000);
@@ -582,7 +623,7 @@ void go_multiboot()
 	}
 
 	memcpy (dest,src,size);
-	textstart=(void*)dest;	
+	textstart=dest;	
 	selectedrom=0;
 	loadcart(selectedrom,g_emuflags&0x300);
 	mainmenuitems=MENUXITEMS[1];

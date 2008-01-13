@@ -1,6 +1,6 @@
 	IMPORT novblankwait
 
-	IMPORT |wram_globals0$$Base|
+	IMPORT GLOBAL_PTR_BASE
 	IMPORT emu_reset
 	IMPORT default_scanlinehook
 	IMPORT cpustate

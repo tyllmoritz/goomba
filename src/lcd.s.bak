@@ -2234,7 +2234,7 @@ vcountinterrupt
 ;----------------------------------------------------------------------------
 
 do_gba_hdma
-	mov r12,globalptr
+	mov r4,globalptr
 	ldr globalptr,=GLOBAL_PTR_BASE
 	ldr r0,=REG_BASE+REG_DM0SAD
 	ldr r1,bigbufferbase2
@@ -2260,7 +2260,7 @@ do_gba_hdma
 	mov r2,#REG_BASE
 	ldr r0,=0x28 + 256*(SCREEN_Y_START+144-1) ;scanline 144+8-1, enable vblank+vcount interrupts
 	strh r0,[r2,#REG_DISPSTAT]
-	mov globalptr,r12
+	mov globalptr,r4
 	bx lr
 	
 end_gba_hdma
@@ -3102,13 +3102,12 @@ VRAM_name0	;(9800-9FFF)
 ;----------------------------------------------------------------------------
 VRAM_nameD	;(9800-9FFF)    Bloody Hack for Push16.
 ;----------------------------------------------------------------------------
+	sub addy,addy,#0x8000
 	stmfd sp!,{addy,lr}
 	bl VRAM_name0
 	ldmfd sp!,{addy,lr}
 	add addy,addy,#1
-	tst addy,#0x2000 ;For games which stack crash, prevent the VRAM code from seeing the write to A000
-	beq VRAM_name0
-	bx lr
+	b VRAM_name0
 ;	
 ;	ldr r2,memmap_tbl+32
 ;	ldrb r1,vrambank

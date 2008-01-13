@@ -9,10 +9,12 @@
 	INCLUDE sound.h
 	INCLUDE sgb.h
 
-	IMPORT |wram_globals0$$Base|
+;	IMPORT |wram_globals0$$Base|
 	IMPORT ui	;ui.c
 	IMPORT quickload	;sram.c
 	IMPORT quicksave	;sram.c
+
+	EXPORT GLOBAL_PTR_BASE
 
 	EXPORT XGB_RAM
 	EXPORT XGB_HRAM
@@ -1622,7 +1624,7 @@ run_core	;r0=0 to return after frame
 	tst r0,#1
 	stmeqfd sp!,{gb_flg-gb_pc,globalptr,r11,lr}
 
-	ldr globalptr,=|wram_globals0$$Base|
+	ldr globalptr,=GLOBAL_PTR_BASE
 	strb r0,dontstop_
 	mov r1,#0
 	strb r1,novblankwait_
@@ -1635,7 +1637,7 @@ line0
 	;now do double speed vblank stuff:
 	ldr r0,doubletimer_
 	tst r0,#0x01
-	blne updatespeed
+	blne_long updatespeed
 	
 
 
@@ -1658,11 +1660,11 @@ line0
 
 	;----anything from here til line0x won't get executed while rom menu is active---
 
-	mov r2,#REG_BASE
-	mov r3,#0x0110				;was 0x0310
-	strh r3,[r2,#REG_BLDMOD]	;stop darkened screen,OBJ blend to BG0/1
-	mov r3,#0x1000				;BG0/1=16, OBJ=0
-	strh r3,[r2,#REG_BLDALPHA]	;Alpha values
+;	mov r2,#REG_BASE
+;	mov r3,#0x0110				;was 0x0310
+;	strh r3,[r2,#REG_BLDMOD]	;stop darkened screen,OBJ blend to BG0/1
+;	mov r3,#0x1000				;BG0/1=16, OBJ=0
+;	strh r3,[r2,#REG_BLDALPHA]	;Alpha values
 
 	adr lr,line0x		;return here after doing L/R + SEL/START
 
@@ -1776,7 +1778,7 @@ line144 ;------------------------
 	beq %f0
 	ldrb r0,doublespeed
 	tst r0,#0x80
-	bl updatespeed2
+	bl_long updatespeed2
 0
 	bl newframe_vblank
 ;	stmfd sp!,{r0-addy,lr}
@@ -1803,14 +1805,14 @@ line144 ;------------------------
 
 
 
- [ DEBUG
-	mov r1,#REG_BASE			;darken screen during GB vblank
-	mov r0,#0x00f1
-	strh r0,[r1,#REG_BLDMOD]
-	ldrh r0,[r1,#REG_VCOUNT]
-	mov r1,#19
-	bl debug_
- ]
+; [ DEBUG
+;	mov r1,#REG_BASE			;darken screen during GB vblank
+;	mov r0,#0x00f1
+;	strh r0,[r1,#REG_BLDMOD]
+;	ldrh r0,[r1,#REG_VCOUNT]
+;	mov r1,#19
+;	bl debug_
+; ]
 	ldrb r0,lcdctrl		;LCD turned on?
 	tst r0,#0x80
 	beq novbirq
@@ -2391,7 +2393,7 @@ _CBC7;		SET x,A		, actually CB-C7,CF,D7,DF,E7,EF,F7 & FF
 
 update_doublespeed_ui ;called from UI
 	stmfd sp!,{globalptr,addy,lr}
-	ldr globalptr,=|wram_globals0$$Base|
+	ldr globalptr,=GLOBAL_PTR_BASE
 	bl updatespeed
 	ldmfd sp!,{globalptr,addy,lr}
 	bx lr
@@ -2547,6 +2549,7 @@ dontstop DCB 0 ;dontstop_
 ;----------------------------------------------------------------------------
 	AREA wram_globals0, CODE, READWRITE
 ;----------------------------------------------------------------------------
+GLOBAL_PTR_BASE
 op_table
 	DCD _00,_01,_02,_03,_04,_05,_06,_07,_08,_09,_0A,_0B,_0C,_0D,_0E,_0F
 	DCD _10,_11,_12,_13,_14,_15,_16,_17,_18,_19,_1A,_1B,_1C,_1D,_1E,_1F

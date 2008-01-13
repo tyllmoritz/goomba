@@ -5,15 +5,20 @@
 //#include "cache.h"
 
 extern u8 ui_border_visible;
-extern u8 ui_moved;
+extern u8 darkness;
 //extern u8 border_visible;
 extern int ui_x;
 extern int ui_y;
 
-extern u8 Image$$RO$$Base;
-extern u8 Image$$RW$$Base;
-extern u8 Image$$RO$$Limit;
-extern u8 Image$$RW$$Limit;
+extern u8 sgb_palette_number;
+
+#if !GCC
+extern u8 Image$$RO$$Base[];
+extern u8 Image$$RW$$Base[];
+extern u8 Image$$RO$$Limit[];
+extern u8 Image$$RW$$Limit[];
+#endif
+
 extern u32 max_multiboot_size;
 
 //gbz80.s
@@ -63,8 +68,8 @@ extern u32 XGB_sramsize,XGB_vramsize,GBC_exramsize;
 void depack(u8 *source, u8 *destination);
 
 //boot.s
-extern u32 font;				//from boot.s
-extern u32 fontpal;				//from boot.s
+extern u8 font_lz77[];				//from boot.s
+extern u8 fontpal_bin[];				//from boot.s
 
 //cart.s
 
@@ -109,7 +114,7 @@ extern int bcolor;		//Border Color
 extern u32 joycfg;				//from io.s
 void resetSIO(u32);				//io.s
 void vbaprint(const char *text);		//io.s
-void LZ77UnCompVram(u32 *source,u16 *destination);		//io.s
+void LZ77UnCompVram(void *source,u16 *destination);		//io.s
 void waitframe(void);			//io.s
 int CheckGBAVersion(void);		//io.s
 void suspend(void);			//io.s
@@ -134,6 +139,7 @@ extern u32 AGBinput;			//from lcd.s
 extern u32 EMUinput;
 
 void GFX_init(void);			//lcd.s
+void GFX_init_irq(void);			//lcd.s
 void debug_(int,int);		//lcd.s
 void paletteinit(void);		//lcd.s
 void PaletteTxAll(void);	//lcd.s

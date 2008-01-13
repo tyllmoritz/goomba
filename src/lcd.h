@@ -1,4 +1,3 @@
-	IMPORT gboambuff
 	IMPORT newframe_vblank
 
 	IMPORT update_sgb_palette
