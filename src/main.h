@@ -15,6 +15,7 @@ extern u32 max_multiboot_size;
 
 extern u32 oldinput;
 extern u8 *textstart;//points to first GB rom (initialized by boot.s)
+extern u8 *ewram_start;//points to first NES rom (initialized by boot.s)
 extern int roms;//total number of roms
 extern int selectedrom;
 extern int ui_x;
@@ -43,7 +44,7 @@ int getinput(void);
 void cls(int chrmap);
 void drawtext(int row,char *str,int hilite);
 void drawtextl(int row,char *str,int hilite,int len);
-void setdarknessgs(int dark);
+void setdarkness(int dark);
 void setbrightnessall(int light);
 void make_ui_visible(void);
 void make_ui_invisible(void);

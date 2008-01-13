@@ -1,3 +1,5 @@
+	INCLUDE macro.h
+
 		GBLL DEBUG
 		GBLL SAFETY
 		GBLL PROFILE
@@ -187,8 +189,6 @@ AGB_SRAM		EQU 0xE000000
 
 AGB_BG			EQU AGB_VRAM+0xA000
 AGB_BG_GBMODE		EQU AGB_VRAM+0x4000
-
-DEBUGSCREEN		EQU AGB_VRAM+0x7800
 
 REG_BASE		EQU 0x4000000
 REG_DISPCNT		EQU 0x00
@@ -382,14 +382,42 @@ lcdctrl0midframe # 1
 lcdctrl0frame # 1
 rendermode # 1
 _ui_border_visible # 1
+
 ui_border_cnt_bic # 4
 ui_border_cnt_orr # 4
 ui_border_scroll2 # 4
 ui_border_scroll3 # 4
 _ui_x # 4
 _ui_y # 4
-_ui_moved # 1
- # 3
+_ui_border_request # 4
+_ui_border_screen # 4
+_ui_border_buffer # 4
+
+_sgb_palette_number # 1
+_gammavalue # 1
+_darkness # 1
+ # 1
+
+			;lcd.s (wram_globals1)
+
+dispcntbase # 4
+dispcntbase2 # 4
+bigbufferbase # 4
+bigbufferbase2 # 4
+
+gboamdirty # 1
+consume_dirty # 1
+consume_buffer # 1
+vblank_happened # 1
+
+gboambuff # 4
+active_gboambuff # 4
+dirty_tiles # 4
+dirty_rows # 4
+
+_palettebank # 4
+
+
 			;cart.s (wram_globals2)
 bank0 # 4
 bank1 # 4
@@ -482,229 +510,5 @@ WINDOW_TOP EQU 8
 WINDOW_LEFT EQU 40
 
 ;----------------------------------------------------------------------------
-
- [ VERSION_IN_ROM
-	MACRO
-	bl_long $label
-	mov lr,pc
-	ldr pc,=$label
-	MEND
-
-	MACRO
-	bleq_long $label
-	moveq lr,pc
-	ldreq pc,=$label
-	MEND
-
-	MACRO
-	bllo_long $label
-	movlo lr,pc
-	ldrlo pc,=$label
-	MEND
-
-	MACRO
-	blhi_long $label
-	movhi lr,pc
-	ldrhi pc,=$label
-	MEND
-
-	MACRO
-	bllt_long $label
-	movlt lr,pc
-	ldrlt pc,=$label
-	MEND
-
-	MACRO
-	blgt_long $label
-	movgt lr,pc
-	ldrgt pc,=$label
-	MEND
-
-	MACRO
-	blne_long $label
-	movne lr,pc
-	ldrne pc,=$label
-	MEND
-
-	MACRO
-	blcc_long $label
-	movcc lr,pc
-	ldrcc pc,=$label
-	MEND
-
-	MACRO
-	blpl_long $label
-	movpl lr,pc
-	ldrpl pc,=$label
-	MEND
-
-	MACRO
-	b_long $label
-	ldr pc,=$label
-	MEND
-
-	MACRO
-	bcc_long $label
-	ldrcc pc,=$label
-	MEND
-
-	MACRO
-	bhs_long $label
-	ldrhs pc,=$label
-	MEND
-
-	MACRO
-	beq_long $label
-	ldreq pc,=$label
-	MEND
-
-	MACRO
-	bne_long $label
-	ldrne pc,=$label
-	MEND
-
-	MACRO
-	blo_long $label
-	ldrlo pc,=$label
-	MEND
-
-	MACRO
-	bhi_long $label
-	ldrhi pc,=$label
-	MEND
-
-	MACRO
-	bgt_long $label
-	ldrgt pc,=$label
-	MEND
-
-	MACRO
-	blt_long $label
-	ldrlt pc,=$label
-	MEND
-
-	MACRO
-	bcs_long $label
-	ldrcs pc,=$label
-	MEND
-
-	MACRO
-	bmi_long $label
-	ldrmi pc,=$label
-	MEND
-
-	MACRO
-	bpl_long $label
-	ldrpl pc,=$label
-	MEND
-
-	|
-
-	MACRO
-	bl_long $label
-	bl $label
-	MEND
-
-	MACRO
-	bleq_long $label
-	bleq $label
-	MEND
-
-	MACRO
-	bllo_long $label
-	bllo $label
-	MEND
-
-	MACRO
-	blhi_long $label
-	blhi $label
-	MEND
-
-	MACRO
-	bllt_long $label
-	bllt $label
-	MEND
-
-	MACRO
-	blgt_long $label
-	blgt $label
-	MEND
-
-	MACRO
-	blne_long $label
-	blne $label
-	MEND
-
-	MACRO
-	blcc_long $label
-	blcc $label
-	MEND
-
-	MACRO
-	blpl_long $label
-	blpl $label
-	MEND
-
-	MACRO
-	b_long $label
-	b $label
-	MEND
-
-	MACRO
-	bcc_long $label
-	bcc $label
-	MEND
-
-	MACRO
-	bhs_long $label
-	bhs $label
-	MEND
-
-	MACRO
-	beq_long $label
-	beq $label
-	MEND
-
-	MACRO
-	bne_long $label
-	bne $label
-	MEND
-
-	MACRO
-	blo_long $label
-	blo $label
-	MEND
-
-	MACRO
-	bhi_long $label
-	bhi $label
-	MEND
-
-	MACRO
-	bgt_long $label
-	bgt $label
-	MEND
-
-	MACRO
-	blt_long $label
-	blt $label
-	MEND
-
-	MACRO
-	bcs_long $label
-	bcs $label
-	MEND
-
-	MACRO
-	bmi_long $label
-	bmi $label
-	MEND
-
-	MACRO
-	bpl_long $label
-	bpl $label
-	MEND
- ]
-
 
 		END

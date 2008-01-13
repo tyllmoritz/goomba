@@ -130,7 +130,7 @@ loadcart ;called from C:  r0=rom number, r1=emuflags
 	ldr r1,=make_instant_pages
 	bl thumbcall_r1
 
-	ldr globalptr,=|wram_globals0$$Base|	;need ptr regs init'd
+	ldr globalptr,=GLOBAL_PTR_BASE	;need ptr regs init'd
 
 	mov r3,r0		;r0 now points to rom image
 	str r3,rombase		;set rom base
@@ -470,7 +470,7 @@ savestate	;called from ui.c.
 ;----------------------------------------------------------------------------
 	stmfd sp!,{r4-r6,globalptr,lr}
 
-	ldr globalptr,=|wram_globals0$$Base|
+	ldr globalptr,=GLOBAL_PTR_BASE
 
 	ldr r2,rombase
 	rsb r2,r2,#0			;adjust rom maps,etc so they aren't based on rombase
@@ -544,7 +544,7 @@ loadstate	;called from ui.c
 	stmfd sp!,{r4-r7,globalptr,r11,lr}
 
 	mov r6,r1		;r6=where state is at
-	ldr globalptr,=|wram_globals0$$Base|
+	ldr globalptr,=GLOBAL_PTR_BASE
 
 	ldr r1,[r6]             ;emuflags
 	bl loadcart		;cart init

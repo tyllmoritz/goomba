@@ -1,21 +1,32 @@
-Goomba Color 01-13-2008
+Goomba Color (Alpha 6)  02-17-2006
 -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 By Dwedit (Dan Weiss)
+Based on Goomba 2.30 by Flubba
 
 It's a Game Boy Color emulator for the Game Boy Advance. 
 - Why? Because the GB Micro and DS can't play GBC games!
 
-Stay tuned for updates!  Check the Pocketheaven forums for a later version!
+
+Alpha Version
+-=-=-=-=-=-=-
+This is an alpha version of Goomba Color, based on Goomba 2.30.
+
+Stay tuned for updates that are coming soon!  If you downloaded this version
+after April 1, 2006, go get a new version!
 http://www.pocketheaven.com/boards/viewforum.php?f=29
 
 Known Issues:
-	Background tiles not updated at same time as tile graphics
 	Savestates are broken, therefore DISABLED in this version.
+	Frames draw graphics from the future, sometimes looking glitchy
+	Some games do not properly show graphics
 	Timing may be off
-	No "hi-color mode"
+	No mid-frame palette changing, so programs that use the so-called
+	  "hi-color" mode won't work.
+	  Millionaire also looks incorrect.
 
 Todo:
 	Fix Savestates
+	Write VRAM and Tilemap at end of frame instead of during frame
 	Add real HDMA
 	Fix the broken games
 	Add mid-screen palette changes
@@ -32,9 +43,6 @@ you can also insert a splashscreen between Goomba Color and the first game if yo
 Make sure the game's size are correct and that they contain a "real" Nintendo header,
 some unlicensed games seem to use their own headers.
 Also make sure your flashing software allocates 64kByte/512kbit SRAM for Goomba Color.
-
-Note: If you use a crappy flash cartridge which does not let you use 64K size saves,
-then use goomba_save32.gba instead of goomba.gba.
 
 
 Controls
@@ -74,13 +82,18 @@ Go Multiboot: Allows you to play without a cartridge!  For small games only,
   Note: You can't eject a cartridge from a Gamecube Game Boy Player while it is running.
 
 Double Speed:  Controls whether the emulated GBC runs in double speed mode or not.
-There are two modes for this option:
+There are three modes for this option:
+    None   - No double speed
     Timers - Only the GBC's internal clock runs at double speed, the processor
              stays at single speed, use this for games which play the music at
              half speed when double speed mode is turned off.
              This is the default mode.
     Full   - Emulates the GBC at full double speed.  This is twice as slow as
              emulating it at normal speed.  Some games need it.
+
+GBA Movie Player:
+  Put the GBAMP version on your card, and run goomba.gba.  That's it.
+  Some CompactFlash cards may be incompatible, these are uncommon.
 
 Pogoshell Plugin: If you wish to use Goomba Color with Pogoshell
   just rename goomba.gba to goomba.mb, put it in the plugins directory,
@@ -93,7 +106,8 @@ GameBoy Player:
   (SMA4 & Pokemon Pinball). This is a must if you want rumble to work.
 
 
-For more information, go to the Pocketheaven.com message boards
+For more information, go to the Pocketheaven.com message boards - A real site
+for Goomba Color will come later.
 http://www.pocketheaven.com/boards/viewforum.php?f=29
 
 ! Thank you:
@@ -115,4 +129,4 @@ http://hem.passagen.se/flubba/gba.html
 -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 Dan Weiss
 danweiss@gmail.com
-http://www.dwedit.org/
+http://dwedit.home.comcast.net/

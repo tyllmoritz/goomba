@@ -1,8 +1,5 @@
 #include "includes.h"
 
-#if MULTIBOOT
-
-
 //based on Jeff Frohwein's slave boot demo:
 //http://www.devrs.com/gba/files/mbclient.txt
 
@@ -11,24 +8,8 @@
 
 u8 *findrom(int);
 
-
-#if GCC
-
-extern u8 __load_stop_iwram9[]; //using this instead of __end__, because it's also cart compatible
-extern u8 __iwram_lma[];
-
-#define EMUSIZE1 ( ( (u32)(&__iwram_lma) ) & 0x3FFFF )
-#define EMUSIZE2 ( ( ( (u32)(&__load_stop_iwram9) ) - EMUSIZE1 ) & 0x7FFF )
-
-#else
-
-extern u8 Image$$RO$$Limit[];
-extern u8 Image$$ZI$$Base[];
-
-#define EMUSIZE1 (((u32)(&Image$$RO$$Limit)&0x3ffff))
-#define EMUSIZE2 (((u32)(&Image$$ZI$$Base)&0x7fff))
-
-#endif
+extern u8 Image$$RO$$Limit;
+extern u8 Image$$ZI$$Base;
 extern u32 romnum;	//from cart.s
 extern u8 *textstart;	//from main.c
 
@@ -65,42 +46,6 @@ void delay() {
 	while(--i);	//(we're running from EWRAM)
 }
 
-#if GCC
-void DelayCycles (u32 cycles) __attribute__((noinline));
-void DelayCycles (u32 cycles)
-{
-    __asm__ volatile (
-		"mov r11,r11\n\t"
-		"adr r1,delaycycles_enter_arm\n\t"
-		"bx r1\n\t"
-		".code 32\n"
-		"delaycycles_enter_arm:\n\t"
-		"mov r0, %0\n\t"
-		"mov r2, pc\n\t"
-		"mov r1, #12\n\t"
-		"cmp r2, #0x02000000\n\t"
-		"beq MultiBootWaitCyclesLoop\n\t"
-    
-    // ROM 4/2 wait
-    	"mov r1, #14\n\t"
-    	"cmp r2, #0x08000000\n\t"
-    	"beq MultiBootWaitCyclesLoop\n\t"
-    
-    // IWRAM
-    	"mov r1, #4\n"
-    
-    	"MultiBootWaitCyclesLoop:\n\t"
-    	"subs r0, r0, r1\n\t"
-    	"bgt MultiBootWaitCyclesLoop\n\t"
-    	"adr r1,delaycycles_enter_thumb+1\n\t"
-    	"bx r1\n\t"
-    	".code 16\n"
-    	"delaycycles_enter_thumb:"
-    	: :"r"(cycles) : "r0","r1","r2"
-    	);
-    return;
-}
-#else
 void DelayCycles (u32 cycles)
 {
     __asm{mov r2, pc}
@@ -122,7 +67,6 @@ void DelayCycles (u32 cycles)
     __asm{sub r0, r0, r1}
     __asm{bgt MultiBootWaitCyclesLoop}
 }
-#endif
 
 u16 xfer(u32 send) {
     u32 i;
@@ -135,25 +79,11 @@ u16 xfer(u32 send) {
 	return (REG_SIOMULTI1);
 }
 
-#if GCC
-int swi25(void *p) {
-    int i;
-    __asm__ volatile (
-		"mov r11,r11\n\t"
-		"mov r0,%1\n\t"
-		"mov r1,#1\n\t"
-		"swi 0x25\n\t"
-		"mov %0,r0"
-	: "=r" (i) : "r"(p) : "r0","r1","r2"
-	);
-	return i;
-}
-#else
 int swi25(void *p) {
 	__asm{mov r1,#1}
 	__asm{swi 0x25, {r0-r1}, {}, {r0-r2} }
 }
-#endif
+
 //returns error code:  1=no link, 2=bad send, 3=too big
 #define TIMEOUT 40
 int SendMBImageToClient(void) {
@@ -165,8 +95,8 @@ int SendMBImageToClient(void) {
 	u16 ie;
 	u32 emusize1,emusize2,romsize;
 
-	emusize1=EMUSIZE1;
-	emusize2=EMUSIZE2;
+	emusize1=((u32)(&Image$$RO$$Limit)&0x3ffff);
+	emusize2=((u32)(&Image$$ZI$$Base)&0x7fff);
 //	if(pogoshell) romsize=48+16+(*(u8*)(findrom(romnum)+48+4))*16*1024+(*(u8*)(findrom(romnum)+48+5))*8*1024;  //need to read this from ROM
 //	else romsize=48+*(u32*)(findrom(romnum)+32);
 	romsize = (0x8000 << (*(findrom(romnum)+0x148)));
@@ -271,5 +201,3 @@ transferEnd:
 	REG_IE=ie;
 	return i;
 }
-
-#endif

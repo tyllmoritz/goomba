@@ -93,6 +93,7 @@ C EQU 2_00010000	;carry
 	strb r0,[r2,addy,lsr#16]
 
 	cmp r1,#0x80000000	; just to solve some games
+	cmpne r1,#0x90000000
 	bleq vram_W2		; that use push16 to write to vram
 	MEND		;r1,r2=?
 

@@ -21,8 +21,12 @@ typedef void (*fptr)(void);
 
 extern u8 g_sramsize;
 
-#define true (1==1)
-#define false (1==0)
+#ifndef true
+#define true 1
+#endif
+#ifndef false
+#define false 0
+#endif
 
 #define MEM_PALETTE (u16*)0x5000000
 #define MEM_VRAM (u16*)0x6000000

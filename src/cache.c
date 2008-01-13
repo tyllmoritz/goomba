@@ -62,8 +62,7 @@ void init_cache() {}
 void init_cache()
 {
 	int i;
-	u8* dest=(u8*)&Image$$RO$$Limit;
-	if ( ((u32)dest)&0x08000000 ) dest = (u8*)0x02000000;
+	u8* dest=ewram_start;
 	
 #if RESIZABLE
 	u8 *end_of_cache=END_of_exram;

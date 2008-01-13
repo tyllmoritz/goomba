@@ -47,7 +47,7 @@ extern char pogoshell;	//main.c
 u8 *findrom(int);
 void cls(int);		//main.c
 void drawtext(int,char*,int);
-void setdarknessgs(int dark);
+void setdarkness(int dark);
 void scrolll(int f);
 void scrollr(void);
 void waitframe(void);
@@ -543,7 +543,7 @@ void quicksave() {
 	ui_y=0;
 	ui_x=256;
 	move_ui();
-	setdarknessgs(7);	//darken
+	setdarkness(7);	//darken
 	drawtext(32+9,"           Saving.",0);
 
 	i=savestate(buffer2);
@@ -562,8 +562,12 @@ int backup_gb_sram(int called_from)
 	configdata *cfg;
 	stateheader *sh;
 	lzo_uint compressedsize;
-
-	u32 chk = checksum((u8*)romstart);
+	u32 chk=0;
+	
+	if (called_from==1 && romstart != NULL)
+	{
+		chk=checksum((u8*)romstart);
+	}
 	
 	if(!using_flashcart())
 		return 1;
