@@ -9,7 +9,9 @@
 	@IMPORT _00
 	@IMPORT move_ui
 
+	.global auto_border
 	.global joy0_W_SGB
+	.global joy0_R_SGB
 	.global g_update_border_palette
 	.global sgb_reset
 	.global g_sgb_mask
@@ -29,13 +31,19 @@
 g_sgb_mask:	.byte 0	@sgb_mask
 g_update_border_palette:
 	.byte 0   @update_border_palette
+auto_border:
+	.byte 1	@autoborder
+	.byte 0	@autoborderstate
+	.byte 0	@borderpartsadded
+	
+	.word 0   @sgb_hack_frame
+	.word 0	@auto_border_reboot_frame
+	
+	.byte 0	@lineslow
 	.byte 0
 	.byte 0
 	.byte 0
 	
-	.word 0   @sgb_hack_frame
-
-
  .align
  .pool
  .text
@@ -73,15 +81,17 @@ unhack:
 
 sgb_reset:
 	stmfd sp!,{lr}
+
+	ldr r0,=_00
+	str r0,[gb_optbl]
+
 	mov r0,#0
 	str_ r0,packetcursor
 	str_ r0,packetbitcursor
-	str_ r0,packetstate @also erase player_turn, player_mask, sgb_mask
-	str_ r0,update_border_palette
-	ldrb_ r1,_ui_border_visible
-	bic r1,r1,#2
-	strb_ r1,_ui_border_visible
-	bl move_ui
+	str_ r0,packetstate @also erases player_turn, player_mask, sgb_mask
+	strb_ r0,update_border_palette
+	strb_ r0,borderpartsadded
+	str_ r0,sgb_hack_frame
 	
 	mvn r0,#0
 	strb_ r0,joy0serial
@@ -97,6 +107,12 @@ sgb_reset:
 	mov r2,#360/4
 	bl filler_
 	
+	@don't remove border after we went through everything to add it
+	ldrb_ r0,autoborderstate
+	cmp r0,#2
+	beq 0f
+	
+	mov r0,#0
 	@erase SGB border
 	ldr r1,=0x06006800
 	mov r2,#0x800/4
@@ -106,7 +122,18 @@ sgb_reset:
 	mov r2,#0x2000/4
 	bl filler_
 	
+	ldrb_ r1,_ui_border_visible
+	bic r1,r1,#2
+	strb_ r1,_ui_border_visible
+0:
+	
+	bl move_ui
+	bl_long update_ui_border_masks
+	mov r0,#255
+	str_ r0,auto_border_reboot_frame
+	
 	@erase SGB packet for no reason
+	mov r0,#0
 	ldr r1,=SGB_PACKET
 	mov r2,#0x112/4
 	bl filler_
@@ -114,46 +141,78 @@ sgb_reset:
 	ldmfd sp!,{pc}
 
 
+@----------------------------------------------------------------------------
+joy0_R_SGB:		@FF00
+@----------------------------------------------------------------------------
+	ldrb_ r0,joy0serial
+	ldrb_ r1,lineslow
+	orr r1,r1,#0x04
+	strb_ r1,lineslow
+	mov pc,lr
 
 @----------------------------------------------------------------------------
 joy0_W_SGB:		@FF00
 @----------------------------------------------------------------------------
-	orr r0,r0,#0xCF
-	mov r2,#0x0
-	ldrb_ addy,player_turn
-	adrl_ r1,joy0state
-	ldrb r1,[r1,addy]  @this one checks which player's turn it is
-	tst r0,#0x10		@Direction
-	orreq r2,r2,r1,lsr#4
-	tst r0,#0x20		@Buttons
-	orreq r2,r2,r1
-	and addy,r0,#0x30
-	cmp addy,#0x30
-	bne not_selecting_player
-	ldrb_ addy,player_turn
-	add addy,addy,#1
+	and r0,r0,#0x30
+
+	ldrb_ r2,player_turn
+	@handle lines low for player control switching
+	ldrb_ r1,lineslow
+	cmp r0,#0x10
+	orreq r1,r1,#0x02
+	cmp r0,#0x20
+	orreq r1,r1,#0x01
+	cmp r0,#0x00
+	moveq r1,#0
+	cmp r0,#0x30
+	bne 0f
+	cmp r1,#0x07
+	bicne r1,r1,#0x04
+	moveq r1,#0
+	addeq r2,r2,#1
+0:
+	strb_ r1,lineslow
 	ldrb_ r1,player_mask
-	and addy,addy,r1
-	orreq r2,r2,addy
-	strb_ addy,player_turn
-not_selecting_player:
-	and r2,r2,#0x0F
-	eor r2,r2,r0
+	and r2,r2,r1
+	strb_ r2,player_turn
+	
+	adrl_ r1,joy0state
+	ldrb r1,[r1,r2]
+
+@	ldrb r2,autoborderstate
+@	cmp r2,#1
+@	eoreq r1,r1,#0x08
+
+	cmp r0,#0x30
+	orr r0,r0,#0xC0
+	orreq r0,r0,#0x0F
+	subeq r0,r0,r2
+	beq 0f
+	tst r0,#0x10		@direction
+	orreq r0,r0,r1,lsr#4
+	and r1,r1,#0x0F
+	tst r0,#0x20		@buttons
+	orreq r0,r0,r1
+	eor r0,r0,#0x0F
+0:
 	ldrb_ r1,joy0serial
-	strb_ r2,joy0serial
+	strb_ r0,joy0serial
 @----------------------------------------------------------------------------
 SGB_transfer_bit:
 @----------------------------------------------------------------------------
 @r0 = current write
 @r1 = previous write
-	tst r0,#0x30
+	ands r0,r0,#0x30
+	and r1,r1,#0x30
 	beq resetpacket
-	@get which lines go low
-	eor r2,r0,r1
-	and r2,r2,r1
-	tst r2,#0x30
+	cmp r0,#0x30
 	bxeq lr
-	tst r2,#0x10 @write a zero, otherwise write a 1
+	@current = 10 or 20, if previous isn't equal to current or 30, invalid packet.
+	cmp r0,r1
+	bxeq lr
+	cmp r1,#0x30
+	bne invalidpacket
+	tst r0,#0x20 @write a zero, otherwise write a 1
 	ldr addy,=SGB_PACKET
 	ldr_ r0,packetcursor
 	ldr_ r1,packetbitcursor
@@ -242,14 +301,14 @@ finishpacket:
 	str_ r0,packetcursor
 	str_ r0,packetbitcursor
 	strb_ r0,packetstate
+	strb_ r0,lineslow
+
 	
 	@SGB speedhack to remove 6 frame delay
 	adr r0,sgb_speedhack_nop
 	str r0,[gb_optbl]
-	
 	ldr_ r0,frame
 	str_ r0,sgb_hack_frame
-	
 	
 	and r0,r2,#0xF8
 	ldr pc,[pc,r0,lsr#1]
@@ -410,6 +469,20 @@ CHR_TRN:   @Transfer Character Font Data
 	stmfd sp!,{lr}
 	ldrb r0,[addy,#1]
 	and r0,r0,#1
+	
+	@###
+	ldrb_ r1,borderpartsadded
+	mov r2,#1
+	orr r1,r1,r2,lsl r0
+	strb_ r1,borderpartsadded
+	cmp r1,#7
+	moveq r1,#0
+	ldrne_ r1,frame
+	addne r1,r1,#255
+	str_ r1,auto_border_reboot_frame	
+	@###
+	
+	
 	ldr r1,=SNES_VRAM
 	add r1,r1,r0,lsl#12
 	stmfd sp!,{r0}
@@ -419,6 +492,16 @@ CHR_TRN:   @Transfer Character Font Data
 	ldmfd sp!,{pc}
 PCT_TRN:   @Set Screen Data Color Data
 	stmfd sp!,{lr}
+
+	@###
+	ldrb_ r1,borderpartsadded
+	orr r1,r1,#4
+	strb_ r1,borderpartsadded
+	tst r1,#3
+	movne r1,#0
+	strne_ r1,auto_border_reboot_frame	
+	@###
+
 	ldr r1,=SNES_MAP
 	mov r2,#0x880
 	bl sgb_vram_transfer2
@@ -537,7 +620,6 @@ draw_sgb_border:
 	bl move_ui
 	
 @	;copy palette into that unused area of border ram
-@	mov r11,r11
 @	mov r7,#128
 @	ldr r6,=BORDER_PALETTE
 @	ldr r5,=SNES_MAP+0x800

@@ -332,6 +332,11 @@ void splash()
 #endif
 
 #if MOVIEPLAYER
+int get_saved_sram()
+{
+	return get_saved_sram_CF(SramName);
+}
+
 int get_saved_sram_CF(char* sramname)
 {
 	if(g_cartflags&2 && g_rammask!=0)
@@ -342,10 +347,14 @@ int get_saved_sram_CF(char* sramname)
 		{
 			FAT_fread(XGB_sram,1,g_rammask+1,file);
 			FAT_fclose(file);
+			return 1;
 		}
-		return 1;
+		return 2;
 	}
-	return 0;
+	else
+	{
+		return 0;
+	}
 }
 int save_sram_CF(char* sramname)
 {
@@ -402,7 +411,7 @@ void rommenu(void)
 		cls(3);
 		
 		loadcart(0,g_emuflags&0x300);
-		get_saved_sram_CF(SramName);
+//		get_saved_sram_CF(SramName);
 	}
 	else
 #endif
@@ -411,9 +420,9 @@ void rommenu(void)
 	if(pogoshell)
 	{
 		loadcart(0,g_emuflags&0x300);
-#if CARTSRAM
-		get_saved_sram();
-#endif
+//#if CARTSRAM
+//		get_saved_sram();
+//#endif
 	}
 	else
 #endif
@@ -429,9 +438,9 @@ void rommenu(void)
 		if(romz>1){
 			i=drawmenu(sel);
 			loadcart(sel,i|(g_emuflags&0x300));  //(keep old gfxmode)
-#if CARTSRAM
-			get_saved_sram();
-#endif
+//#if CARTSRAM
+//			get_saved_sram();
+//#endif
 			lastselected=sel;
 			for(i=0;i<8;i++)
 			{
@@ -459,9 +468,9 @@ void rommenu(void)
 			if(lastselected!=sel) {
 				i=drawmenu(sel);
 				loadcart(sel,i|(g_emuflags&0x300));  //(keep old gfxmode)
-#if CARTSRAM
-				get_saved_sram();
-#endif
+//#if CARTSRAM
+//				get_saved_sram();
+//#endif
 				lastselected=sel;
 			}
 			run(0);

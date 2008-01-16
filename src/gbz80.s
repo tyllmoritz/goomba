@@ -1639,15 +1639,21 @@ run_core:	@r0=0 to return after frame
 @cycles ran out
 @----------------------------------------------------------------------------
 line0:
-	@now do double speed vblank stuff:
-	ldr_ r0,doubletimer_
-	tst r0,#0x01
-	blne_long updatespeed
+	adr_ r2,cpuregs
+	stmia r2,{gb_flg-gb_pc,gb_sp}	@save gbz80 state
+	
+	ldrb_ r0,autoborderstate
+	cmp r0,#1
+	bne 0f
+	ldr_ r0,frame
+	ldr_ r1,auto_border_reboot_frame
+	cmp r0,r1
+	blt 0f
+	bl_long loadcart_after_sgb_border
+0:
 	
 
 
-	adr_ r2,cpuregs
-	stmia r2,{gb_flg-gb_pc,gb_sp}	@save gbz80 state
 @waitformulti
 	ldr r1,=REG_P1		@refresh input every frame
 	ldrh r0,[r1]
@@ -1725,6 +1731,11 @@ line0x:
 	strb_ r1,scanline		@reset scanline count
 	bl newframe		@display update
 
+	@now do double speed vblank stuff:
+	ldr_ r0,doubletimer_
+	tst r0,#0x01
+	blne_long updatespeed
+
 	adr_ r0,cpuregs
 	ldmia r0,{gb_flg-gb_pc,gb_sp}	@restore GB-Z80 state
 
@@ -1739,8 +1750,7 @@ line0x:
 
 	adr r0,line1_to_71
 	str_ r0,nexttimeout
-	mov r1,#0 		@Scanline
-	strb_ r1,scanline      @add
+
 	ldr_ pc,scanlinehook
 	
 line1_to_71: @------------------------
@@ -1780,11 +1790,7 @@ line72_to_143: @------------------------
 line144: @------------------------
 	ldrb_ r0,doubletimer_
 	tst r0,#1
-	beq 0f
-	ldrb_ r0,doublespeed
-	tst r0,#0x80
-	bl_long updatespeed2
-0:
+	blne_long updatespeed
 	bl newframe_vblank
 @	stmfd sp!,{r0-addy,lr}
 
@@ -1892,13 +1898,7 @@ noScanlineIRQ:
 
 @------------------
 checkTimerIRQ:
-	ldrb_ r2,doubletimer_
-	tst r2,#0x01
-	ldrneb_ r2,doublespeed
-	tstne r2,#0x80
-
-	ldr_ r2,cyclesperscanline
-	movne r2,r2,lsl#1
+	ldr_ r2,timercyclesperscanline
 	
 	ldr_ r0,dividereg
 	add r0,r0,r2,lsl#12		@256th cycles.
@@ -2415,18 +2415,30 @@ speedswitch:
 updatespeed:
 	ldrb_ r0,doublespeed
 	tst r0,#0x80
-	ldrb_ r0,doubletimer_
-	tstne r0,#0x02
-updatespeed2:
-
+@updatespeed2
 @(DMG=456*CYCLE, CGB=912*CYCLE)
-	movne r1,#DOUBLE_SPEED
-	moveq r1,#SINGLE_SPEED
+	mov r2,#SINGLE_SPEED_HBLANK
+	mov r1,#SINGLE_SPEED
+	mov r12,r1
+	beq requests_singlespeed
+
+	mov r12,#DOUBLE_SPEED	@if game wants double speed, always give double speed timers
+
+	ldrb_ r0,doubletimer_
+	tst r0,#0x02
+	bne grant_doublespeed
+	ldrb_ r0,scanline
+	cmp r0,#144
+	blt requests_singlespeed
+grant_doublespeed:	
+	mov r2,#DOUBLE_SPEED_HBLANK
+	mov r1,#DOUBLE_SPEED
+requests_singlespeed:
+	str_ r2,hblankposition
 	str_ r1,cyclesperscanline
-	movne r1,#DOUBLE_SPEED_HBLANK
-	moveq r1,#SINGLE_SPEED_HBLANK
-	str_ r1,hblankposition
+	str_ r12,timercyclesperscanline
 	bx lr
+
 
  .if PROFILE
 profile_it:
@@ -2479,12 +2491,8 @@ emu_reset:	@called by loadcart (r0-r9 are free to use)
 	bl GFX_reset
 	bl sgb_reset
 @---Speed - normal GB
-	mov r1,#SINGLE_SPEED
-	str_ r1,cyclesperscanline
-	mov r1,#SINGLE_SPEED_HBLANK
-	str_ r1,hblankposition
-	
-	
+	@gfx_reset zeroes doublespeed byte, this commits that change
+	bl_long updatespeed
 cpu_reset:
 @---cpu reset
 	.if SPEEDHACKS
@@ -2511,12 +2519,15 @@ cpu_reset:
 	mov r1,#0
 	strb_ r1,doublespeed
 	str_ r1,gb_ime		@disable all IRQ
+	str_ r1,dividereg
 	str_ r1,timercounter	@reset timers
 	str_ r1,timermodulo	@reset timers
+
+	str_ r1,frame		@frame count reset
+
 	ldr gb_sp,=0xfffe0000
 	mov cycles,#0
 
-	str_ r1,frame		@frame count reset
 
 	@(clear irq/nmi/res source)...
 
@@ -2654,6 +2665,7 @@ cpustate:
 frametotal:		@let ui.c see frame count for savestates
 	.word 0 @frame
 	.word 0 @cyclesperscanline (DMG=456*CYCLE, CGB=912*CYCLE)
+	.word 0 @timercyclesperscanline
  .if SPEEDHACKS
 num_speedhacks:
 	.word 0 @numspeedhacks

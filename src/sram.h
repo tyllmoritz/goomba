@@ -49,7 +49,7 @@ void quickload(void);
 void quicksave(void);
 int backup_gb_sram(int called_from);
 void save_new_sram(void);
-void get_saved_sram(void);
+int get_saved_sram(void);
 void register_sram_owner(void);
 void no_sram_owner(void);
 void setup_sram_after_loadstate(void);

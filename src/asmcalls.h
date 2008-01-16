@@ -4,6 +4,8 @@
 //#include "fs.h"
 //#include "cache.h"
 
+extern u8 auto_border;
+
 extern u8 ui_border_visible;
 extern u8 darkness;
 //extern u8 border_visible;

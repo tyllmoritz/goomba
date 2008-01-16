@@ -7,6 +7,7 @@
 @	#include "io.h"
 
 	@IMPORT findrom2 @from main.c
+	@IMPORT get_saved_sram
 	@IMPORT make_instant_pages
 	@IMPORT init_cache
 	
@@ -15,6 +16,7 @@
 	.endif
 
 	.global loadcart
+	.global loadcart_after_sgb_border
 @	EXPORT mapBIOS_
 	.global map0123_
 	.global map4567_
@@ -124,17 +126,29 @@ mbcflagstbl:
 	.byte 0
 	.byte MBC_RAM|MBC_SAV
 	.byte 0
+
+
+loadcart_after_sgb_border:
+	ldr_ r1,emuflags
+	ldr_ r0,romnumber
+	stmfd sp!,{r0-r1,r4-r11,lr}
+	ldr globalptr,=GLOBAL_PTR_BASE	@need ptr regs init'd
+	mov r1,#2
+	b 0f
+
 @----------------------------------------------------------------------------
 loadcart: @called from C:  r0=rom number, r1=emuflags
 @----------------------------------------------------------------------------
 	stmfd sp!,{r0-r1,r4-r11,lr}
+	ldr globalptr,=GLOBAL_PTR_BASE	@need ptr regs init'd
+	mov r1,#0
+0:
+	strb_ r1,autoborderstate
 
 	ldr r1,=findrom2
 	bl thumbcall_r1
 	ldr r1,=make_instant_pages
 	bl thumbcall_r1
-
-	ldr globalptr,=GLOBAL_PTR_BASE	@need ptr regs init'd
 
 	mov r3,r0		@r0 now points to rom image
 	str_ r3,rombase		@set rom base
@@ -154,42 +168,67 @@ loadcart: @called from C:  r0=rom number, r1=emuflags
 	str_ r0,romnumber
         str_ r1,emuflags
         
-	@check for SGB support, r2 = supports SGB
+	@check for SGB support, r5 = supports SGB
 	ldrb r1,[r3,#0x146]
 	cmp r1,#3
 	ldreqb r1,[r3,#0x14B]
 	cmpeq r1,#0x33
-	moveq r2,#1
-	movne r2,#0
+	moveq r5,#1
+	movne r5,#0
 	
-	@check for GBC support, r1 = supports GBC
+	@check for GBC support, r4 = supports GBC
         ldrb r1,[r3,#0x143]
         cmp r1,#0x80
         cmpne r1,#0xC0
-        moveq r1,#1
-        movne r1,#0
+        moveq r4,#1
+        movne r4,#0
 
 	@check what GB type we want:
 	@0 = GB
 	@1 = perfer SGB over GBC
 	@2 = perfer GBC over SGB
 	@3 = Weird GBC+SGB
+	
+	@---
+	@if supports SGB+CGB, autoborder==1, and autoborderstate==0,
+	@then we're doing a "dry run" where it loads the border then resets
+	@also doesn't load SRAM in that case
+	cmp r5,#1
+	cmpeq r4,#1
+	bne 0f
+	ldrb_ r0,autoborder
+	cmp r0,#1
+	bne 0f
+	ldrb_ r0,autoborderstate
+	movs r0,r0
+	bne 0f
+	@eq if autoborder==1 and autoborderstate==0
+	ldrb_ r0,request_gb_type_
+	cmp r0,#2
+	bne 0f
+	
+	mov r0,#1
+	strb_ r0,autoborderstate
+	mov r4,#0
+	b 1f
+0:	
+	@---
 	ldrb_ r0,request_gb_type_
         
         cmp r0,#0
-        moveq r1,#0
-        moveq r2,#0
+        moveq r4,#0
+        moveq r5,#0
         
         cmp r0,#1
-        cmpeq r2,#1
-        moveq r1,#0 @disable GBC if SGB supported
+        cmpeq r5,#1
+        moveq r4,#0 @disable GBC if SGB supported
         
         cmp r0,#2
-        cmpeq r1,#1
-        moveq r2,#0 @disable SGB if GBC supported
-        
-        strb_ r1,gbcmode
-        strb_ r2,sgbmode
+        cmpeq r4,#1
+        moveq r5,#0 @disable SGB if GBC supported
+1:
+        strb_ r4,gbcmode
+        strb_ r5,sgbmode
        	
  .if RESIZABLE
  	cmp r1,#0x00
@@ -240,7 +279,7 @@ loadcart: @called from C:  r0=rom number, r1=emuflags
 	
 	mov r0,#0
 	str_ r0,bank0
-	mov r1,#1
+	mov r0,#1
 	str_ r0,bank1
 	
 	mov r0,#0		@default ROM mapping
@@ -256,6 +295,14 @@ loadcart: @called from C:  r0=rom number, r1=emuflags
 	moveq r0,#3
 	adr r1,mbcflagstbl
 	ldrb r0,[r1,r0]		@get mbc flags.
+	
+	@autoborderstate == 1 overrides the flags, we want NO SRAM while we're getting the SGB border
+	@-----
+	ldrb_ r1,autoborderstate
+	cmp r1,#1
+	biceq r0,r0,#MBC_SAV
+	@-----
+
 	strb_ r0,cartflags	@set cartflags
 	ldr r1,=empty_W
 	tst r0,#MBC_RAM
@@ -375,6 +422,10 @@ lc1:				@call mapper*init
 	.endif
 
 	bl emu_reset		@reset everything else
+	ldr r0,=get_saved_sram
+	mov lr,pc
+	bx r0
+	
 	ldmfd sp!,{r4-r11,lr}
 	bx lr
 

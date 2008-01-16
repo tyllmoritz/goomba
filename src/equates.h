@@ -316,6 +316,7 @@
  _m_ scanlinehook,4
  _m_ frame,4
  _m_ cyclesperscanline,4
+ _m_ timercyclesperscanline,4
  .if SPEEDHACKS
  _m_ numspeedhacks,4
  _m_ speedhacks_p,4
@@ -445,7 +446,7 @@
  _m_ joy2state,1
  _m_ joy3state,1
  _m_ joy0serial,1
- _m_ joy1serial,1
+	_m_ ,1
 	_m_ ,2
 
 			@sgb.s (wram_globals4)
@@ -457,9 +458,15 @@
  _m_ sgb_mask,1
 
  _m_ update_border_palette,1
- _m_ ,3
+ _m_ autoborder,1
+ _m_ autoborderstate,1
+ _m_ borderpartsadded,1
  _m_ sgb_hack_frame,4
-
+ _m_ auto_border_reboot_frame,4
+ _m_ lineslow,1
+ _m_ ,1
+ _m_ ,1
+ _m_ ,1
 
 			@gbz80.s (wram_globals5)
  _m_ fiveminutes_,4

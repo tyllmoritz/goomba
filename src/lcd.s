@@ -1,3 +1,6 @@
+@TODO:
+@check all reset code, and make sure it's resetting everything!!!
+
 @newerest todo:
 @fix timers in double speed hack mode
 
@@ -124,6 +127,8 @@
 	@IMPORT RumbleInterrupt
 	@IMPORT StartRumbleComs
  .endif
+ 	.global update_ui_border_masks
+ 	
 	.global ui_border_visible
 	.global ui_y
 	.global ui_x
@@ -506,14 +511,7 @@ GFX_reset:	@called with CPU reset
 	strb_ r0,rendermode
 	bl_long newframeinit
 
-	ldrb_ r0,_ui_border_visible
-	bic r0,r0,#2	@turn off border
-	strb_ r0,_ui_border_visible
-	bl move_ui
-	
 	bl_long update_ui_border_masks
-
-
 	ldmfd sp!,{addy,lr}
 
 
@@ -1766,6 +1764,7 @@ tobuffer:
 	mov r8,r0
 	
 	
+	
 1:
 	stmia r1!,{r2,r3,r4,r5,r6,r7}
 	subs r0,r0,#1
@@ -1865,7 +1864,7 @@ apply16:
 @@@@@@@
 
 move_ui_2:
-	adr_ r2,ui_border_cnt_bic
+	adrl_ r2,ui_border_cnt_bic
 	ldmia r2,{r4-r7}
 @	ldr r4,ui_border_cnt_bic
 @	ldr r5,ui_border_cnt_orr
@@ -1938,7 +1937,7 @@ add_ui_border:
 	bxeq lr
 	
 	@now apply the settings to the active (to be displayed) scanline buffers
-	adr_ r12,ui_border_cnt_bic
+	adrl_ r12,ui_border_cnt_bic
 	ldmia r12,{r0-r3}
 	stmfd sp!,{r0-r3,lr}		@push old
 	ldr_ r1,_ui_border_screen

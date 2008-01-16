@@ -97,7 +97,7 @@ const fptr fnlist2[]={vblset,fpsset,sleepset,swapAB,autostateset,
 #if SPEEDHACKS
 find_speedhacks,
 #endif
-timermode,gbtype,gbatype};
+timermode,gbtype,changeautoborder,gbatype};
 const fptr fnlist3[]={chpalette,brightset,sgbpalnum};
 
 const fptr* fnlistX[]={fnlist1,multifnlist,fnlist2,fnlist3};
@@ -353,6 +353,7 @@ void drawui2()
 #endif
 	print_2("Double Speed: ",clocktxt[doubletimer]);
 	print_2("Game Boy: ",gbtxt[request_gb_type]);
+	print_2("Auto SGB border: ",autotxt[auto_border]);
 	print_2("Identify as GBA: ",autotxt[request_gba_mode]);
 }
 
@@ -592,6 +593,10 @@ void timermode()
 	doubletimer=(doubletimer+1) % 3;
 	if (doubletimer==0) doubletimer=1;
 	update_doublespeed_ui();
+}
+void changeautoborder()
+{
+	auto_border=!auto_border;
 }
 
 #if GOMULTIBOOT

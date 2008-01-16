@@ -37,6 +37,13 @@
  .align
  .pool
 
+@	EXPORT breakpoint
+@breakpoint
+@	mov r11,r11
+@	bx lr
+
+
+
 vbaprint:
 	swi 0xFF0000		@!!!!!!! Doesn't work on hardware !!!!!!!
 	bx lr
@@ -71,14 +78,22 @@ resetSIO:
 @----------------------------------------------------------------------------
 IO_reset:
 @----------------------------------------------------------------------------
+	mov r0,#0
+	str_ r0,joy0state
+	str_ r0,joy0serial
+	strb_ r0,stctrl
+
 	ldrb_ r0,sgbmode
 	movs r0,r0
+	ldreq r0,=joy0_W
 	ldrne r0,=joy0_W_SGB
-	ldrne r1,=joypad_write_ptr
-	strne r0,[r1]
+	ldr r1,=joypad_write_ptr
+	str r0,[r1]
+	ldreq r0,=joy0_R
+	ldrne r0,=joy0_R_SGB
+	ldr r1,=joypad_read_ptr
+	str r0,[r1]
 	
-	mov r0,#0
-	strb_ r0,stctrl
 	bx lr
 @----------------------------------------------------------------------------
 suspend:	@called from ui.c and 6502.s
@@ -192,6 +207,7 @@ IO_High_R:	@I/O read
 	b HRAM_R
 @----------------------------------------------------------------------------
 io_read_tbl:
+joypad_read_ptr:
 	.word joy0_R	@$FF00: Joypad 0 read
 	.word _FF01R	@SB - Serial Transfer Data
 	.word _FF02R	@SC - Serial Transfer Ctrl
@@ -1112,7 +1128,7 @@ FF4D_W:	@KEY1 - prepare double speed
 	 .byte 0 @joy2state
 	 .byte 0 @joy3state
 	 .byte 0 @joy0serial
-	 .byte 0 @joy1serial
+	 .byte 0 
 	 .byte 0
 	 .byte 0
 
