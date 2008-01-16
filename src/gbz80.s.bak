@@ -1636,19 +1636,6 @@ run_core	;r0=0 to return after frame
 line0
 	adr r2,cpuregs
 	stmia r2,{gb_flg-gb_pc,gb_sp}	;save gbz80 state
-	
-	ldrb r0,autoborderstate
-	cmp r0,#1
-	bne %f0
-	ldr r0,frame
-	ldr r1,auto_border_reboot_frame
-	cmp r0,r1
-	blt %f0
-	bl loadcart_after_sgb_border
-0
-	
-	
-	
 ;waitformulti
 	ldr r1,=REG_P1		;refresh input every frame
 	ldrh r0,[r1]
@@ -1786,6 +1773,10 @@ line144 ;------------------------
 	ldrb r0,doubletimer_
 	tst r0,#1
 	blne_long updatespeed
+;	beq %f0
+;	ldrb r0,doublespeed
+;	tst r0,#0x80
+;0
 	bl newframe_vblank
 ;	stmfd sp!,{r0-addy,lr}
 
@@ -1893,7 +1884,13 @@ noScanlineIRQ
 
 ;------------------
 checkTimerIRQ
+;	ldrb r2,doubletimer_
+;	tst r2,#0x01
+;	ldrneb r2,doublespeed
+;	tstne r2,#0x80
+
 	ldr r2,timercyclesperscanline
+;	movne r2,r2,lsl#1
 	
 	ldr r0,dividereg
 	add r0,r0,r2,lsl#12		;256th cycles.
@@ -2484,6 +2481,12 @@ emu_reset	;called by loadcart (r0-r9 are free to use)
 ;---Speed - normal GB
 	;gfx_reset zeroes doublespeed byte, this commits that change
 	bl_long updatespeed
+;	mov r1,#SINGLE_SPEED
+;	str r1,cyclesperscanline
+;	mov r1,#SINGLE_SPEED_HBLANK
+;	str r1,hblankposition
+	
+	
 cpu_reset
 ;---cpu reset
 	[ SPEEDHACKS
@@ -2510,15 +2513,12 @@ cpu_reset
 	mov r1,#0
 	strb r1,doublespeed
 	str r1,gb_ime		;disable all IRQ
-	str r1,dividereg
 	str r1,timercounter	;reset timers
 	str r1,timermodulo	;reset timers
-
-	str r1,frame		;frame count reset
-
 	ldr gb_sp,=0xfffe0000
 	mov cycles,#0
 
+	str r1,frame		;frame count reset
 
 	;(clear irq/nmi/res source)...
 

@@ -672,16 +672,22 @@ void save_new_sram() {
 	updatestates(65536,0,SRAMSAVE);
 }
 
-void get_saved_sram(void)
+int get_saved_sram(void)
 {
+	//returns:
+	// 0 - game doesn't use SRAM
+	// 1 - successfully loaded
+	// 2 - file not found
+	
 	int i,j;
+	int retval;
 	u32 chk;
 	configdata *cfg;
 	stateheader *sh;
 	lzo_uint statesize;
 
 	if(!using_flashcart())
-		return;
+		return 0;
 
 	if(g_cartflags&MBC_SAV)
 	{	//if rom uses SRAM
@@ -714,8 +720,10 @@ void get_saved_sram(void)
 			#else
 			lzo1x_decompress((u8*)(sh+1),statesize,XGB_SRAM,&statesize,NULL);
 			#endif
+			retval=1;
 		} else { //pack new sram and save it.
 			save_new_sram();
+			retval=2;
 		}
 		
 		//For 32k SRAM, don't bother storing anything in real SRAM, in fact, flush it out.
@@ -729,6 +737,11 @@ void get_saved_sram(void)
 			bytecopy(MEM_SRAM+GBC_SRAM_POS,XGB_SRAM,0x2000);
 			register_sram_owner();//register new sram owner
 		}
+		return retval;
+	}
+	else
+	{
+		return 0;
 	}
 }
 

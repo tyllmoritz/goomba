@@ -42,5 +42,6 @@ void gbatype(void);
 void sgbpalnum(void);
 void timermode(void);
 void go_multiboot(void);
+void changeautoborder(void);
 
 #endif
