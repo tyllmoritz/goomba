@@ -120,7 +120,7 @@ sgb_reset
 	
 	bl move_ui
 	bl_long update_ui_border_masks
-	mov r0,#255
+	mov r0,#91
 	str r0,auto_border_reboot_frame
 	
 	;erase SGB packet for no reason
@@ -135,6 +135,7 @@ sgb_reset
 ;----------------------------------------------------------------------------
 joy0_R_SGB		;FF00
 ;----------------------------------------------------------------------------
+	mov r11,r11
 	ldrb r0,joy0serial
 	ldrb r1,lineslow
 	orr r1,r1,#0x04
@@ -144,6 +145,7 @@ joy0_R_SGB		;FF00
 ;----------------------------------------------------------------------------
 joy0_W_SGB		;FF00
 ;----------------------------------------------------------------------------
+	mov r11,r11
 	and r0,r0,#0x30
 
 	ldrb r2,player_turn
@@ -153,8 +155,6 @@ joy0_W_SGB		;FF00
 	orreq r1,r1,#0x02
 	cmp r0,#0x20
 	orreq r1,r1,#0x01
-	cmp r0,#0x00
-	moveq r1,#0
 	cmp r0,#0x30
 	bne %f0
 	cmp r1,#0x07
@@ -169,11 +169,6 @@ joy0_W_SGB		;FF00
 	
 	adrl r1,joy0state
 	ldrb r1,[r1,r2]
-
-;	ldrb r2,autoborderstate
-;	cmp r2,#1
-;	eoreq r1,r1,#0x08
-
 	cmp r0,#0x30
 	orr r0,r0,#0xC0
 	orreq r0,r0,#0x0F
@@ -184,7 +179,6 @@ joy0_W_SGB		;FF00
 	and r1,r1,#0x0F
 	tst r0,#0x20		;buttons
 	orreq r0,r0,r1
-	eor r0,r0,#0x0F
 0
 	ldrb r1,joy0serial
 	strb r0,joy0serial
@@ -203,7 +197,7 @@ SGB_transfer_bit
 	bxeq lr
 	cmp r1,#0x30
 	bne invalidpacket
-	tst r0,#0x20 ;write a zero, otherwise write a 1
+	tst r0,#0x10 ;write a zero, otherwise write a 1
 	ldr addy,=SGB_PACKET
 	ldr r0,packetcursor
 	ldr r1,packetbitcursor
@@ -292,14 +286,22 @@ finishpacket
 	str r0,packetcursor
 	str r0,packetbitcursor
 	strb r0,packetstate
-	strb r0,lineslow
-
 	
 	;SGB speedhack to remove 6 frame delay
 	adr r0,sgb_speedhack_nop
 	str r0,[gb_optbl]
+	
+	;;(
+	ldr r0,auto_border_reboot_frame
+	cmp r0,#0
+	;;)
 	ldr r0,frame
 	str r0,sgb_hack_frame
+	;;(
+	addne r0,r0,#91
+	strne r0,auto_border_reboot_frame
+	;;)
+	
 	
 	and r0,r2,#0xF8
 	ldr pc,[pc,r0,lsr#1]
@@ -468,9 +470,7 @@ CHR_TRN   ;Transfer Character Font Data
 	strb r1,borderpartsadded
 	cmp r1,#7
 	moveq r1,#0
-	ldrne r1,frame
-	addne r1,r1,#255
-	str r1,auto_border_reboot_frame	
+	streq r1,auto_border_reboot_frame	
 	;###
 	
 	

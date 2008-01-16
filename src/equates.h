@@ -13,7 +13,7 @@
 
 		GBLL LITTLESOUNDDJ
 
-SRAM_32		SETL {FALSE}
+;SRAM_32		SETL {FALSE}
 
 DEBUG		SETL {FALSE}
 PROFILE		SETL {FALSE}
@@ -313,6 +313,7 @@ nexttimeout_alt # 4
 scanlinehook # 4
 frame # 4
 cyclesperscanline # 4
+timercyclesperscanline # 4
  [ SPEEDHACKS
 numspeedhacks # 4
 speedhacks_p # 4
@@ -442,7 +443,7 @@ joy1state # 1
 joy2state # 1
 joy3state # 1
 joy0serial # 1
-joy1serial # 1
+	# 1
 	# 2
 
 			;sgb.s (wram_globals4)
@@ -454,9 +455,15 @@ player_mask # 1
 sgb_mask # 1
 
 update_border_palette # 1
- # 3
+autoborder # 1
+autoborderstate # 1
+borderpartsadded # 1
 sgb_hack_frame # 4
-
+auto_border_reboot_frame # 4
+lineslow # 1
+ # 1
+ # 1
+ # 1
 
 			;gbz80.s (wram_globals5)
 fiveminutes_ # 4

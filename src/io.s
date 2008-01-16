@@ -74,14 +74,22 @@ resetSIO
 ;----------------------------------------------------------------------------
 IO_reset
 ;----------------------------------------------------------------------------
+	mov r0,#0
+	str r0,joy0state
+	str r0,joy0serial
+	strb r0,stctrl
+
 	ldrb r0,sgbmode
 	movs r0,r0
+	ldreq r0,=joy0_W
 	ldrne r0,=joy0_W_SGB
-	ldrne r1,=joypad_write_ptr
-	strne r0,[r1]
-	
-	mov r0,#0
-	strb r0,stctrl
+	ldr r1,=joypad_write_ptr
+	str r0,[r1]
+	ldreq r0,=joy0_R
+	ldrne r0,=joy0_R_SGB
+	ldr r1,=joypad_read_ptr
+	str r0,[r1]
+
 	bx lr
 ;----------------------------------------------------------------------------
 suspend	;called from ui.c and 6502.s
@@ -190,6 +198,7 @@ IO_High_R	;I/O read
 	b HRAM_R
 ;----------------------------------------------------------------------------
 io_read_tbl
+joypad_read_ptr
 	DCD joy0_R	;$FF00: Joypad 0 read
 	DCD _FF01R	;SB - Serial Transfer Data
 	DCD _FF02R	;SC - Serial Transfer Ctrl
@@ -1105,7 +1114,7 @@ FF4D_W	;KEY1 - prepare double speed
 	 DCB 0 ;joy2state
 	 DCB 0 ;joy3state
 	 DCB 0 ;joy0serial
-	 DCB 0 ;joy1serial
+	 DCB 0 
 	 DCB 0
 	 DCB 0
 

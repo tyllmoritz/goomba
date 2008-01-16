@@ -1,7 +1,12 @@
 Goomba revision history
 -=-=-=-=-=-=-=-=-=-=-=-
 
-Current version - 2008-01-13
+version 2008-01-16
+   Fixed double speed timers mode
+   Adds SGB borders to games which support both GBC and SGB mode
+   Fixed controller input in SGB mode
+
+version 2008-01-13
    Fixed bugs from alpha versions
 
 Some alpha versions - 2007-4-17
