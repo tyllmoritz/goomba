@@ -1,6 +1,7 @@
-Goomba Color 01-16-2008
+Goomba Color 01-26-2008
 -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 By Dwedit (Dan Weiss)
+http://www.dwedit.org/gba/goombacolor.php
 
 It's a Game Boy Color emulator for the Game Boy Advance. 
 - Why? Because the GB Micro and DS can't play GBC games!
@@ -57,8 +58,8 @@ minutes of inactivity)
 Other Stuff
 -=-=-=-=-=-=-
 
-Gameboy SRAM: Goomba Color automaticly takes care of games which use 8kByte SRAM,
-  games which use 32kByte SRAM must be saved by returning to the menu with L+R.
+Gameboy SRAM: Goomba Color automaticly takes care of games which use 8kByte SRAM.
+  Games which use 32kByte SRAM must be saved by returning to the menu with L+R.
 
 Link transfer:  Sends Goomba Color to another GBA.  The other GBA must be in
   multiboot receive mode (no cartridge inserted, powered on and waiting with
@@ -75,12 +76,12 @@ Go Multiboot: Allows you to play without a cartridge!  For small games only,
 
 Double Speed:  Controls whether the emulated GBC runs in double speed mode or not.
 There are two modes for this option:
-    Timers - Only the GBC's internal clock runs at double speed, the processor
-             stays at single speed, use this for games which play the music at
-             half speed when double speed mode is turned off.
+    Full   - Emulates the GBC at full double speed.  This can be twice as slow as
+             emulating it at normal speed.
              This is the default mode.
-    Full   - Emulates the GBC at full double speed.  This is twice as slow as
-             emulating it at normal speed.  Some games need it.
+    Timers - Only the GBC's internal clock runs at double speed, the processor
+             stays at single speed.  Games may run faster at this setting.
+             This setting may cause some games to crash.
 
 Pogoshell Plugin: If you wish to use Goomba Color with Pogoshell
   just rename goomba.gba to goomba.mb, put it in the plugins directory,
@@ -92,6 +93,20 @@ GameBoy Player:
   homepage. Otherwise you can rip it from any other game that displays it
   (SMA4 & Pokemon Pinball). This is a must if you want rumble to work.
 
+
+ROM program
+-=-=-=-=-=-
+Goomba Color now runs from ROM, and the standard "goomba.gba" file can no longer be booted
+over a multiboot cable.  If you want to boot Goomba Color over a multiboot cable, or otherwise
+want to run the emulator in multiboot mode, and you do not have a flash cartridge, you can
+use "goomba_mb.gba", which is the mutiboot version of the program.
+Note that "goomba.gba" also contains a complete copy of "goomba_mb.gba" embedded inside
+to allow the "Go Multiboot" and "Link Transfer" features to work.
+(that's also why the emulator is two times bigger than previous versions)
+
+
+More Information
+-=-=-=-=-=-=-=-=-
 
 For more information, go to the Pocketheaven.com message boards
 http://www.pocketheaven.com/boards/viewforum.php?f=29

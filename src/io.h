@@ -1,3 +1,9 @@
+	IMPORT _E0
+	IMPORT _E2
+	IMPORT _F0
+	IMPORT _F2
+
+
 	IMPORT thumbcall_r1
 	IMPORT IO_reset
 	IMPORT IO_R
@@ -9,6 +15,9 @@
 	IMPORT suspend
 	IMPORT gettime
 	IMPORT refreshNESjoypads
-	IMPORT serialinterrupt
+;	IMPORT serialinterrupt
 	IMPORT _FF70W
+	IMPORT io_read_tbl
+	IMPORT io_write_tbl
+
 	END

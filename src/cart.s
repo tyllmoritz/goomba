@@ -150,15 +150,15 @@ loadcart ;called from C:  r0=rom number, r1=emuflags
 	str r3,rombase		;set rom base
 				;r3=rombase til end of loadcart so DON'T FUCK IT UP
 
-;	mov r0,#0
-;	ldr r1,=AGB_VRAM+0x4000	;clear AGB Tiles
-;	mov r2,#0x8000/4
-;	bl filler_
+;	mov r1,#0
+;	ldr r0,=AGB_VRAM+0x4000	;clear AGB Tiles
+;	mov r2,#0x8000
+;	bl memset_
 
-;	ldr r0,=0x01000100
-;	ldr r1,=AGB_BG1		;clear AGB BG (GB Window sides)
-;	mov r2,#0x2000/4
-;	bl filler_
+;	ldr r1,=0x01000100
+;	ldr r0,=AGB_BG1		;clear AGB BG (GB Window sides)
+;	mov r2,#0x2000
+;	bl memset_
 
 	ldmfd sp!,{r0-r1}
 	str r0,romnumber
@@ -316,36 +316,34 @@ dont_use_true_sram
 	ldr r0,=default_scanlinehook
 	str r0,scanlinehook	;no mapper irq
 
-	mov r0,#0xe0		;was 0xe0
-	mov r1,#AGB_OAM
-	mov r2,#0x100
-	bl filler_		;no stray sprites please
+	mov r1,#0xe0		;was 0xe0
+	mov r0,#AGB_OAM
+	mov r2,#0x400
+	bl memset_		;no stray sprites please
 
-	mov r0,#0		;clear gb ram+hram
-	ldr r1,=XGB_RAM
-	mov r2,#0x2080/4
-	bl filler_
+	mov r1,#0		;clear gb ram+hram
+	ldr r0,=XGB_RAM
+	mov r2,#0x2080
+	bl memset_
  [ RESIZABLE
-	mov r0,#0
+	mov r1,#0
 
-	ldr r1,xgb_vram
+	ldr r0,xgb_vram
 	ldr r2,xgb_vramsize
-	movs r2,r2,lsr#2
-	blne filler_		;clear GB VRAM
+	blne memset_		;clear GB VRAM
 
-	ldr r1,xgb_sram		;clear gb sram, it will be loaded later anyway
+	ldr r0,xgb_sram		;clear gb sram, it will be loaded later anyway
 	ldr r2,xgb_sramsize
-	movs r2,r2,lsr#2
-	blne filler_
+	blne memset_
  |
-	ldr r1,=XGB_SRAM	;clear gb sram, it will be loaded later anyway
-	mov r2,#0x8000/4
-	bl filler_
+	ldr r0,=XGB_SRAM	;clear gb sram, it will be loaded later anyway
+	mov r2,#0x8000
+	bl memset_
  ]
 
-	ldr r1,=mapperstate	;clear mapperdata so we don't have to do that in every MapperInit.
-	mov r2,#32/4
-	bl filler_
+	ldr r0,=mapperstate	;clear mapperdata so we don't have to do that in every MapperInit.
+	mov r2,#32
+	bl memset_
 
 	ldr r0,=joy0_W
 	ldr r1,=joypad_write_ptr
@@ -487,10 +485,10 @@ little_sound_dj_init
 	
 	mov addy,lr
 	;clear M3_SRAM_BUFFER
-	mov r0,#0
-	ldr r1,=M3_SRAM_BUFFER
-	mov r2,#32768
-	bl filler_
+	mov r1,#0
+	ldr r0,=M3_SRAM_BUFFER
+	mov r2,#128*1024
+	bl memset_
 	mov lr,addy
 	
 	bx lr

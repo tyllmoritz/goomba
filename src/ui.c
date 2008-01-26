@@ -65,7 +65,7 @@ int text2_str(int row)
 #define print_1_1(xxxx) row=text(row,(xxxx));
 #define print_2_1(xxxx) row=text2(row,(xxxx));
 
-//#define MENU2ITEMS 8+SPEEDHACKS			//othermenu items
+//#define MENU2ITEMS 8+SPEEDHACK2			//othermenu items
 //#define MENU3ITEMS 3			//displaymenu items
 //
 ////mainmenuitems when running from cart (not multiboot)
@@ -94,8 +94,8 @@ go_multiboot,
 restart,exit_};
 
 const fptr fnlist2[]={vblset,fpsset,sleepset,swapAB,autostateset,
-#if SPEEDHACKS
-find_speedhacks,
+#if SPEEDHACK2
+autodetect_speedhack,
 #endif
 timermode,gbtype,changeautoborder,gbatype};
 const fptr fnlist3[]={chpalette,brightset,sgbpalnum};
@@ -213,7 +213,7 @@ void ui()
 			drawui1();
 	} while(!(key&(B_BTN+R_BTN+L_BTN)));
 #if CARTSRAM
-	if (savesuccess)
+	if (get_sram_owner()==0)
 	{
 		get_saved_sram();
 	}
@@ -300,11 +300,15 @@ char *const bordtxt[]={"Black","Grey","Blue","None"};
 char *const paltxt[16]={"Yellow","Grey","Multi1","Multi2","Zelda","Metroid",
 				"AdvIsland","AdvIsland2","BaloonKid","Batman","BatmanROTJ",
 				"BionicCom","CV Adv","Dr.Mario","Kirby","DK Land"};
-char *const gbtxt[]={"GB","Perfer SGB over GBC","Perfer GBC over SGB","GBC+SGB"};
+char *const gbtxt[]={"GB","Prefer SGB over GBC","Prefer GBC over SGB","GBC+SGB"};
 char *const clocktxt[]={"None","Timers","Full"};
 #define EMUNAME "Goomba Color"
 //char *const emuname = "Goomba Color ";
 char *const palnumtxt[]={"0","1","2","3"};
+
+#if SPEEDHACK2
+char *const hacknames[]={"jr z","jr nz", "jr c", "jr nc"};
+#endif
 
 void drawui1()
 {
@@ -348,8 +352,15 @@ void drawui2()
 	print_2("Autosleep: ",sleeptxt[stime]);
 	print_2("Swap A-B: ",autotxt[(joycfg>>10)&1]);
 	print_2("Autoload state: ",autotxt[autostate&1]);
-#if SPEEDHACKS
-	print_2("Speed Hacks: ",autotxt[2==(g_hackflags&2)]);
+#if SPEEDHACK2
+	if (g_hackflags==0)
+	{
+		print_2_1("Autodetect Speed Hack");
+	}
+	else
+	{
+		print_2("Speed Hack: ",hacknames[(g_hackflags-2)&3]);
+	}
 #endif
 	print_2("Double Speed: ",clocktxt[doubletimer]);
 	print_2("Game Boy: ",gbtxt[request_gb_type]);
@@ -602,21 +613,33 @@ void changeautoborder()
 #if GOMULTIBOOT
 void go_multiboot()
 {
-	u8 *src, *dest;
-	int size;
+#if ROMVERSION
+	u8* rom_addr;
+	u32 max_mb_size=128*1024;
+	u32 romsize;
+	u8 *emu_src=(u8*)goomba_mb_gba;
+	u8 *emu_dest=(u8*)0x02000000;
+	u32 emu_size=GOOMBA_MB_GBA_SIZE;
+	int i;
 	int key;
-	int romsize;
-
-	src=(u8*)findrom(selectedrom);
-	dest=ewram_start;
-	romsize = (0x8000 << (*(src+0x148)));
 	
-	size=max_multiboot_size-((int) dest-0x02000000);
-	if (romsize>size)
+	rom_addr=(u8*)findrom(selectedrom);
+	romsize = (0x8000 << (*(rom_addr+0x148)));
+	if (romsize>max_mb_size)
 	{
 		cls(1);
 		drawtext(8, "Game is too big to multiboot",0);
-		drawtext(9,"      Attempt anyway?",0);
+		for(i=0;i<90;i++)			//wait a while
+		{
+			waitframe();
+		}
+		return;
+	}
+	else
+	{
+		cls(1);
+		drawtext(8, "This will reset the emulator!",0);
+		drawtext(9, "       Are you sure?",0);
 		drawtext(10,"        A=YES, B=NO",0);
 		oldkey=~REG_P1;			//reset key input
 		do {
@@ -626,12 +649,166 @@ void go_multiboot()
 		} while(!(key&(A_BTN)));
 		oldkey=~REG_P1;			//reset key input
 	}
+	REG_IME=0;
+	REG_DM0CNT_H=0;
+	REG_DM1CNT_H=0;
+	REG_DM2CNT_H=0;
+	REG_DM3CNT_H=0;
+	memcpy(emu_dest,emu_src,emu_size);
+	memcpy(emu_dest+emu_size,rom_addr,romsize);
+	jump_r0(0x02000000);
+#else
+	u8 *src, *dest;
+	int size;
+	int key;
+	int romsize;
+	int i;
 
+	src=(u8*)findrom(selectedrom);
+	dest=ewram_start;
+	romsize = (0x8000 << (*(src+0x148)));
+	
+	size=max_multiboot_size;
+	if (romsize>size)
+	{
+		cls(1);
+		drawtext(8, "Game is too big to multiboot",0);
+		for(i=0;i<90;i++)			//wait a while
+		{
+			waitframe();
+		}
+		return;
+	}
+	else
+	{
+		cls(1);
+		drawtext(8, "This will reset the emulator!",0);
+		drawtext(9, "       Are you sure?",0);
+		drawtext(10,"        A=YES, B=NO",0);
+		oldkey=~REG_P1;			//reset key input
+		do {
+			key=getmenuinput(10);
+			if(key&(B_BTN + R_BTN + L_BTN ))
+				return;
+		} while(!(key&(A_BTN)));
+		oldkey=~REG_P1;			//reset key input
+	}
+	
 	memcpy (dest,src,size);
 	textstart=dest;	
 	selectedrom=0;
 	loadcart(selectedrom,g_emuflags&0x300);
 	mainmenuitems=MENUXITEMS[1];
 	roms=1;
+#endif
+}
+#endif
+
+
+#if SPEEDHACK2
+u32*const speedhack_buffers[]=
+{
+	SPEEDHACK_FIND_JR_Z_BUF,
+	SPEEDHACK_FIND_JR_NZ_BUF,
+	SPEEDHACK_FIND_JR_C_BUF,
+	SPEEDHACK_FIND_JR_NC_BUF
+};
+const int num_speedhack_buffers=4;
+const int MAX_SPEEDHACK_LENGTH=16;
+
+__inline void clear_speedhack_find_buffers(void)
+{
+	int i;
+	for (i=0;i<num_speedhack_buffers;i++)
+	{
+		memset (speedhack_buffers[i],0,64);
+	}
+}
+void autodetect_speedhack(void)
+{
+	int oldvblank;
+	if (g_hackflags==0)
+	{
+		clear_speedhack_find_buffers();
+		g_hackflags=1;
+		cpuhack_reset();
+		oldvblank=novblankwait;  //preserve vblank
+		
+#if CARTSRAM
+		//Ensure that game has SRAM before running
+		if (get_sram_owner()==0)
+		{
+			get_saved_sram();
+		}
+		writeconfig();			//save any changes
+#endif
+		
+		run(0);
+		
+#if CARTSRAM
+		{
+			//If game changed sram, save it now.
+			int savesuccess=backup_gb_sram(1);
+			if (!savesuccess)
+			{
+				drawui1();
+				REG_BG2HOFS=0;
+			}
+		}
+#endif		
+		
+		
+		
+		novblankwait=oldvblank;
+		dontstop=1;
+		find_best_speedhack();
+	}
+	else // if (g_hackflags!=1)  //no more deleayed searches
+	{
+		g_hackflags=0;
+		cpuhack_reset();
+	}
+}
+
+
+void find_best_speedhack(void)
+{
+	unsigned int max=0,val,branchlength;
+	int hacktype=-1;
+	int h;
+	u32 *arr;
+	int i,maxindex=-1;
+	for (h=0;h<num_speedhack_buffers;h++)
+	{
+		arr=speedhack_buffers[h];
+		for (i=0;i<MAX_SPEEDHACK_LENGTH;i++)
+		{
+			val=arr[i];
+			if (val>max)
+			{
+				maxindex=i;
+					hacktype=h;
+				max=val;
+			}
+		}
+	}
+	
+	if (hacktype>=0)
+	{
+		branchlength=maxindex+2;
+//		hacktype=hacktypes[hacktype];
+//		if (hacktype==0x4C)
+//		{
+//			branchlength-=2;
+//		}
+		g_hackflags=hacktype+2;
+		g_hackflags2=branchlength;
+		cpuhack_reset();
+	}
+	else
+	{
+		g_hackflags=0;
+		cpuhack_reset();
+	}
 }
 #endif

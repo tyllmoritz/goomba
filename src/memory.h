@@ -16,6 +16,8 @@
 	IMPORT echo_W
 	IMPORT echo_R
 	
-	IMPORT filler_
-	IMPORT copy_
+	IMPORT memset_
+	IMPORT memcpy_
+	IMPORT memset__
+	IMPORT memcpy__
 	END

@@ -83,18 +83,16 @@ C EQU 2_00010000	;carry
 
 	MACRO
 	push16		;push r0
-	sub gb_sp,gb_sp,#0x00020000
+	subs gb_sp,gb_sp,#0x00020000	;use "negative flag" as indicator we are writing to ROM
 	and r1,gb_sp,#0xF0000000
 	adr r2,memmap_tbl
 	ldr r2,[r2,r1,lsr#26]
-	strb r0,[r2,gb_sp,lsr#16]
-	add addy,gb_sp,#0x00010000
+	strmib r0,[r2,gb_sp,lsr#16]		;reject rom write
+	adds addy,gb_sp,#0x00010000
 	mov r0,r0,lsr#8
-	strb r0,[r2,addy,lsr#16]
-
-	cmp r1,#0x80000000	; just to solve some games
-	cmpne r1,#0x90000000
-	bleq vram_W2		; that use push16 to write to vram
+	strmib r0,[r2,addy,lsr#16]		;reject rom write
+	tstmi r1,#0x60000000	;just to solve some games
+	bleq vram_W2			;that use push16 to write to vram
 	MEND		;r1,r2=?
 
 	MACRO

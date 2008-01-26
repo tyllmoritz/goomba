@@ -35,10 +35,9 @@ SAVESTATES	SETL {FALSE}
 ;BUILD		SETS "DEBUG"/"GBA"	(defined at cmdline)
 ;----------------------------------------------------------------------------
 
-XGB_RAM		EQU 0x3005400
-XGB_HRAM	EQU XGB_RAM+0x2000
-CHR_DECODE	EQU XGB_HRAM+0x80
-;?		EQU CHR_DECODE+0x400
+MAX_RECENT_TILES EQU 96  ;if you change this, change RECENT_TILES as well!
+BG_CACHE_SIZE EQU 512
+
 
 ;statck starts at 0x03007700
 
@@ -61,6 +60,7 @@ MAPPED_RGB		EQU 0x2040000-16*4	;mapped GB palette.
 ;palbuff			EQU MAPPED_RGB - 512
 
 INSTANT_PAGES EQU MAPPED_RGB-1024
+
 openFiles       EQU INSTANT_PAGES-1200
 lfnName			EQU openFiles-256
 ;fatBuffer	EQU lfnName-512
@@ -81,7 +81,6 @@ fatWriteBuffer EQU fatBuffer
 
   
   |
-MAX_RECENT_TILES EQU 96  ;if you change this, change RECENT_TILES as well!
 
 ;VRAM areas:
 ;0x600 bytes at 06006200
@@ -110,7 +109,9 @@ DIRTY_ROWS EQU SGB_PALETTE-48
 DIRTY_TILES EQU DIRTY_ROWS-768-4
 RECENT_TILENUM	EQU DIRTY_TILES-(MAX_RECENT_TILES+2)*2
 
-SGB_PALS	EQU RECENT_TILENUM-4096
+BG_CACHE	EQU RECENT_TILENUM-BG_CACHE_SIZE
+
+SGB_PALS	EQU BG_CACHE-4096
 SGB_ATFS	EQU SGB_PALS-4096
 sgb_attributes EQU SGB_ATFS-360
 
@@ -135,7 +136,17 @@ DISPCNTBUFF2	EQU WINDOWBUFF2-144*2
 ;XSCROLLBUFF2	EQU YSCROLLBUFF2-144
 ;LCDCBUFF2	EQU XSCROLLBUFF2-144
 
+	[ SPEEDHACKS
+SPEEDHACK_FIND_JR_Z_BUF		EQU DISPCNTBUFF2-64
+SPEEDHACK_FIND_JR_NZ_BUF	EQU SPEEDHACK_FIND_JR_Z_BUF-64
+SPEEDHACK_FIND_JR_C_BUF		EQU SPEEDHACK_FIND_JR_NZ_BUF-64
+SPEEDHACK_FIND_JR_NC_BUF	EQU SPEEDHACK_FIND_JR_C_BUF-64
+MULTIBOOT_LIMIT	EQU SPEEDHACK_FIND_JR_NC_BUF-0	;How much data is left for Multiboot to work.
+	|
 MULTIBOOT_LIMIT	EQU DISPCNTBUFF2-0	;How much data is left for Multiboot to work.
+	]
+
+
 
 openFiles	EQU DISPCNTBUFF2-1200
 lfnName	EQU openFiles-256
@@ -284,11 +295,6 @@ addy		RN r12 ;keep this at r12 (scratch for APCS)
 		;r15=PC
 ;----------------------------------------------------------------------------
 
-; MAP 0,gb_zpage
-;xgb_ram # 0x2000
-;xgb_hram # 0x80
-;chr_decode # 0x400
-
 ;everything in wram_globals* areas:
 
  MAP 0,globalptr	;gb-z80.s
@@ -314,17 +320,13 @@ scanlinehook # 4
 frame # 4
 cyclesperscanline # 4
 timercyclesperscanline # 4
- [ SPEEDHACKS
-numspeedhacks # 4
-speedhacks_p # 4
- ]
  [ PROFILE
 profiler # 4
  ]
 rambank # 1
 gbcmode # 1
 sgbmode # 1
-hackflags # 1
+ # 1
 doubletimer_ # 1
 gbamode # 1
 request_gb_type_ # 1
@@ -340,6 +342,7 @@ gbc_exram # 4
 gbc_exramsize # 4
 end_of_exram # 4
  ]
+;#6 word (of 8)
 			;lcd.s (wram_globals1)
 fpsvalue # 4
 AGBjoypad # 4
@@ -367,6 +370,8 @@ vrambank # 1
 
 dma_src # 2
 dma_dest # 2
+dirty_tiles # 4
+dirty_rows # 4
 
 bigbuffer	# 4
 bg01cnt		# 4
@@ -384,6 +389,11 @@ lcdctrl0frame # 1
 rendermode # 1
 _ui_border_visible # 1
 
+_sgb_palette_number # 1
+_gammavalue # 1
+_darkness # 1
+ # 1
+
 ui_border_cnt_bic # 4
 ui_border_cnt_orr # 4
 ui_border_scroll2 # 4
@@ -393,13 +403,6 @@ _ui_y # 4
 _ui_border_request # 4
 _ui_border_screen # 4
 _ui_border_buffer # 4
-
-_sgb_palette_number # 1
-_gammavalue # 1
-_darkness # 1
- # 1
-
-			;lcd.s (wram_globals1)
 
 dispcntbase # 4
 dispcntbase2 # 4
@@ -413,11 +416,17 @@ vblank_happened # 1
 
 gboambuff # 4
 active_gboambuff # 4
-dirty_tiles # 4
-dirty_rows # 4
 
 _palettebank # 4
 
+bg_cache_cursor # 4
+bg_cache_base # 4
+bg_cache_limit # 4
+bg_cache_full # 1
+bg_cache_updateok # 1
+	# 2
+
+;VRAM_name0_ptr # 4
 
 			;cart.s (wram_globals2)
 bank0 # 4
@@ -469,10 +478,13 @@ lineslow # 1
 fiveminutes_ # 4
 sleeptime_   # 4
 dontstop_    # 1
- # 3
-
-   
-   
+hackflags	 # 1
+hackflags2	 # 1
+ # 1
+			;gbz80.s (wram_globals6)
+xgb_ram	# 0x2000
+xgb_hram # 0x80
+chr_decode # 0x400
 
 ;----------------------------------------------------------------------------
 ;IRQ_VECTOR EQU 0xfffe ; IRQ/BRK interrupt vector address

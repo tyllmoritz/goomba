@@ -215,7 +215,7 @@ void C_entry()
 		if (!disc_IsInserted())
 		{
 #endif
-#ifdef SPLASH
+#if SPLASH
 		//splash screen present?
 		p=textstart;
 #if USETRIM
@@ -381,7 +381,7 @@ void rommenu(void)
 	ui_x=0x100;
 
 	setdarkness(16);
-	resetSIO((joycfg&~0xff000000) + 0x40000000);//back to 1P
+//	resetSIO((joycfg&~0xff000000) + 0x40000000);//back to 1P
 	
 #if MOVIEPLAYER
 	usingcache=MOVIEPLAYERDEBUG;

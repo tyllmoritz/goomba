@@ -124,7 +124,7 @@ void DelayCycles (u32 cycles)
 }
 #endif
 
-u16 xfer(u32 send) {
+u16 xfer(u16 send) {
     u32 i;
 	
     i=1000;
@@ -164,13 +164,29 @@ int SendMBImageToClient(void) {
 	u16 *p;
 	u16 ie;
 	u32 emusize1,emusize2,romsize;
-
+	u32 totalsize;
+	u16 *src_ewram;
+	u16 *src_iwram;
+	u32 bytepos;
+	
+#if ROMVERSION
+	src_ewram=(u16*)goomba_mb_gba;
+	src_iwram=NULL;
+	emusize1=GOOMBA_MB_GBA_SIZE;
+	emusize2=0;
+#else
+	src_iwram=(u16*)0x03000000;
+	src_ewram=(u16*)0x02000000;
 	emusize1=EMUSIZE1;
 	emusize2=EMUSIZE2;
+#endif
+
 //	if(pogoshell) romsize=48+16+(*(u8*)(findrom(romnum)+48+4))*16*1024+(*(u8*)(findrom(romnum)+48+5))*8*1024;  //need to read this from ROM
 //	else romsize=48+*(u32*)(findrom(romnum)+32);
 	romsize = (0x8000 << (*(findrom(romnum)+0x148)));
-	if(emusize1+romsize>max_multiboot_size) return 3;
+	if(emusize1+romsize>192*1024) return 3;
+	
+	totalsize = emusize1+emusize2+romsize;
 
 #if 0
     //this check frequently causes hangs, and is not necessary
@@ -194,8 +210,8 @@ int SendMBImageToClient(void) {
 	if(!i) return 2;
 
 	xfer (0x6100);
-	p=(u16*)0x2000000;
-	for(i=0;i<96; i++) {		//send header
+	p=(u16*)src_ewram;
+	for(bytepos=0;bytepos<96; bytepos++) {		//send header
 		xfer(*p);
 		p++;
 	}
@@ -253,18 +269,18 @@ int SendMBImageToClient(void) {
 		i=2;
 		goto transferEnd;
 	}
-	xfer(emusize1+emusize2+romsize);		//transmission size..
-	xfer((emusize1+emusize2+romsize)>>16);
+	xfer(totalsize&0xFFFF);		//transmission size..
+	xfer(totalsize>>16);
 
-	p=(u16*)((u32)0x2000000);	//(from ewram.)
-	for(;emusize1;emusize1-=2)		//send first part of emu
+	p=(u16*)(src_ewram);	//(from ewram.)
+	for(bytepos=0;bytepos<emusize1;bytepos+=2)		//send first part of emu
 		xfer(*(p++));
-	p=(u16*)0x3000000;			//(from iwram)
-	for(;emusize2;emusize2-=2)		//send second part of emu
+	p=(u16*)(src_iwram);			//(from iwram)
+	for(bytepos=0;bytepos<emusize2;bytepos+=2)		//send second part of emu
 		xfer(*(p++));
 
 	p=(u16*)findrom(romnum);	//send ROM
-	for(;romsize;romsize-=2)
+	for(bytepos=0;bytepos<romsize;bytepos+=2)
 		xfer(*(p++));
 	i=0;
 transferEnd:
