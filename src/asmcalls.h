@@ -4,6 +4,14 @@
 #include "fs.h"
 //#include "cache.h"
 
+#if ROMVERSION
+extern u8 goomba_mb_gba[];
+extern u32 goomba_mb_gba_size[];
+#define GOOMBA_MB_GBA_SIZE ((u32)(&goomba_mb_gba_size))
+#endif
+
+void jump_r0(u32);
+
 extern u8 auto_border;
 
 extern u8 ui_border_visible;
@@ -24,6 +32,16 @@ extern u8 Image$$RW$$Limit[];
 extern u32 max_multiboot_size;
 
 //gbz80.s
+#if SPEEDHACK2
+extern u32 SPEEDHACK_FIND_JR_Z_BUF[16];
+extern u32 SPEEDHACK_FIND_JR_NZ_BUF[16];
+extern u32 SPEEDHACK_FIND_JR_C_BUF[16];
+extern u32 SPEEDHACK_FIND_JR_NC_BUF[16];
+extern u8 g_hackflags;
+extern u8 g_hackflags2;
+
+#endif
+
 void update_doublespeed_ui(void);
 
 void emu_reset(void);
@@ -53,7 +71,7 @@ extern u8 gbc_mode;
 extern u8 sgb_mode;
 extern u8 doubletimer;
 
-extern u32 dontstop;
+extern u8 dontstop;
 
 //extern u8* g_gbz80_pc;
 //extern u8* g_lastbank;
@@ -117,7 +135,7 @@ extern int bcolor;		//Border Color
 
 //io.s
 extern u32 joycfg;				//from io.s
-void resetSIO(u32);				//io.s
+//void resetSIO(u32);				//io.s
 void vbaprint(const char *text);		//io.s
 void LZ77UnCompVram(void *source,u16 *destination);		//io.s
 void waitframe(void);			//io.s

@@ -1,5 +1,9 @@
 	IMPORT novblankwait
 
+	IMPORT XGB_RAM
+	IMPORT XGB_HRAM
+	IMPORT CHR_DECODE
+
 	IMPORT GLOBAL_PTR_BASE
 	IMPORT emu_reset
 	IMPORT default_scanlinehook

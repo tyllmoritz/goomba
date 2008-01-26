@@ -1,5 +1,14 @@
 #include "includes.h"
 
+#if !CARTSRAM
+#if !MOVIEPLAYER
+int get_saved_sram(void)
+{
+	return 0;
+}
+#endif
+#else
+
 #if SRAM_SIZE==32
 	//for 32k SRAM
 	#define GBC_SRAM_POS 0x6000
@@ -905,3 +914,4 @@ void clean_gb_sram() {
 }
 
 */
+#endif

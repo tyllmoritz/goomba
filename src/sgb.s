@@ -87,31 +87,31 @@ sgb_reset
 	mvn r0,#0
 	strb r0,joy0serial
 	
-	mov r0,#0
-	ldr r1,=SGB_PALS
-	mov r2,#4096/4
-	bl filler_
-	ldr r1,=SGB_ATFS
-	mov r2,#4096/4
-	bl filler_
-	ldr r1,=sgb_attributes
-	mov r2,#360/4
-	bl filler_
+	mov r1,#0
+	ldr r0,=SGB_PALS
+	mov r2,#4096
+	bl memset_
+	ldr r0,=SGB_ATFS
+	mov r2,#4096
+	bl memset_
+	ldr r0,=sgb_attributes
+	mov r2,#360
+	bl memset_
 
 	;don't remove border after we went through everything to add it
 	ldrb r0,autoborderstate
 	cmp r0,#2
 	beq %f0
 	
-	mov r0,#0
+	mov r1,#0
 	;erase SGB border
-	ldr r1,=0x06006800
-	mov r2,#0x800/4
-	bl filler_
+	ldr r0,=0x06006800
+	mov r2,#0x800
+	bl memset_
 	;erase SGB border tiles
-	ldr r1,=0x06004200
-	mov r2,#0x2000/4
-	bl filler_
+	ldr r0,=0x06004200
+	mov r2,#0x2000
+	bl memset_
 	
 	ldrb r1,_ui_border_visible
 	bic r1,r1,#2
@@ -124,10 +124,10 @@ sgb_reset
 	str r0,auto_border_reboot_frame
 	
 	;erase SGB packet for no reason
-	mov r0,#0
-	ldr r1,=SGB_PACKET
-	mov r2,#0x112/4
-	bl filler_
+	mov r1,#0
+	ldr r0,=SGB_PACKET
+	mov r2,#112
+	bl memset_
 	
 	ldmfd sp!,{pc}
 

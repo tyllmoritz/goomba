@@ -199,9 +199,22 @@ headcopy
 	DCB 0x64			;complement check
 	DCW 0				;unused
  ]
+
+	LTORG
+
 font_lz77
 	INCBIN font.lz77
 ;	INCBIN font.bin
 fontpal_bin
 	INCBIN fontpal.bin
+
+	[ MBVERSION
+	|
+	EXPORT goomba_mb_gba
+goomba_mb_gba
+	INCBIN goomba_mb.gba
+goomba_mb_gba_end
+goomba_mb_gba_size	EQU goomba_mb_gba_end-goomba_mb_gba
+	EXPORT goomba_mb_gba_size
+	]
 	END

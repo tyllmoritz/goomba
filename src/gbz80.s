@@ -16,6 +16,17 @@
 
 	EXPORT GLOBAL_PTR_BASE
 
+	EXPORT dontstop
+	
+ [ SPEEDHACKS
+	EXPORT g_hackflags
+	EXPORT g_hackflags2
+	EXPORT SPEEDHACK_FIND_JR_Z_BUF
+	EXPORT SPEEDHACK_FIND_JR_NZ_BUF
+	EXPORT SPEEDHACK_FIND_JR_C_BUF
+	EXPORT SPEEDHACK_FIND_JR_NC_BUF
+ ]	
+	EXPORT CHR_DECODE
 	EXPORT XGB_RAM
 	EXPORT XGB_HRAM
  [ RESIZABLE
@@ -43,8 +54,8 @@
 	EXPORT gbc_mode
 	
 	[ SPEEDHACKS
-	EXPORT num_speedhacks
-	EXPORT speedhacks
+	EXPORT g_hackflags
+	EXPORT g_hackflags2
 	EXPORT cpuhack_reset
 	]
 	EXPORT g_hackflags
@@ -186,28 +197,6 @@ _0F;	RRCA	rotate accu right
 	orrcs gb_a,gb_a,#0x00000080
 	mov gb_a,gb_a,lsl#24
 	fetch 4
-;----------------------------------------------------------------------------
-_10;	STOP	stops the processor until an (joypad) interrupt.
-;----------------------------------------------------------------------------
-	ldrb r0,doublespeed
-	tst r0,#1
-	blne_long speedswitch
-	
-;	b _noStop
-;;	b _76 ;halt instead?
-;	ldrb r1,gb_ime
-;	tst r1,#1			;no Halt if IRQ disabled.
-;	beq _noStop
-;	ldrb r0,gb_ic		;interrupt confirm
-;	cmp r0,#0
-;	movne r0,#0
-;	strneb r0,gb_ic
-;	subeq gb_pc,gb_pc,#1
-;	moveq cycles,#0
-_noStop
-;	add gb_pc,gb_pc,#1
-	fetch 4
-	
 	LTORG
 ;----------------------------------------------------------------------------
 _11;	LD DE,#nnnn
@@ -294,40 +283,17 @@ _1F;	RRA	rotate accu right through C
 	fetch 4
 
 	[ SPEEDHACKS
-;binary search through hacks list
-checkjump
-	ldr r0,lastbank
-	sub gb_pc,gb_pc,r0
-	mov r1,#0
-	ldr r2,numspeedhacks
-	ldr addy,speedhacks_p
-checkjump_loop
-	add r0,r1,r2
-	mov r0,r0,lsr#1
-	ldrh lr,[addy,r0]
-	cmp lr,gb_pc
-	beq checkjump_foundit
-	subgt r2,r0,#1
-	addlt r1,r0,#1
-	cmp r1,r2
-	ble checkjump_loop
-checkjump_foundit
-	subeq cycles,cycles,#100*CYCLE
-	ldr r0,lastbank
-	add gb_pc,gb_pc,r0
-	b nojump_20x
-
 ;----------------------------------------------------------------------------
 _20x;	JR NZ,*	jump if not zero - speedhack version
 ;----------------------------------------------------------------------------
 	ldrsb r0,[gb_pc],#1
 	tst gb_flg,#PSR_Z
-	bne nojump_20x
+	bne %f0
 	add gb_pc,gb_pc,r0
 	sub cycles,cycles,#4*CYCLE
-	cmp r0,#-11
-	bgt checkjump
-nojump_20x
+	cmp r0,#-4
+	andeq cycles,cycles,#CYC_MASK
+0
 	fetch 8
 	]
 ;----------------------------------------------------------------------------
@@ -370,54 +336,18 @@ _25;	DEC H
 _26;	LD H,#nn
 ;----------------------------------------------------------------------------
 	opLDIM8H gb_hl
-;----------------------------------------------------------------------------
-_27;	DAA	decimal adjust ackumulator
-;----------------------------------------------------------------------------
-	mov r0,#0
-
-	and r1,gb_a,#0x0F000000
-	cmp r1,#0x0A000000
-	orrpl r0,r0,#0x06000000
-	cmppl gb_a,#0x90000000
-	cmpmi gb_a,#0xA0000000
-	orrhs gb_flg,gb_flg,#PSR_C			;C
-noextra
-	tst gb_flg,#PSR_h					;half carry.
-	orrne r0,r0,#0x06000000
-
-	tst gb_flg,#PSR_C					;carry.
-	orrne r0,r0,#0x60000000
-
-	tst gb_flg,#PSR_n					;check if last instruction was add or sub.
-	bne doSUBconv
-
-doADDconv
-	and gb_flg,gb_flg,#PSR_C+PSR_n	;keep C & n
-	adds gb_a,gb_a,r0
-	orreq gb_flg,gb_flg,#PSR_Z
-	cmp r1,#0x0A000000
-	orrpl gb_flg,gb_flg,#PSR_h
-	fetch 4
-
-doSUBconv
-	and gb_flg,gb_flg,#PSR_C+PSR_n+PSR_h	;keep C & n & H
-	subs gb_a,gb_a,r0
-	orreq gb_flg,gb_flg,#PSR_Z
-	cmp r1,#0x06000000
-	bicpl gb_flg,gb_flg,#PSR_h
-	fetch 4
 	[ SPEEDHACKS
 ;----------------------------------------------------------------------------
 _28x;	JR Z,*	jump if zero - speedhack version
 ;----------------------------------------------------------------------------
 	tst gb_flg,#PSR_Z
 	ldrsb r0,[gb_pc],#1
-	beq nojump_28x
+	beq %f0
 	add gb_pc,gb_pc,r0
 	sub cycles,cycles,#4*CYCLE
-	cmp r0,#-11
-	bgt checkjump
-nojump_28x
+	cmp r0,#-4
+	andeq cycles,cycles,#CYC_MASK
+0
 	fetch 8
 	]
 ;----------------------------------------------------------------------------
@@ -472,12 +402,12 @@ _30x;	JR NC,*	jump if no carry - speedhack version
 ;----------------------------------------------------------------------------
 	tst gb_flg,#PSR_C
 	ldrsb r0,[gb_pc],#1
-	bne nojump_30x
+	bne %f0
 	add gb_pc,gb_pc,r0
 	sub cycles,cycles,#4*CYCLE
-	cmp r0,#-11
-	bgt checkjump
-nojump_30x
+	cmp r0,#-4
+	andeq cycles,cycles,#CYC_MASK
+0
 	fetch 8
 	]
 ;----------------------------------------------------------------------------
@@ -538,12 +468,12 @@ _38x;	JR C,*	jump if carry - speedhack version
 ;----------------------------------------------------------------------------
 	tst gb_flg,#PSR_C
 	ldrsb r0,[gb_pc],#1
-	beq nojump_38x
+	beq %f0
 	add gb_pc,gb_pc,r0
 	sub cycles,cycles,#4*CYCLE
-	cmp r0,#-11
-	bgt checkjump
-nojump_38x
+	cmp r0,#-4
+	andeq cycles,cycles,#CYC_MASK
+0
 	fetch 8
 	]
 ;----------------------------------------------------------------------------
@@ -564,11 +494,6 @@ _3A;	LDD A,(HL)	load A from (HL), decr HL
 	readmemHL
 	sub gb_hl,gb_hl,#0x00010000
 	mov gb_a,r0,lsl#24
-	fetch 8
-;----------------------------------------------------------------------------
-_3B;	DEC SP
-;----------------------------------------------------------------------------
-	opDEC16 gb_sp
 	fetch 8
 ;----------------------------------------------------------------------------
 _3C;	INC A
@@ -917,19 +842,6 @@ _73;	LD (HL),E
 	writememHL
 	fetch 8
 ;----------------------------------------------------------------------------
-_74;	LD (HL),H
-;----------------------------------------------------------------------------
-	mov r0,gb_hl,lsr#24
-	writememHL
-	fetch 8
-;----------------------------------------------------------------------------
-_75;	LD (HL),L		special...
-;----------------------------------------------------------------------------
-	mov addy,gb_hl,lsr#16
-	and r0,addy,#0xFF
-	writemem
-	fetch 8
-;----------------------------------------------------------------------------
 _76;	HALT, wait for interrupt.
 ;----------------------------------------------------------------------------
 	ldrb r0,gb_ie
@@ -1249,10 +1161,6 @@ _BE;	CP (HL)
 	readmemHL
 	opCPb
 ;----------------------------------------------------------------------------
-_BF;	CP A
-;----------------------------------------------------------------------------
-	opCPA
-;----------------------------------------------------------------------------
 _C0;	RET NZ
 ;----------------------------------------------------------------------------
 	tst gb_flg,#PSR_Z
@@ -1424,13 +1332,11 @@ _DE;	SBC #nn
 ;----------------------------------------------------------------------------
 	ldrb r0,[gb_pc],#1
 	opSBCb
+
 ;----------------------------------------------------------------------------
-_E0;	LD ($FF00+nn),A
+;_E0;	LD ($FF00+nn),A
 ;----------------------------------------------------------------------------
-	ldrb r2,[gb_pc],#1
-	mov r0,gb_a,lsr#24
-	bl IO_High_W
-	fetch 12
+
 ;----------------------------------------------------------------------------
 _E1;	POP HL
 ;----------------------------------------------------------------------------
@@ -1438,13 +1344,9 @@ _E1;	POP HL
 	mov gb_hl,gb_hl,lsl#16
 	fetch 12
 ;----------------------------------------------------------------------------
-_E2;	LD ($FF00+C),A
+;_E2;	LD ($FF00+C),A
 ;----------------------------------------------------------------------------
-	mov r2,gb_bc,lsr#16
-	and r2,r2,#0xFF
-	mov r0,gb_a,lsr#24
-	bl IO_High_W
-	fetch 8
+
 ;----------------------------------------------------------------------------
 _E5;	PUSH HL
 ;----------------------------------------------------------------------------
@@ -1487,12 +1389,9 @@ _EE;	XOR #nn
 	ldrb r0,[gb_pc],#1
 	opXORb
 ;----------------------------------------------------------------------------
-_F0;	LD A,($FF00+nn)
+;_F0;	LD A,($FF00+nn)
 ;----------------------------------------------------------------------------
-	ldrb r2,[gb_pc],#1
-	bl IO_High_R
-	mov gb_a,r0,lsl#24
-	fetch 12
+
 ;----------------------------------------------------------------------------
 _F1;	POP AF
 ;----------------------------------------------------------------------------
@@ -1500,13 +1399,9 @@ _F1;	POP AF
 	decodeFLG
 	fetch 12
 ;----------------------------------------------------------------------------
-_F2;	LD A,($FF00+C)
+;_F2;	LD A,($FF00+C)
 ;----------------------------------------------------------------------------
-	mov r2,gb_bc,lsr#16
-	and r2,r2,#0xFF
-	bl IO_High_R
-	mov gb_a,r0,lsl#24
-	fetch 8
+
 ;----------------------------------------------------------------------------
 _F3;	DI, disable interrupt
 ;----------------------------------------------------------------------------
@@ -1644,7 +1539,7 @@ line0
 	ldr r1,auto_border_reboot_frame
 	cmp r0,r1
 	blt %f0
-	bl loadcart_after_sgb_border
+	bl_long loadcart_after_sgb_border
 0
 	
 	
@@ -1982,8 +1877,135 @@ doIRQ
 	encodePC
 
 	fetch 24
+
+;these got moved from rom because they were used frequently
+;----------------------------------------------------------------------------
+_CB12;		RL D
+;----------------------------------------------------------------------------
+	opRLH gb_de
+;----------------------------------------------------------------------------
+_CB13;		RL E
+;----------------------------------------------------------------------------
+	opRLL gb_de
+;----------------------------------------------------------------------------
+_CB14;		RL H
+;----------------------------------------------------------------------------
+	opRLH gb_hl
+;----------------------------------------------------------------------------
+_CB23;		SLA E
+;----------------------------------------------------------------------------
+	opSLAL gb_de
+;----------------------------------------------------------------------------
+_CB25;		SLA L
+;----------------------------------------------------------------------------
+	opSLAL gb_hl
+;----------------------------------------------------------------------------
+_CB27;		SLA A
+;----------------------------------------------------------------------------
+	opSLAA
+;----------------------------------------------------------------------------
+_CB37;		SWAP A
+;----------------------------------------------------------------------------
+	opSWAPA
+;----------------------------------------------------------------------------
+_CB39;		SRL C
+;----------------------------------------------------------------------------
+	opSRLL gb_bc
+;----------------------------------------------------------------------------
+_CB45;		BIT x,L		, actually CB-45,4D,55,5D,65,6D,75 & 7D
+;----------------------------------------------------------------------------
+	opBITL gb_hl
+	fetch 8
+
+
+
 ;----------------------------------------------------------------------------
 	AREA rom_code, CODE, READONLY
+;----------------------------------------------------------------------------
+
+;----------------------------------------------------------------------------
+_10;	STOP	stops the processor until an (joypad) interrupt.
+;----------------------------------------------------------------------------
+	ldrb r0,doublespeed
+	tst r0,#1
+	blne_long speedswitch
+	
+;	b _noStop
+;;	b _76 ;halt instead?
+;	ldrb r1,gb_ime
+;	tst r1,#1			;no Halt if IRQ disabled.
+;	beq _noStop
+;	ldrb r0,gb_ic		;interrupt confirm
+;	cmp r0,#0
+;	movne r0,#0
+;	strneb r0,gb_ic
+;	subeq gb_pc,gb_pc,#1
+;	moveq cycles,#0
+_noStop
+;	add gb_pc,gb_pc,#1
+	fetch 4
+;----------------------------------------------------------------------------
+_27;	DAA	decimal adjust ackumulator
+;----------------------------------------------------------------------------
+	mov r0,#0
+
+	and r1,gb_a,#0x0F000000
+	cmp r1,#0x0A000000
+	orrpl r0,r0,#0x06000000
+	cmppl gb_a,#0x90000000
+	cmpmi gb_a,#0xA0000000
+	orrhs gb_flg,gb_flg,#PSR_C			;C
+noextra
+	tst gb_flg,#PSR_h					;half carry.
+	orrne r0,r0,#0x06000000
+
+	tst gb_flg,#PSR_C					;carry.
+	orrne r0,r0,#0x60000000
+
+	tst gb_flg,#PSR_n					;check if last instruction was add or sub.
+	bne doSUBconv
+
+doADDconv
+	and gb_flg,gb_flg,#PSR_C+PSR_n	;keep C & n
+	adds gb_a,gb_a,r0
+	orreq gb_flg,gb_flg,#PSR_Z
+	cmp r1,#0x0A000000
+	orrpl gb_flg,gb_flg,#PSR_h
+	fetch 4
+
+doSUBconv
+	and gb_flg,gb_flg,#PSR_C+PSR_n+PSR_h	;keep C & n & H
+	subs gb_a,gb_a,r0
+	orreq gb_flg,gb_flg,#PSR_Z
+	cmp r1,#0x06000000
+	bicpl gb_flg,gb_flg,#PSR_h
+	fetch 4
+;----------------------------------------------------------------------------
+_3B;	DEC SP
+;----------------------------------------------------------------------------
+	opDEC16 gb_sp
+	fetch 8
+;----------------------------------------------------------------------------
+_74;	LD (HL),H
+;----------------------------------------------------------------------------
+	mov r0,gb_hl,lsr#24
+	writememHL
+	fetch 8
+;----------------------------------------------------------------------------
+_75;	LD (HL),L		special...
+;----------------------------------------------------------------------------
+	mov addy,gb_hl,lsr#16
+	and r0,addy,#0xFF
+	writemem
+	fetch 8
+;----------------------------------------------------------------------------
+_BF;	CP A
+;----------------------------------------------------------------------------
+	opCPA
+
+
+
+
 
 ;----------------------------------------------------------------------------
 _CB00;		RLC B
@@ -2065,18 +2087,6 @@ _CB11;		RL C
 ;----------------------------------------------------------------------------
 	opRLL gb_bc
 ;----------------------------------------------------------------------------
-_CB12;		RL D
-;----------------------------------------------------------------------------
-	opRLH gb_de
-;----------------------------------------------------------------------------
-_CB13;		RL E
-;----------------------------------------------------------------------------
-	opRLL gb_de
-;----------------------------------------------------------------------------
-_CB14;		RL H
-;----------------------------------------------------------------------------
-	opRLH gb_hl
-;----------------------------------------------------------------------------
 _CB15;		RL L
 ;----------------------------------------------------------------------------
 	opRLL gb_hl
@@ -2141,17 +2151,9 @@ _CB22;		SLA D
 ;----------------------------------------------------------------------------
 	opSLAH gb_de
 ;----------------------------------------------------------------------------
-_CB23;		SLA E
-;----------------------------------------------------------------------------
-	opSLAL gb_de
-;----------------------------------------------------------------------------
 _CB24;		SLA H
 ;----------------------------------------------------------------------------
 	opSLAH gb_hl
-;----------------------------------------------------------------------------
-_CB25;		SLA L
-;----------------------------------------------------------------------------
-	opSLAL gb_hl
 ;----------------------------------------------------------------------------
 _CB26;		SLA (HL)
 ;----------------------------------------------------------------------------
@@ -2159,10 +2161,6 @@ _CB26;		SLA (HL)
 	opSLAb
 	writemem
 	fetch 16
-;----------------------------------------------------------------------------
-_CB27;		SLA A
-;----------------------------------------------------------------------------
-	opSLAA
 ;----------------------------------------------------------------------------
 _CB28;		SRA B
 ;----------------------------------------------------------------------------
@@ -2230,17 +2228,9 @@ _CB36;		SWAP (HL)
 	writemem
 	fetch 16
 ;----------------------------------------------------------------------------
-_CB37;		SWAP A
-;----------------------------------------------------------------------------
-	opSWAPA
-;----------------------------------------------------------------------------
 _CB38;		SRL B
 ;----------------------------------------------------------------------------
 	opSRLH gb_bc
-;----------------------------------------------------------------------------
-_CB39;		SRL C
-;----------------------------------------------------------------------------
-	opSRLL gb_bc
 ;----------------------------------------------------------------------------
 _CB3A;		SRL D
 ;----------------------------------------------------------------------------
@@ -2292,11 +2282,6 @@ _CB43;		BIT x,E		, actually CB-43,4B,53,5B,63,6B,73 & 7B
 _CB44;		BIT x,H		, actually CB-44,4C,54,5C,64,6C,74 & 7C
 ;----------------------------------------------------------------------------
 	opBITH gb_hl
-	fetch 8
-;----------------------------------------------------------------------------
-_CB45;		BIT x,L		, actually CB-45,4D,55,5D,65,6D,75 & 7D
-;----------------------------------------------------------------------------
-	opBITL gb_hl
 	fetch 8
 ;----------------------------------------------------------------------------
 _CB80;		RES x,B		, actually CB-80,88,90,98,A0,A8,B0 & B8
@@ -2390,6 +2375,50 @@ _CBC7;		SET x,A		, actually CB-C7,CF,D7,DF,E7,EF,F7 & FF
 	fetch 8
 ;----------------------------------------------------------------------------
 
+	[ SPEEDHACKS
+;----------------------------------------------------------------------------
+_20z;	JR NZ,*	jump if not zero - speedhack version
+;----------------------------------------------------------------------------
+	ldr r1,=SPEEDHACK_FIND_JR_NZ_BUF
+	ldr r2,=_20
+	b _find_speedhack_thingy
+;----------------------------------------------------------------------------
+_28z;	JR Z,*	jump if zero - speedhack version
+;----------------------------------------------------------------------------
+	ldr r1,=SPEEDHACK_FIND_JR_Z_BUF
+	ldr r2,=_28
+	b _find_speedhack_thingy
+;----------------------------------------------------------------------------
+_30z;	JR NC,*	jump if no carry - speedhack version
+;----------------------------------------------------------------------------
+	ldr r1,=SPEEDHACK_FIND_JR_NC_BUF
+	ldr r2,=_30
+	b _find_speedhack_thingy
+;----------------------------------------------------------------------------
+_38z;	JR C,*	jump if carry - speedhack version
+;----------------------------------------------------------------------------
+	ldr r1,=SPEEDHACK_FIND_JR_C_BUF
+	ldr r2,=_38
+	b _find_speedhack_thingy
+
+_find_speedhack_thingy
+	ldrsb r0,[gb_pc]
+
+	;between -17 and -2
+	cmp r0,#-17
+	bxlt r2
+	cmp r0,#-2
+	bxgt r2
+	rsb r0,r0,#0
+	sub r0,r0,#2
+	mov r0,r0,lsl#2
+	add r0,r0,r1
+	ldr r1,[r0]
+	add r1,r1,#1
+	str r1,[r0]
+	bx r2
+	]
+
 
 update_doublespeed_ui ;called from UI
 	stmfd sp!,{globalptr,addy,lr}
@@ -2456,20 +2485,42 @@ pr_loop
  ]
 
 	[ SPEEDHACKS
+normalops
+	DCD _20,_28,_30,_38
+jmpops
+	DCD _20x,_28x,_30x,_38x
+finderops
+	DCD _20z,_28z,_30z,_38z
+opindex
+	DCD op_table+0x20*4,op_table+0x28*4,op_table+0x30*4,op_table+0x38*4
+
 cpuhack_reset
-	stmfd sp!,{r0-r7}
-	ldr r0,hackflags
-	tst r0,#CPUHACK	;load opcode set
-	adr r1,normalops
-	adrne r1,jmpops
+	stmfd sp!,{r0-r4}
+	ldrb r0,hackflags
+	cmp r0,#1
+	adreq r2,finderops
+	adrne r2,normalops
 	adr r3,opindex
 	mov r4,#3
-nr0	ldr r5,[r1,r4,lsl#2]
-	ldr r6,[r3,r4,lsl#2]
-	str r5,[r6]
+0
+	ldr r0,[r2,r4,lsl#2]
+	ldr r1,[r3,r4,lsl#2]
+	str r0,[r1]
 	subs r4,r4,#1
-	bpl nr0
-	ldmfd sp!,{r0-r7}
+	bpl %b0
+	
+	ldrb r4,hackflags
+	subs r4,r4,#2
+	bmi %f1
+	adr r2,jmpops
+	ldr r0,[r2,r4,lsl#2]
+	ldr r1,[r3,r4,lsl#2]
+	str r0,[r1]
+	
+	ldrb r1,hackflags2
+	strb r1,[r0,#5*4]
+1
+	ldmfd sp!,{r0-r4}
 	bx lr
 	]
 ;----------------------------------------------------------------------------
@@ -2530,16 +2581,6 @@ cpu_reset
 	stmia r0,{gb_flg-gb_pc,gb_sp}
 	ldr pc,[sp],#4
 
-	[ SPEEDHACKS
-normalops
-	DCD _20,_28,_30,_38
-jmpops
-	DCD _20x,_28x,_30x,_38x
-opindex
-	DCD op_table+0x20*4,op_table+0x28*4,op_table+0x30*4,op_table+0x38*4
-	]
-
-
 run
 	b_long run_core
 
@@ -2550,8 +2591,8 @@ run
 fiveminutes DCD 5*60*60 ;fiveminutes_
 sleeptime DCD 5*60*60 ;sleeptime_
 dontstop DCB 0 ;dontstop_
- DCB 0
- DCB 0
+g_hackflags DCB 0 ;hackflags
+g_hackflags2 DCB 0 ;hackflags2
  DCB 0
 ;----------------------------------------------------------------------------
 
@@ -2647,11 +2688,6 @@ frametotal		;let ui.c see frame count for savestates
 	DCD 0 ;frame
 	DCD 0 ;cyclesperscanline (DMG=456*CYCLE, CGB=912*CYCLE)
 	DCD 0 ;timercyclesperscanline
- [ SPEEDHACKS
-num_speedhacks
-	DCD 0 ;numspeedhacks
-	DCD speedhacks ;speedhacks_p
- ]
  [ PROFILE
 	DCD 0x02008000 ;profiler
  ]
@@ -2660,8 +2696,7 @@ gbc_mode
 	DCB 0 ;gbcmode
 sgb_mode
 	DCB 0 ;sgbmode
-g_hackflags
-	DCB 0 ;hackflags
+	DCB 0 ; #
 doubletimer
 	DCB 2 ;doubletimer_
 request_gba_mode
@@ -2691,5 +2726,12 @@ END_of_exram
 	DCD 0
  ]
 ;----------------------------------------------------------------------------
+	AREA wram_globals6, CODE, READWRITE
+XGB_RAM % 0x2000
+XGB_HRAM % 0x80
+CHR_DECODE % 0x400
+
+
+
 	END
 

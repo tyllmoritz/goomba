@@ -1,6 +1,10 @@
 Goomba revision history
 -=-=-=-=-=-=-=-=-=-=-=-
 
+version 2008-01-26
+   Tilemaps now updated in sync with tile graphics
+   Lots of little optimizations and other internal changes
+
 version 2008-01-16
    Fixed double speed timers mode
    Adds SGB borders to games which support both GBC and SGB mode

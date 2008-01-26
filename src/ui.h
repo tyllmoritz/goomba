@@ -44,4 +44,9 @@ void timermode(void);
 void go_multiboot(void);
 void changeautoborder(void);
 
+#if SPEEDHACK2
+void find_best_speedhack(void);
+void autodetect_speedhack(void);
+#endif
+
 #endif
