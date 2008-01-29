@@ -1,6 +1,10 @@
 Goomba revision history
 -=-=-=-=-=-=-=-=-=-=-=-
 
+version 2008-01-29
+   Fixed an IRQ issue that affected Final Fantasy Adventure
+   Fixed junk graphics when backgrounds are supposed to be disabled
+
 version 2008-01-26
    Tilemaps now updated in sync with tile graphics
    Lots of little optimizations and other internal changes

@@ -212,7 +212,7 @@ fontpal_bin
 	|
 	EXPORT goomba_mb_gba
 goomba_mb_gba
-	INCBIN goomba_mb.gba
+	INCBIN GBABIN_MULTIBOOT\goomba.gba
 goomba_mb_gba_end
 goomba_mb_gba_size	EQU goomba_mb_gba_end-goomba_mb_gba
 	EXPORT goomba_mb_gba_size

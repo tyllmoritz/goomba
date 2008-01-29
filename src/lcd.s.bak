@@ -1249,7 +1249,8 @@ newmode
 	ldrb r0,lcdctrl
 	tst r0,#0x20
 	beq entermode0
-	ldr r0,scanline_oam_position  ;if cycles >=scanline_oam_position, inside hblank
+	
+	ldr r0,hblankposition  ;if cycles >=hblankposition, inside hblank
 	cmp cycles,r0
 	ldrb r0,scanline
 	addmi r0,r0,#1
@@ -1392,7 +1393,6 @@ entermode0_
 ;	orrne r1,r1,#0x0001  ;because there's the unconditional right below this
 	bicne r1,r1,#0x000C
 	orr r1,r1,#0x0001
-	movs r0,#0
 0	
 	str r1,bg01cnt
 	addne r1,r1,#0x0200
@@ -1469,7 +1469,7 @@ bufferfinish
 	mov r2,#144
 	b %f0
 tobuffer
-	ldr r2,scanline_oam_position  ;if cycles >=scanline_oam_position, inside hblank
+	ldr r2,hblankposition  ;if cycles >=hblankposition, inside hblank
 	cmp cycles,r2
 	ldrb r2,scanline
 	addmi r2,r2,#1
@@ -2153,6 +2153,7 @@ pal_loop3
 
 
 white_palette
+	mov r11,r11
 	ldrb r0,gbcmode
 	movs r0,r0
 	mvn r0,#0
@@ -2626,8 +2627,8 @@ newframe_vblank	;called at line 144	(??? safe to use)
 	ldrb r0,lcdctrl
 	;screen on?
 	tst r0,#0x80
-	streqb r0,lcdctrl0midframe
-	ldrneb r0,lcdctrl0midframe	
+	strbeq r0,lcdctrl0midframe
+	ldrbne r0,lcdctrl0midframe	
 	strb r0,lcdctrl0frame
 	
 	;swap "big" buffer
@@ -2930,7 +2931,7 @@ FF44_R;      LCD Scanline
 ;FF44_R;		LCD Scanline
 ;;----------------------------------------------------------------------------
 ;
-;l
+;
 ;	ldr r0,scanline
 ;;	cmp r0,#153
 ;;	moveq r0,#0
@@ -2947,22 +2948,8 @@ FF45_R;		LCD Y Compare
 ;----------------------------------------------------------------------------
 FF45_W;		LCD Y Compare
 ;----------------------------------------------------------------------------
-;	ldrb r1,lcdyc
 	strb r0,lcdyc
-;	cmp r0,r1
-;	bxeq lr
-	ldrb r1,lcdstat
-lcdyc_check
-	;r0=lcdyc, r1=lcdstat
-	tst r1,#0x40
-	bxeq lr
-	ldrb r1,scanline
-	cmp r0,r1
-	bxne lr
-	ldrb r0,gb_if
-	orr r0,r0,#0x02		;2=LCD STAT
-	strb r0,gb_if
-	b immediate_check_irq
+	mov pc,lr
 ;----------------------------------------------------------------------------
 FF47_W;		BGP - BG Palette Data  (GB MODE ONLY)
 ;----------------------------------------------------------------------------
@@ -3423,14 +3410,11 @@ gbc_palette2	% 128
 FF41_W;		LCD Status
 ;----------------------------------------------------------------------------
 	ldrb r1,lcdstat
-	and r2,r1,#0x01		;Save VBlank bit.
+	and r1,r1,#0x01		;Save VBlank bit.
 	and r0,r0,#0x78
-	orr r0,r0,r2
+	orr r0,r0,r1
 	strb r0,lcdstat
-	ldrb r0,lcdyc
-	b_long lcdyc_check
-;	mov pc,lr
-
+	mov pc,lr
 ;----------------------------------------------------------------------------
 FF42_R;		SCY - Scroll Y
 ;----------------------------------------------------------------------------

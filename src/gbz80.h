@@ -12,4 +12,6 @@
 	IMPORT checkIRQ
 	IMPORT line145_to_end
 	IMPORT gbc_mode
+	
+	IMPORT immediate_check_irq
 	END

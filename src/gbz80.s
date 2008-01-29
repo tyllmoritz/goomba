@@ -18,6 +18,8 @@
 
 	EXPORT dontstop
 	
+	EXPORT immediate_check_irq
+	
  [ SPEEDHACKS
 	EXPORT g_hackflags
 	EXPORT g_hackflags2
@@ -1761,6 +1763,32 @@ line145_to_end ;------------------------
 	str r0,frame
 	ldr pc,scanlinehook
 
+
+immediate_check_irq
+	ldrb r0,gb_ie		;0xFFFF=Interrupt Enable.
+	ldrb r1,gb_if
+	ands r1,r1,r0
+	bxeq lr
+	ldrb r0,gb_ime
+	movs r0,r0
+	bxeq lr
+	;different ugly hack which doesn't mess up timing,
+	;this is necessary because goomba can't handle GB interrupts from within a memory write
+	sub cycles,cycles,#1024*CYCLE  ;this just makes it go somewhere else instead of the next instruction
+	ldr r0,nexttimeout
+	str r0,nexttimeout_alt
+	ldr r0,=no_more_irq_hack
+	str r0,nexttimeout
+	bx lr
+
+no_more_irq_hack
+	add cycles,cycles,#1024*CYCLE
+	ldr r0,nexttimeout_alt
+	str r0,nexttimeout
+	b_long checkIRQ
+	
+
+
 ;----------------------------------------------------------
 default_scanlinehook
 checkScanlineIRQ
@@ -2437,7 +2465,7 @@ updatespeed
 	tst r0,#0x80
 ;updatespeed2
 ;(DMG=456*CYCLE, CGB=912*CYCLE)
-	mov r2,#SINGLE_SPEED_HBLANK
+	mov r2,#SINGLE_SPEED_SCANLINE_OAM_POSITION
 	mov r1,#SINGLE_SPEED
 	mov r12,r1
 	beq requests_singlespeed
@@ -2451,10 +2479,10 @@ updatespeed
 	cmp r0,#144
 	blt requests_singlespeed
 grant_doublespeed	
-	mov r2,#DOUBLE_SPEED_HBLANK
+	mov r2,#DOUBLE_SPEED_SCANLINE_OAM_POSITION
 	mov r1,#DOUBLE_SPEED
 requests_singlespeed
-	str r2,hblankposition
+	str r2,scanline_oam_position
 	str r1,cyclesperscanline
 	str r12,timercyclesperscanline
 	bx lr
@@ -2706,7 +2734,7 @@ request_gb_type
 novblankwait
 	DCB 0 ;novblankwait_
 
-	DCD 0 ;hblankposition (DMG=204*CYCLE, CGB=408*CYCLE)
+	DCD 0 ;scanline_oam_position (DMG=204*CYCLE, CGB=408*CYCLE)
 
 
  [ RESIZABLE
