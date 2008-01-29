@@ -622,7 +622,8 @@ HRAM_W;		(FF80-FFFF)
 	cmp r2,#0xFF
 	bxne lr
 HRAM_W_IE_
-	b_long HRAM_W_IE
+	strb r0,gb_ie
+	b immediate_check_irq
 
 ;----------------------------------------------------------------------------
 HRAM_R;		(FF80-FFFF)
@@ -764,31 +765,6 @@ IO_reset
 	str r0,[r1]
 
 	bx lr
-
-
-HRAM_W_IE
-	strb r0,gb_ie		;0xFFFF=Interrupt Enable.
-	ldrb r1,gb_if
-	ands r1,r1,r0
-	moveq pc,lr
-	ldrb r0,gb_ime
-	movs r0,r0
-	moveq pc,lr
-	
-	;different ugly hack which doesn't mess up timing,
-	;this is necessary because goomba can't handle GB interrupts from within a memory write
-	sub cycles,cycles,#1024*CYCLE  ;this just makes it go somewhere else instead of the next instruction
-	ldr r0,nexttimeout
-	str r0,nexttimeout_alt
-	ldr r0,=no_more_irq_hack
-	str r0,nexttimeout
-	bx lr
-
-no_more_irq_hack
-	add cycles,cycles,#1024*CYCLE
-	ldr r0,nexttimeout_alt
-	str r0,nexttimeout
-	b_long checkIRQ
 
 ;----------------------------------------------------------------------------
 _FF01W;		SB - Serial Transfer Data
