@@ -1,6 +1,14 @@
 Goomba revision history
 -=-=-=-=-=-=-=-=-=-=-=-
 
+version 2008-03-18
+   Some minor CPU optimizations
+   Fixed fast LCD status polling
+
+version 2008-02-20
+   Moved GB rom bank 0 to GBA VRAM for higher speed!
+   Faster LCD status polling
+
 version 2008-01-29
    Fixed an IRQ issue that affected Final Fantasy Adventure
    Fixed junk graphics when backgrounds are supposed to be disabled

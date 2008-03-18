@@ -176,13 +176,13 @@ resetSIO	;r0=joycfg
 	add r2,r2,#0x100
 
 	mov r1,#0
-;	strh r1,[r2,#REG_RCNT]
+	strh r1,[r2,#REG_RCNT]
 
 	tst r0,#0x80000000
 	moveq r1,#0x2000
 	movne r1,   #0x6000
 	addne r1,r1,#0x0002	;16bit multiplayer, 57600bps
-;	strh r1,[r2,#REG_SIOCNT]
+	strh r1,[r2,#REG_SIOCNT]
 
 	bx lr
 ;----------------------------------------------------------------------------

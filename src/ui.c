@@ -693,7 +693,7 @@ void go_multiboot()
 		} while(!(key&(A_BTN)));
 		oldkey=~REG_P1;			//reset key input
 	}
-	
+
 	memcpy (dest,src,size);
 	textstart=dest;	
 	selectedrom=0;

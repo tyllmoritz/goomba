@@ -1,3 +1,7 @@
+ 	IMPORT lcdstat
+ 	IMPORT FF41_modify1
+ 	IMPORT FF41_R_vblank
+
 	IMPORT update_ui_border_masks
 	IMPORT newframe_vblank
 

@@ -126,6 +126,10 @@ DEBUGSCREEN EQU VRAM_BASE+0x7800
  ]
  	EXPORT update_ui_border_masks
  	
+ 	EXPORT lcdstat
+ 	EXPORT FF41_modify1
+ 	EXPORT FF41_R_vblank
+ 	
 	EXPORT ui_border_visible
 	EXPORT ui_y
 	EXPORT ui_x
@@ -468,7 +472,8 @@ GFX_reset	;called with CPU reset
 
 	
 	mov r0,#0
-	strb r0,lcdstat		;flags off
+	ldr r1,=lcdstat
+	strb r0,[r1];lcdstat		;flags off
 	strb r0,scrollX
 	strb r0,scrollY
 	strb r0,windowX
@@ -557,7 +562,8 @@ resetlcdregs
 
 ;	ldrb r0,lcdctrl
 ;	bl_long FF40_W
-	ldrb r0,lcdstat
+	ldr r1,=lcdstat
+	ldrb r0,[r1];lcdstat
 	bl_long FF41_W
 ;	ldrb r0,scrollY
 ;	bl_long FF42_W
@@ -636,7 +642,7 @@ nomap					;map rrrrrrrrggggggggbbbbbbbb  ->  0bbbbbgggggrrrrr
 
 transfer_palette
 	b_long transfer_palette_
-
+	
 ;----------------------------------------------------------------------------
 showfps_		;fps output, r0-r3=used.
 ;----------------------------------------------------------------------------
@@ -1655,7 +1661,7 @@ apply16
 	bicne addy,addy,#0xFF000000
 	add r2,r2,r0
 	bx lr
-	
+
 	LTORG
 	
 ;
@@ -1893,6 +1899,9 @@ display_whole_map
 	str r0,bg_cache_base
 	str r0,bg_cache_limit
 	strb r0,bg_cache_full
+	mov r0,#0x5A000000  ;BPL
+	orr r0,r0,#(VRAM_name0-vram_W_modify)/4-2
+	str r0,vram_W_modify
 	
 	stmfd sp!,{lr}
 	ldr addy,=XGB_VRAM+0x1800
@@ -2247,7 +2256,7 @@ FF46_W;		sprite DMA transfer
 	adr r2,memmap_tbl
 	ldr r1,[r2,r1,lsr#2]	;in: addy,r1=addy&0xE000 (for rom_R)
 	add r1,r1,r0,lsl#8	;r1=DMA source
-
+	
 	mov r0,#1
 	strb r0,gboamdirty
 
@@ -2863,28 +2872,32 @@ FF40_W;		LCD Control
 
 
 ;----------------------------------------------------------------------------
+FF41_W;		LCD Status
+;----------------------------------------------------------------------------
+	ldrb r1,lcdstat
+	and r1,r1,#0x05		;Save VBlank bit and LCDYC bit.
+	and r0,r0,#0x78
+	orr r0,r0,r1
+	strb r0,lcdstat
+	mov pc,lr
+
+
+FF41_R_vblank
+	ldrb r0,lcdstat
+	bx lr
+;----------------------------------------------------------------------------
 FF41_R;		LCD Status
 ;----------------------------------------------------------------------------
-	ldrb r0,lcdstat
-	ldrb r1,scanline
-	ldrb r2,lcdyc
-	cmp r1,r2
-	orreq r0,r0,#4		;scanline=LYC
-	tst r0,#0x01		;in VBlank.
-	movne pc,lr
-	
-	ldr r2,cyclesperscanline
-	cmp r2,#DOUBLE_SPEED
-	movne r1,cycles
-	moveq r1,cycles,lsr#1
-	
-	cmp r1,#376*CYCLE
-	orrpl r0,r0,#2		;in OAM access
-	movpl pc,lr
+lcdstat
+	mov r0,#1
+FF41_modify2	cmp cycles,#204*CYCLE
+	bxlt lr				;return if after VRAM access
+	orr r0,r0,#2
+FF41_modify1	cmp cycles,#376*CYCLE
+	bxlt lr				;return if after OAM access
+	orr r0,r0,#3
+	bx lr
 
-	cmp r1,#204*CYCLE
-	orrpl r0,r0,#3		;in VRAM access
-	mov pc,lr
 ;----------------------------------------------------------------------------
 FF42_W;		SCY - Scroll Y
 ;----------------------------------------------------------------------------
@@ -2930,7 +2943,7 @@ FF44_R;      LCD Scanline
 ;FF44_R;		LCD Scanline
 ;;----------------------------------------------------------------------------
 ;
-;l
+;
 ;	ldr r0,scanline
 ;;	cmp r0,#153
 ;;	moveq r0,#0
@@ -2947,18 +2960,17 @@ FF45_R;		LCD Y Compare
 ;----------------------------------------------------------------------------
 FF45_W;		LCD Y Compare
 ;----------------------------------------------------------------------------
-;	ldrb r1,lcdyc
 	strb r0,lcdyc
-;	cmp r0,r1
-;	bxeq lr
-	ldrb r1,lcdstat
-lcdyc_check
-	;r0=lcdyc, r1=lcdstat
-	tst r1,#0x40
-	bxeq lr
 	ldrb r1,scanline
 	cmp r0,r1
+	ldrb r0,lcdstat
+	orreq r0,r0,#4
+	bicne r0,r0,#4
+	strb r0,lcdstat
 	bxne lr
+	tst r0,#0x40
+	bxeq lr
+
 	ldrb r0,gb_if
 	orr r0,r0,#0x02		;2=LCD STAT
 	strb r0,gb_if
@@ -3058,7 +3070,7 @@ FF49_W;		OBP1 - OBJ 1 Palette Data
 	bxeq lr
 FF49_W_
 	strb r0,ob1palette
-	
+
 	ldrb r1,gbcmode
 	cmp r1,#0
 	bxne lr
@@ -3141,6 +3153,7 @@ vram_W
 	strb r0,[r2,addy]
 	cmp addy,#0x9800
 ;	ldrpl pc,VRAM_name0_ptr
+vram_W_modify
 	bpl VRAM_name0
 ;----------------------------------------------------------------------------
 VRAM_chr;	8000-97FF
@@ -3188,9 +3201,9 @@ VRAM_chr;	8000-97FF
 ;----------------------------------------------------------------------------
 VRAM_name0	;(9800-9FFF)
 ;----------------------------------------------------------------------------
-	ldrb r2,bg_cache_full
-	movs r2,r2
-	bxne lr
+;	ldrb r2,bg_cache_full
+;	movs r2,r2
+;	bxne lr
 	;store
 	ldr r2,bg_cache_cursor
 	ldr r1,=BG_CACHE
@@ -3205,7 +3218,14 @@ VRAM_name0	;(9800-9FFF)
 	;set full
 	mov r1,#1
 	strb r1,bg_cache_full
+	ldr r1,set_full_instruction
+	str r1,vram_W_modify
+	
 	bx lr
+set_full_instruction
+	bxpl lr
+set_empty_instruction
+
 
  [ {FALSE}	
 	ldrb r2,gbcmode
@@ -3418,19 +3438,6 @@ gbc_palette2	% 128
 ;----------------------------------------------------------------------------
 
  AREA rom_code_, CODE, READONLY
-
-;----------------------------------------------------------------------------
-FF41_W;		LCD Status
-;----------------------------------------------------------------------------
-	ldrb r1,lcdstat
-	and r2,r1,#0x01		;Save VBlank bit.
-	and r0,r0,#0x78
-	orr r0,r0,r2
-	strb r0,lcdstat
-	ldrb r0,lcdyc
-	b_long lcdyc_check
-;	mov pc,lr
-
 ;----------------------------------------------------------------------------
 FF42_R;		SCY - Scroll Y
 ;----------------------------------------------------------------------------

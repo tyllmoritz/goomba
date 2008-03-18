@@ -17,6 +17,8 @@
 	IMPORT refreshNESjoypads
 ;	IMPORT serialinterrupt
 	IMPORT _FF70W
+	IMPORT FF41_R_ptr
+
 	IMPORT io_read_tbl
 	IMPORT io_write_tbl
 

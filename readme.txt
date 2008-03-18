@@ -1,4 +1,4 @@
-Goomba Color 01-29-2008
+Goomba Color 03-18-2008
 -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 By Dwedit (Dan Weiss)
 http://www.dwedit.org/gba/goombacolor.php
