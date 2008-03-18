@@ -15,7 +15,7 @@
 	IMPORT quicksave	;sram.c
 
 	EXPORT GLOBAL_PTR_BASE
-
+	
 	EXPORT dontstop
 	
 	EXPORT immediate_check_irq
@@ -1221,8 +1221,8 @@ _FF;	RST 0x38
 	ldr r0,lastbank
 	sub r0,gb_pc,r0
 	mov gb_pc,r1
-	push16
-	encodePC
+	push16_novram
+	encodePC_afterpush16
 	fetch 16
 ;----------------------------------------------------------------------------
 _C8;	RET Z
@@ -1261,8 +1261,8 @@ _CD;	CALL $nnnn
 	ldr r0,lastbank
 	sub r0,gb_pc,r0
 	orr gb_pc,r1,r2,lsl#8
-	push16
-	encodePC
+	push16_novram
+	encodePC_afterpush16
 	fetch 24
 ;----------------------------------------------------------------------------
 _CE;	ADC #nn
@@ -1633,15 +1633,20 @@ line0x
 
 ;	ldrb r1,lcdctrl		;not liked by SML.
 ;	tst r1,#0x80
-	ldrb r0,lcdstat		;
-	and r0,r0,#0x78		;reset lcd mode flags (vblank/hblank/oam/lcd)
-	strb r0,lcdstat		;
+	adrl r1,lcdstat
+	ldrb r0,[r1]		;
+	and r0,r0,#0x7C		;reset lcd mode flags (vblank/hblank/oam/lcd)
+	strb r0,[r1]		;
 
 	ldr r0,cyclesperscanline
 	add cycles,cycles,r0
 
 	adr r0,line1_to_71
 	str r0,nexttimeout
+
+	ldr r0,=FF41_R
+	ldr r1,=FF41_R_ptr
+	str r0,[r1]
 
 	ldr pc,scanlinehook
 	
@@ -1720,10 +1725,15 @@ line144 ;------------------------
 	tst r0,#0x80
 	beq novbirq
 
-	ldrb r0,lcdstat		;vbl flag
-	and r0,r0,#0x78
+	ldr r0,=FF41_R_vblank
+	ldr r1,=FF41_R_ptr
+	str r0,[r1]
+
+	adrl r1,lcdstat
+	ldrb r0,[r1]		;vbl flag
+	and r0,r0,#0x7C
 	orr r0,r0,#0x01
-	strb r0,lcdstat		;vbl flag
+	strb r0,[r1]		;vbl flag
 
 	ldrb r0,gb_if
 	orr r0,r0,#0x01		;1=VBL
@@ -1792,19 +1802,37 @@ no_more_irq_hack
 ;----------------------------------------------------------
 default_scanlinehook
 checkScanlineIRQ
-	;screen turned on?  (not sure if this is correct)
-	ldrb r2,lcdctrl
-	tst r2,#0x80
-	beq noScanlineIRQ
-	
-	ldrb r2,lcdstat
-	and r0,r2,#0x09		;LCD stat HBlank IRQ/VBL.
-	cmp r0,#0x08		;LCD stat HBlank IRQ.
-	beq ScanlineIRQ
+	;do LCDYC test
 	ldrb r1,scanline
 	ldrb r0,lcdyc
 	cmp r0,r1
-	bne noScanlineIRQ
+	adrl r1,lcdstat
+	ldrb r2,[r1]
+	orreq r2,r2,#4
+	bicne r2,r2,#4
+	strb r2,[r1]
+	
+	;screen turned on?  (not sure if this is correct)
+	ldrb r1,lcdctrl
+	tst r1,#0x80
+	beq noScanlineIRQ
+	
+;	ldrb r2,lcdstat
+	and r0,r2,#0x09		;LCD stat HBlank IRQ/VBL.
+	cmp r0,#0x08		;LCD stat HBlank IRQ.
+	beq ScanlineIRQ
+	
+;	;hackhack
+;;	and r0,r2,#0x21
+;	cmp r0,#0x20
+;	beq ScanlineIRQ
+	
+	
+;	ldrb r1,scanline
+;	ldrb r0,lcdyc
+;	cmp r0,r1
+	tst r2,#4
+	beq noScanlineIRQ
 	tst r2,#0x40		;LCD stat LYC IRQ.
 	beq noScanlineIRQ
 ScanlineIRQ
@@ -1901,8 +1929,8 @@ doIRQ
 	sub r0,gb_pc,r0
 	mov gb_pc,r2			;get IRQ vector
 
-	push16					;save PC
-	encodePC
+	push16_novram					;save PC
+	encodePC_afterpush16
 
 	fetch 24
 
@@ -1945,8 +1973,6 @@ _CB45;		BIT x,L		, actually CB-45,4D,55,5D,65,6D,75 & 7D
 	opBITL gb_hl
 	fetch 8
 
-
-
 ;----------------------------------------------------------------------------
 	AREA rom_code, CODE, READONLY
 ;----------------------------------------------------------------------------
@@ -1972,6 +1998,8 @@ _10;	STOP	stops the processor until an (joypad) interrupt.
 _noStop
 ;	add gb_pc,gb_pc,#1
 	fetch 4
+
+	LTORG
 ;----------------------------------------------------------------------------
 _27;	DAA	decimal adjust ackumulator
 ;----------------------------------------------------------------------------
@@ -2461,31 +2489,43 @@ speedswitch
 	eors r0,r0,#0x80
 	strb r0,doublespeed
 updatespeed
+	;set single speed
+	mov r0,#SINGLE_SPEED
+	str r0,timercyclesperscanline
+	str r0,cyclesperscanline
+	mov r0,#SINGLE_SPEED_SCANLINE_OAM_POSITION
+	str r0,scanline_oam_position
+	ldr r12,=FF41_modify1
+	ldr r0,FF41_modifydata
+	str r0,[r12]
+	ldr r0,FF41_modifydata+4
+	str r0,[r12,#8]
+	
 	ldrb r0,doublespeed
 	tst r0,#0x80
-;updatespeed2
-;(DMG=456*CYCLE, CGB=912*CYCLE)
-	mov r2,#SINGLE_SPEED_SCANLINE_OAM_POSITION
-	mov r1,#SINGLE_SPEED
-	mov r12,r1
-	beq requests_singlespeed
-
-	mov r12,#DOUBLE_SPEED	;if game wants double speed, always give double speed timers
-
+	bxeq lr
+	
+	;set double speed timers
 	ldrb r0,doubletimer_
-	tst r0,#0x02
-	bne grant_doublespeed
-	ldrb r0,scanline
-	cmp r0,#144
-	blt requests_singlespeed
-grant_doublespeed	
-	mov r2,#DOUBLE_SPEED_SCANLINE_OAM_POSITION
-	mov r1,#DOUBLE_SPEED
-requests_singlespeed
-	str r2,scanline_oam_position
-	str r1,cyclesperscanline
-	str r12,timercyclesperscanline
+	tst r0,#2
+	mov r0,#DOUBLE_SPEED
+	str r0,timercyclesperscanline
+	bxeq lr
+	;set double speed
+	str r0,cyclesperscanline
+	mov r0,#DOUBLE_SPEED_SCANLINE_OAM_POSITION
+	str r0,scanline_oam_position
+	ldr r0,FF41_modifydata+8
+	str r0,[r12]
+	ldr r0,FF41_modifydata+12
+	str r0,[r12,#8]
 	bx lr
+
+FF41_modifydata
+	cmp cycles,#376*CYCLE
+	cmp cycles,#204*CYCLE
+	cmp cycles,#376*CYCLE*2
+	cmp cycles,#204*CYCLE*2
 
 
  [ PROFILE

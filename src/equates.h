@@ -349,7 +349,8 @@ AGBjoypad # 4
 XGBjoypad # 4
 
 lcdctrl # 1
-lcdstat # 1
+;lcdstat # 1
+ # 1
 scrollX # 1
 scrollY # 1
 

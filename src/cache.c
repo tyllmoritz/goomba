@@ -20,6 +20,8 @@ u8 *make_instant_pages(u8* rom_base)
 {
 	//this is for cases where there is no caching!
 	u32 *p=(u32*)rom_base;
+	u8 *page0_rom;
+	u8 cartsizebyte;
 	int i;
 	
 #if MOVIEPLAYER
@@ -50,7 +52,17 @@ u8 *make_instant_pages(u8* rom_base)
 			INSTANT_PAGES[i]=rom_base+16384*(i);//&page_mask);
 		}
 	}
-	return INSTANT_PAGES[0];
+	page0_rom=INSTANT_PAGES[0];
+	cartsizebyte=page0_rom[0x148];
+
+	if (cartsizebyte>0)
+	{
+		breakpoint();
+		//copy bank 0 to VRAM
+		memcpy(bank_1,page0_rom,16384);
+		INSTANT_PAGES[0]=bank_1;
+	}
+	return page0_rom;
 }
 
 #if !MOVIEPLAYER

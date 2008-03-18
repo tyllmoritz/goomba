@@ -19,6 +19,15 @@ C EQU 2_00010000	;carry
 	add gb_pc,gb_pc,r0
 	MEND
 
+	MACRO		;push16 already does "adr r2,memmap_tbl"
+	encodePC_afterpush16
+	and r1,gb_pc,#0xF000
+;	adr r2,memmap_tbl
+	ldr r0,[r2,r1,lsr#10]
+	str r0,lastbank
+	add gb_pc,gb_pc,r0
+	MEND
+
 	MACRO		;pack GB-Z80 flags into r0
 	encodeFLG
 	and r0,gb_flg,#0xA0000000	;nC
@@ -93,6 +102,18 @@ C EQU 2_00010000	;carry
 	strmib r0,[r2,addy,lsr#16]		;reject rom write
 	tstmi r1,#0x60000000	;just to solve some games
 	bleq vram_W2			;that use push16 to write to vram
+	MEND		;r1,r2=?
+
+	MACRO
+	push16_novram		;push r0 with no VRAM check (because who would fill VRAM with PC?)
+	subs gb_sp,gb_sp,#0x00020000	;use "negative flag" as indicator we are writing to ROM
+	and r1,gb_sp,#0xF0000000
+	adr r2,memmap_tbl
+	ldr addy,[r2,r1,lsr#26]
+	strmib r0,[addy,gb_sp,lsr#16]		;reject rom write
+	adds r1,gb_sp,#0x00010000
+	mov r0,r0,lsr#8
+	strmib r0,[addy,r1,lsr#16]		;reject rom write
 	MEND		;r1,r2=?
 
 	MACRO

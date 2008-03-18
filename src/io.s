@@ -36,7 +36,7 @@
 	EXPORT CheckGBAVersion
 ;	EXPORT gbpadress
 	EXPORT _FF70W
-	
+	EXPORT FF41_R_ptr
 	EXPORT jump_r0
  [ RESIZABLE
 	IMPORT add_exram
@@ -82,11 +82,10 @@ CheckGBAVersion
 
 jump_r0
 	bx r0
-
+	
 
 ;----------------------------------------------------------------------------
 	INCLUDE visoly.s
-
 ;----------------------------------------------------------------------------
 suspend	;called from ui.c and 6502.s
 ;----------------------------------------------------------------------------
@@ -333,6 +332,7 @@ joypad_read_ptr
 	DCD _FF30R
 
 	DCD FF40_R	;LCDC - LCD Control
+FF41_R_ptr
 	DCD FF41_R	;STAT - LCDC Status
 	DCD FF42_R	;SCY - Scroll Y
 	DCD FF43_R	;SCX - Scroll X
@@ -763,7 +763,7 @@ IO_reset
 	ldrne r0,=joy0_R_SGB
 	ldr r1,=joypad_read_ptr
 	str r0,[r1]
-
+	
 	bx lr
 
 ;----------------------------------------------------------------------------
