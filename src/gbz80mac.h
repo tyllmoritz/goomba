@@ -64,10 +64,9 @@ C EQU 2_00010000	;carry
 
 	MACRO
 	readmem
-	and r1,addy,#0xF000
-	adr r2,readmem_tbl
+	mvn r1,addy,lsr#12
 	adr lr,%F0
-	ldr pc,[r2,r1,lsr#10]	;in: addy,r1=addy&0xE000 (for rom_R)
+	ldr pc,[r10,r1,lsl#2]	;in: addy,r1=addy&0xE000 (for rom_R)
 0				;out: r0=val (bits 8-31=0 ), addy preserved for RMW instructions
 	MEND
 

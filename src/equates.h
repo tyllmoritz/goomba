@@ -41,7 +41,7 @@ BG_CACHE_SIZE EQU 512
 
 ;statck starts at 0x03007700
 
-BORDER_PALETTE EQU 0x06006F80
+BORDER_PALETTE EQU 0x0600EF80	;formerly 0x06006F80
 
 				;This area can probably be overwritten when making a savestate.
   [ RESIZABLE
@@ -90,10 +90,12 @@ fatWriteBuffer EQU fatBuffer
 ;0x300 at 06007D00-06008000
 
 ;SGB border areas coincide with the GBA areas reserved for them
-SNES_VRAM	EQU 0x06004220 ;one tile ahead, too bad if games don't write low tiles then high tiles, also overlaps with recent_tiles...
-SNES_MAP	EQU 0x06006780 ;overlaps with recent_tiles, map must be updated in reverse order
-RECENT_TILES	EQU 0x06006200 ;DIRTY_TILES-(MAX_RECENT_TILES*16)
+SNES_VRAM	EQU 0x0600C220 ;one tile ahead, too bad if games don't write low tiles then high tiles, also overlaps with recent_tiles...
+SNES_MAP	EQU 0x0600E780 ;overlaps with recent_tiles, map must be updated in reverse order
+RECENT_TILES	EQU 0x0600E200 ;DIRTY_TILES-(MAX_RECENT_TILES*16)
 
+AGB_SGB_MAP		EQU 0x0600E800
+AGB_SGB_VRAM	EQU 0x0600C200
 
 
 MEM_END	EQU 0x02040000
@@ -102,7 +104,7 @@ XGB_SRAM	EQU MEM_END-0x8000
 XGB_VRAM	EQU XGB_SRAM-0x4000
 GBC_EXRAM	EQU XGB_VRAM-0x6000
 SGB_PACKET	EQU GBC_EXRAM-112
-INSTANT_PAGES	EQU 0x0600cc00 ;SGB_PACKET-1024
+INSTANT_PAGES	EQU 0x06004c00 ;SGB_PACKET-1024		;formerly 0x0600CC00
 SGB_PALETTE	EQU SGB_PACKET-16*4
 
 DIRTY_ROWS EQU SGB_PALETTE-48
@@ -192,14 +194,6 @@ AGB_PALETTE		EQU 0x5000000
 AGB_VRAM		EQU 0x6000000
 AGB_OAM			EQU 0x7000000
 AGB_SRAM		EQU 0xE000000
-
-;map1        0x06001000
-;map2        0x06001800
-;map1 blocks 0x06002000
-;map2 blocks 0x06002800
-
-AGB_BG			EQU AGB_VRAM+0xA000
-AGB_BG_GBMODE		EQU AGB_VRAM+0x4000
 
 REG_BASE		EQU 0x4000000
 REG_DISPCNT		EQU 0x00
@@ -297,41 +291,46 @@ addy		RN r12 ;keep this at r12 (scratch for APCS)
 
 ;everything in wram_globals* areas:
 
- MAP 0,globalptr	;gb-z80.s
+ MAP 0,globalptr	;gbz80.s
+readmem_tbl_begin # -16*4
+readmem_tbl_end # 16*4
+ # -4
+readmem_tbl_ # 0
+ # 4
 opz # 256*4
-readmem_tbl # 16*4
 writemem_tbl # 16*4
 memmap_tbl # 16*4
 cpuregs # 8*4
 gb_ime # 1
 gb_ie # 1
 gb_if # 1
-gb_ic # 1  ;not actually used
-lastbank # 4
+ # 1  
+rambank # 1
+gbcmode # 1
+sgbmode # 1
+ # 1
+
 dividereg # 4
 timercounter # 4
 timermodulo # 1
 timerctrl # 1
 stctrl # 1
-debugstop # 1 ;align
+ # 1
+frame # 4
 nexttimeout # 4
 nexttimeout_alt # 4
 scanlinehook # 4
-frame # 4
+lastbank # 4
 cyclesperscanline # 4
 timercyclesperscanline # 4
- [ PROFILE
-profiler # 4
- ]
-rambank # 1
-gbcmode # 1
-sgbmode # 1
- # 1
+scanline_oam_position # 4
+; [ PROFILE
+;profiler # 4
+; ]
 doubletimer_ # 1
 gbamode # 1
 request_gb_type_ # 1
 novblankwait_ # 1
-scanline_oam_position # 4
 
  [ RESIZABLE
 xgb_sram # 4
@@ -349,8 +348,7 @@ AGBjoypad # 4
 XGBjoypad # 4
 
 lcdctrl # 1
-;lcdstat # 1
- # 1
+lcdstat_save # 1
 scrollX # 1
 scrollY # 1
 

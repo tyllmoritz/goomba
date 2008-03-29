@@ -3,8 +3,10 @@
 #define page_size (16)
 #define page_size_2 (page_size*1024)
 
+#define CRAP_AMOUNT 512
+
 u8 *const bank_0=(u8*)0x0600C000;
-u8 *const bank_1=(u8*)0x06014000;
+u8 *const bank_1=(u8*)0x06010000-CRAP_AMOUNT;
 u8 *const bank_2=(u8*)0x06008000;
 
 #if MOVIEPLAYER
@@ -55,11 +57,11 @@ u8 *make_instant_pages(u8* rom_base)
 	page0_rom=INSTANT_PAGES[0];
 	cartsizebyte=page0_rom[0x148];
 
-	if (cartsizebyte>0)
+//	if (cartsizebyte>0)
 	{
-		breakpoint();
 		//copy bank 0 to VRAM
-		memcpy(bank_1,page0_rom,16384);
+//		memcpy(bank_1,page0_rom,16384);
+		memcpy(bank_1,page0_rom,16384+CRAP_AMOUNT);
 		INSTANT_PAGES[0]=bank_1;
 	}
 	return page0_rom;
