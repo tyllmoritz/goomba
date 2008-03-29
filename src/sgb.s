@@ -105,11 +105,11 @@ sgb_reset
 	
 	mov r1,#0
 	;erase SGB border
-	ldr r0,=0x06006800
+	ldr r0,=AGB_SGB_MAP
 	mov r2,#0x800
 	bl memset_
 	;erase SGB border tiles
-	ldr r0,=0x06004200
+	ldr r0,=AGB_SGB_VRAM
 	mov r2,#0x2000
 	bl memset_
 	
@@ -551,7 +551,7 @@ convert_snes_vram
 	;r0 = page number, 0 or 1 (tiles 0-127, or tiles 128-255)
 	stmfd sp!,{r3-r7,lr}
 	mov r7,#128
-	ldr r6,=0x06004200
+	ldr r6,=AGB_SGB_VRAM
 	add r6,r6,r0,lsl#12
 	ldr r5,=SNES_VRAM
 	add r5,r5,r0,lsl#12
@@ -587,7 +587,7 @@ draw_sgb_border
 	;6f00-80
 	
 	mov r7,#32*28
-	ldr r6,=0x06006800+0x700
+	ldr r6,=AGB_SGB_MAP+0x700
 	ldr r5,=SNES_MAP+0x700
 0
 	ldrh r0,[r5,#-2]!

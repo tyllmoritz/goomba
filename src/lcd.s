@@ -1,52 +1,28 @@
 ;TODO:
+;Workaround for screen garbage on UI
+
 ;check all reset code, and make sure it's resetting everything!!!
 
-;newerest todo:
-;fix timers in double speed hack mode
-
-;newest todo:
-;*Fix balloon kid's garbage graphics
-;Take lots of non-critical code out of IWRAM
-;*remove NONE from double speed menu
 ;option to use color 0 as border color
 ;Fix the damn UI shaking, fix the darkened UI when changing between SGB and non SGB
-;Finish the job, make the interrupt handler be in charge of adding the UI/Border
-;	Do this by comparing my_ui_border with _ui_border_visible
-;	Also make my_ui_border work
-;*TIMERS doublespeed mode should be full double speed during vblank period
-;Incorporate UI and Border into scanline filler, also ensure 4 layers always visible
+;Still a couple bugs involving applying the ui/border
 
 ;newer todo:
-;fix flickering
+;fix flickering???
 
-;new todo:
-;fix sprite priority in window split mode
-;sync BG tiles
-;
 ;SGB STUFF:
 ;do SGB colors correctly
 ;do sgb attributes
-;*update SGB border palette for real
-;*Proper darkness when UI and Border visible
 
 ;other border stuff:
 ;custom borders
 
-
-
 ;TODO:
 ;* = written, + = tested
 ;fake bios, init sound like the real bios
-;*verify that turning off screen is working correctly
-;*verify that interrupts are working correctly
 ;fix STOP instruction
-;*"ugly hack" from io.s?
-;Border Support
-;	border generation ui, border loading...
-;*set default double speed mode to Full
 ;Save options per game, like palette, double speed mode
 ;Custom palettes
-;SGB Support
 ;Palette changes per line using vcount, may up to 4 palettes per frame total
 ;Savestates
 ;Real HDMA
@@ -54,29 +30,6 @@
 ;Possibly separate gbz80 core from gb system stuff?
 ;Port to NDS
 ;ROM Compression
-
-;test new code
-;*buffer filler (vblank and others)
-;*newframe_vblank
-
-;finished TODO:
-;*fix recent_tiles again, there's graphics corruption
-;*correct graphics in fast mode
-;*gamma correct GBC palette
-;*init window values
-;*newframe applys at start of vblank
-;*look again at those buffer fillers, check the code for problems
-;*fill in values for bgxcntbuff
-;*incorporate UI visibility
-;*change windowx code to store into a buffer
-;*new code for DMAing the buffers (using vcount interrupts to start and stop)
-;*write vcount interrupt
-;*write code to generate GBA tilemaps, including HP tiles
-;*new vram arrangement
-;*integrate dirty tiles
-;*integrate delayed dirty tiles
-;*add sprite generator
-
 
 ;dma: scrolling, dispcnt, bgXcnt, windowx
 ;border GFX takes up 1E00 bytes [240 tiles] per border
@@ -112,13 +65,18 @@
 	INCLUDE sgb.h
 
 VRAM_BASE	EQU 0x06000000
-VRAM_OBJ_BASE	EQU 0x06010000
+OBJ_BASE	EQU 0x14000
+VRAM_OBJ_BASE	EQU VRAM_BASE+OBJ_BASE
 SCREEN_X_START	EQU 40
 SCREEN_Y_START	EQU 8
 OAM_BASE	EQU 0x07000000
 PALETTE_BASE	EQU AGB_PALETTE
 
-DEBUGSCREEN EQU VRAM_BASE+0x7800
+TILEMAP1	EQU 10 ;formerly 26
+TILEMAP2	EQU 13 ;formerly 29
+UI_TILEMAP	EQU 30 ;formerly 15
+BORDER_TILEMAP EQU 29 ;formerly 13
+DEBUGSCREEN EQU VRAM_BASE+(UI_TILEMAP+1)*2048
 
  [ RUMBLE
 	IMPORT RumbleInterrupt
@@ -140,6 +98,8 @@ DEBUGSCREEN EQU VRAM_BASE+0x7800
 	
 	EXPORT newframe_vblank
 	EXPORT gbc_chr_update
+	
+	EXPORT g_scanline
 	
 	EXPORT GFX_init
 	EXPORT GFX_init_irq
@@ -444,7 +404,7 @@ GFX_reset	;called with CPU reset
 	mov r2,#0x4000
 	bl memset_
 	;clear GBA tilemaps corresponding to XGB_VRAM
-	ldr r0,=VRAM_BASE+0xD000
+	ldr r0,=VRAM_BASE+TILEMAP1*2048
 	mov r2,#0x3000
 	bl memset_
 	
@@ -929,11 +889,11 @@ get_agb_vram_address
 	addne agbptr_1,agbptr_1,#0x8000
 	bxne lr
 	tst r0,#0x080
-	addeq agbptr_3,agbptr_1,#0x10000 ;0-127: sprite 0000, bg 0000
+	addeq agbptr_3,agbptr_1,#OBJ_BASE ;0-127: sprite 0000, bg 0000
 	addeq agbptr_2,agbptr_1,#0x0000
 	addeq agbptr_1,agbptr_1,#0x0000
 
-	addne agbptr_3,agbptr_1,#0x11000 ;128-255: sprite 1000, bg 1000, bg 9000
+	addne agbptr_3,agbptr_1,#OBJ_BASE+0x1000 ;128-255: sprite 1000, bg 1000, bg 9000
 	addne agbptr_2,agbptr_1,#0x9000
 	addne agbptr_1,agbptr_1,#0x1000
 
@@ -1169,42 +1129,44 @@ vblankinterrupt;
 	
 	bl_long showfps_
 	
+	;force first 8 scnalines to contain UI
+	;part 1 - save old, find out NEW
+	adr r4,ui_border_cnt_bic
+	ldmia r4,{r0-r3}
+	stmfd sp!,{r0-r4}
+	ldr r1,_ui_border_screen
+	orr r1,r1,#1
+	bl update_ui_border_masks_2
+
 	mov r2,#REG_BASE
-	
 	;write buffer values for scanline 0
 	ldr r1,bigbufferbase2
 	ldmia r1,{r3-r8}
 	
-;	;force first 8 scanlines to contain UI?
-;	;for this to work, you need to enable it at reg_winout, then suppress it afterwards
-;	ldrb r1,_ui_border_visible
-;	tst r1,#1
-;	bne %f0
-;	tst r1,#2
-;	ldr r0,_ui_x
-;	bic r0,r0,#0xFF000000
-;	bic r0,r0,#0x00FF0000
-;	ldr r1,_ui_y
-;	orr r0,r0,r1,lsl#16
-;	biceq r4,r4,#0xFF000000
-;	biceq r4,r4,#0x00FF0000
-;	orreq r4,r4,#0x4E000000
-;	orreq r4,r4,#0x000C0000
-;	moveq r8,r0
-;	bicne r4,r4,#0xFF00
-;	bicne r4,r4,#0x00FF
-;	orrne r4,r4,#0x4E00
-;	orrne r4,r4,#0x000C
-;	movne r7,r0
-;0
-	
-	
+	;force UI visible in first 8 scanlines
+	;part 2: Apply changes
+	ldr r1,ui_border_cnt_bic
+	bic r4,r4,r1
+	ldr r1,ui_border_cnt_orr
+	orr r4,r4,r1
+	ldr r1,_ui_border_screen
+	ands r1,r1,#2
+	ldr r0,_ui_y
+	ldr r8,_ui_x
+	orr r8,r8,r0,lsl#16
+	movne r7,r8
+	ldrne r8,ui_border_scroll3
+
+	orr r1,r1,#1
+	;update WININ register
+	cmp r1,#2
+	ldrle r0,=0xFFE8FFFA ;one layer
+	cmp r1,#3
+	ldreq r0,=0xFFECFFFE ;two layers
+	str r0,[r2,#REG_WININ]
 	
 	add r1,r2,#REG_BG0CNT
 	stmia r1,{r3-r8}
-	
-	
-	
 	
 	mov r0,#0
 	strh r0,[r2,#REG_WIN0H]
@@ -1220,6 +1182,11 @@ vblankinterrupt;
 
 	ldr r0,=0x28  + 256*(SCREEN_Y_START-1) ;scanline 7, enable vblank+vcount interrupts
 	strh r0,[r2,#REG_DISPSTAT]
+
+	;Force UI visible in first 8 scanlines
+	;part 3: Restore old values
+	ldmfd sp!,{r0-r4}
+	stmia r4,{r0-r3}
 
 	bl transfer_palette_
 
@@ -1300,8 +1267,8 @@ entermode2_
 	orr r1,r1,r1,lsl#16
 	str r1,dispcntdata
 	
-	;default bgXcnt: 000mmmmm000cccpp
-	ldr r1,=0x1A02
+	;default bgXcnt: 000mmmmm0000ccpp
+	ldr r1,= TILEMAP1*0x100 + 0x02	;formerly 1A02
 	tst r0,#0x10 ;Tile Select
 	orreq r1,r1,#0x0008
 
@@ -1319,13 +1286,14 @@ entermode2_
 	cmp r0,#1
 	orreq r1,r1,#0x0003	;For GBC, low priority for all layers
 	addne r1,r1,#0x0100	;For non-gbc, make all tiles color zero
-	bicne r1,r1,#0x000C
+	orrne r1,r1,#0x0008
 0
 	str r1,bg01cnt
 	add r1,r1,#0x00000100 ;for color 0 tiles (BG)
 	add r1,r1,#0x01000000
-	bic r1,r1,#0x0000000C
-	bic r1,r1,#0x000C0000
+	orr r1,r1,#0x00000008
+	orr r1,r1,#0x00080000
+	orrne r1,r1,#0x0008
 	str r1,bg23cnt
 
 mode2_update_scroll
@@ -1381,7 +1349,7 @@ entermode0_
 	str r1,dispcntdata
 	
 	;default bgXcnt: 000mmmmm000cccpp
-	ldr r1,=0x1A02
+	ldr r1,= TILEMAP1*0x100 + 0x02	;formerly 1A02
 	tst r0,#0x10 ;Tile Select
 	orreq r1,r1,#0x0008
 	tst r0,#0x08 ;BG Tilemap
@@ -1389,14 +1357,14 @@ entermode0_
 	orr r1,r1,r1,lsl#16
 	add r1,r1,#0x01000000 ;for color 0 tiles
 	orr r1,r1,#0x00010000
-	bic r1,r1,#0x000C0000
+	orr r1,r1,#0x00080000
 	tst r0,#0x01 ;BG enable
 	bne %f0
 	ldrb r0,gbcmode
 	cmp r0,#1
 	addne r1,r1,#0x0100
 ;	orrne r1,r1,#0x0001  ;because there's the unconditional right below this
-	bicne r1,r1,#0x000C
+	orrne r1,r1,#0x0008
 	orr r1,r1,#0x0001
 	movs r0,#0
 0	
@@ -1438,7 +1406,7 @@ entermode1_
 	str r1,dispcntdata
 	
 	;default bgXcnt: 000mmmmm000cccpp
-	ldr r1,=0x1A02
+	ldr r1,= TILEMAP1*0x100 + 0x02	;formerly 1A02
 	tst r0,#0x10 ;Tile Select
 	orreq r1,r1,#0x0008
 	tst r0,#0x40 ;Window Tilemap
@@ -1446,7 +1414,7 @@ entermode1_
 	orr r1,r1,r1,lsl#16
 	add r1,r1,#0x01000000 ;for color 0 tiles
 	orr r1,r1,#0x00010000
-	bic r1,r1,#0x000C0000
+	orr r1,r1,#0x00080000
 	tst r0,#0x01 ;BG enable
 	bne %f0
 	ldrb r0,gbcmode
@@ -1775,7 +1743,7 @@ update_ui_border_masks_2
 1 ;UI visible
 	ldr r0,=0xFFFF0000
 	str r0,ui_border_cnt_bic
-	ldr r0,=0x4E0C0000
+	ldr r0,=0x40040000 + UI_TILEMAP*0x1000000
 	str r0,ui_border_cnt_orr
 
 	mov r0,r1,lsr#8    ;ui_x
@@ -1788,7 +1756,7 @@ update_ui_border_masks_2
 2 ;Border visible
 	ldr r0,=0xFFFF0000
 	str r0,ui_border_cnt_bic
-	ldr r0,=0x0D040000
+	ldr r0,=0x000C0000 + BORDER_TILEMAP*0x1000000
 	str r0,ui_border_cnt_orr
 ;snes_screen_y = (224-144)/2 = 40
 ;gba_screen_y = (160-144)/2 = 8
@@ -1800,7 +1768,7 @@ update_ui_border_masks_2
 3 ;UI and Border visible
 	mvn r0,#0
 	str r0,ui_border_cnt_bic
-	ldr r0,=0x0D044E0C
+	ldr r0,=0x000C4004 + BORDER_TILEMAP*0x1000000 + UI_TILEMAP*0x100
 	str r0,ui_border_cnt_orr
 	ldr r0,= (40-SCREEN_Y_START)*65536 + (48-SCREEN_X_START)
 	str r0,ui_border_scroll3
@@ -1876,8 +1844,8 @@ consume_bg_cache
 	
 	ldr r2,=XGB_VRAM+0x1800
 	add r2,r2,r0
-	ldreq r11,=VRAM_BASE+26*2048
-	ldrne r11,=VRAM_BASE+29*2048
+	ldreq r11,=VRAM_BASE+TILEMAP1*2048
+	ldrne r11,=VRAM_BASE+TILEMAP2*2048
 	add r11,r11,r1,lsl#1
 	ldrh r0,[r2]
 	add r2,r2,#0x2000
@@ -1905,10 +1873,10 @@ display_whole_map
 	
 	stmfd sp!,{lr}
 	ldr addy,=XGB_VRAM+0x1800
-	ldr r11,=VRAM_BASE+26*2048 ;D000
+	ldr r11,=VRAM_BASE+TILEMAP1*2048 ;D000
 	bl update_whole_map
 	ldr addy,=XGB_VRAM+0x1800+0x400
-	ldr r11,=VRAM_BASE+29*2048 ;D000
+	ldr r11,=VRAM_BASE+TILEMAP2*2048 ;D000
 	bl update_whole_map
 	ldmfd sp!,{pc}
 
@@ -2328,7 +2296,9 @@ dm11
 	;tile
 	and r0,r3,#0x00FF0000
 	orr r1,r1,r0,lsr#16
-	
+	[ OBJ_BASE = 0x14000	
+	add r1,r1,#512
+	]
 	strh r1,[r2],#4		;store OBJ Atr 2
 dm9
 	cmp addy,r9
@@ -2377,6 +2347,9 @@ dm12
 	and r0,r3,#0x00FF0000
 	orr r1,r1,r0,lsr#16
 	bic r1,r1,#0x0001
+	[ OBJ_BASE = 0x14000	
+	add r1,r1,#512
+	]
 
 	strh r1,[r2],#4		;store OBJ Atr 2
 dm14
@@ -2421,6 +2394,20 @@ do_gba_hdma
 	mov r2,#REG_BASE
 	ldr r0,=0x28 + 256*(SCREEN_Y_START+144-1) ;scanline 144+8-1, enable vblank+vcount interrupts
 	strh r0,[r2,#REG_DISPSTAT]
+
+	ldr r0,_ui_border_screen
+	and r0,r0,#3
+	;update WININ and WINOUT registers
+	cmp r0,#2
+	ldrle r1,=0xFFE8FFFA ;one layer
+	cmp r0,#3
+	ldreq r1,=0xFFECFFFE ;two layers
+	cmp r0,#0
+	ldreq r1,=0xFFE0FFFA ;no extra layers
+	str r1,[r2,#REG_WININ]
+
+
+
 	mov globalptr,r12
 	bx lr
 	
@@ -2879,7 +2866,9 @@ FF41_W;		LCD Status
 	and r0,r0,#0x78
 	orr r0,r0,r1
 	strb r0,lcdstat
-	mov pc,lr
+	ldrb r0,lcdyc
+	b_long lcdyc_check
+;	mov pc,lr
 
 
 FF41_R_vblank
@@ -2890,12 +2879,13 @@ FF41_R;		LCD Status
 ;----------------------------------------------------------------------------
 lcdstat
 	mov r0,#1
-FF41_modify2	cmp cycles,#204*CYCLE
+FF41_modify1	cmp cycles,#204*CYCLE
 	bxlt lr				;return if after VRAM access
 	orr r0,r0,#2
-FF41_modify1	cmp cycles,#376*CYCLE
-	bxlt lr				;return if after OAM access
-	orr r0,r0,#3
+FF41_modify2	cmp cycles,#376*CYCLE
+;	bxlt lr				;return if after OAM access
+;	orr r0,r0,#3
+	orrge r0,r0,#3
 	bx lr
 
 ;----------------------------------------------------------------------------
@@ -2961,6 +2951,7 @@ FF45_R;		LCD Y Compare
 FF45_W;		LCD Y Compare
 ;----------------------------------------------------------------------------
 	strb r0,lcdyc
+lcdyc_check
 	ldrb r1,scanline
 	cmp r0,r1
 	ldrb r0,lcdstat
@@ -3513,11 +3504,11 @@ EMUinput	DCD 0 ;XGBjoypad (this is what GB sees)
 
 lcdstate
 	DCB 0 ;lcdctrl  ff40
-	DCB 0 ;lcdstat
+	DCB 0 ;lcdstat_save
 	DCB 0 ;scrollX
 	DCB 0 ;scrollY
 	
-	DCB 0 ;scanline
+g_scanline	DCB 0 ;scanline
 	DCB 0 ;lcdyc
 	DCB 0 ;[unused] dma start address
 	DCB 0 ;bgpalette
@@ -3533,7 +3524,8 @@ lcdstate
 	DCB 0 ;vrambank
 
 	DCD 0 ;dma_src, dma_dest
-
+;;end of lcdstate
+	
 	DCD DIRTY_TILES		;dirty_tiles
 	DCD DIRTY_ROWS		;dirty_rows
 

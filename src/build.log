@@ -1,0 +1,1173 @@
+
+Inter-AREA References
+
+boot.o(rom_code) refers to main.o(C$$data) for textstart
+boot.o(rom_code) refers to main.o(C$$code) for C_entry
+io.o(wram_code1) refers to lcd.o(wram_code1) for OAM_R
+io.o(wram_code1) refers to io.o(rom_code_)
+io.o(wram_code1) refers to memory.o(wram_code2) for void
+io.o(wram_code1) refers to sound.o(rom_code) for _FF10R
+io.o(wram_code1) refers to lcd.o(rom_code_) for FF42_R
+io.o(wram_code1) refers to gbz80.o(wram_code0) for immediate_check_irq
+io.o(rom_code_) refers to io.o(wram_code1)
+io.o(rom_code_) refers to sgb.o(rom_code7) for joy0_W_SGB
+io.o(rom_code_) refers to cart.o(wram_code4) for map0123_
+main.o(C$$code) refers to lcd.o(wram_globals1) for ui_border_visible
+main.o(C$$code) refers to lcd.o(rom_code) for move_ui
+main.o(C$$code) refers to main.o(C$$data)
+main.o(C$$code) refers to io.o(rom_code) for waitframe
+main.o(C$$code) refers to _sdiv.o(C$$code) for __16__rt_sdiv
+main.o(C$$code) refers to ui.o(C$$data) for autostate
+main.o(C$$code) refers to cart.o(wram_globals2) for g_emuflags
+main.o(C$$code) refers to gbz80.o(rom_code) for run
+main.o(C$$code) refers to sram.o(C$$code) for quickload
+main.o(C$$code) refers to cart.o(rom_code) for loadcart
+main.o(C$$code) refers to ui.o(C$$code) for ui
+main.o(C$$code) refers to memmove.o(C$$code) for memcpy
+main.o(C$$code) refers to boot.o(rom_code) for fontpal_bin
+main.o(C$$code) refers to lcd.o(wram_code1) for vblankinterrupt
+main.o(C$$code) refers to main.o(C$$zidata) for pogoshell_romname
+main.o(C$$code) refers to sram.o(C$$data) for buffer3
+main.o(C$$code) refers to rumble.o(C$$data) for SerialIn
+main.o(C$$code) refers to minilzo.o(C$$code) for __lzo_init2
+main.o(C$$code) refers to memset.o(C$$code) for memset
+cart.o(rom_code) refers to mappers.o(wram_code3) for mbc0init
+cart.o(rom_code) refers to io.o(rom_code) for thumbcall_r1
+cart.o(rom_code) refers to memory.o(rom_code) for memset_
+cart.o(rom_code) refers to gbz80.o(rom_code) for emu_reset
+cart.o(rom_code) refers to gbz80.o(wram_globals0) for GLOBAL_PTR_BASE
+cart.o(rom_code) refers to main.o(C$$code) for findrom2
+cart.o(rom_code) refers to cache.o(C$$code) for make_instant_pages
+cart.o(rom_code) refers to cart.o(wram_code4)
+cart.o(rom_code) refers to memory.o(wram_code2) for empty_W
+cart.o(rom_code) refers to gbz80.o(wram_code0) for default_scanlinehook
+cart.o(rom_code) refers to gbz80.o(wram_globals6) for XGB_RAM
+cart.o(rom_code) refers to cart.o(wram_globals2)
+cart.o(rom_code) refers to io.o(wram_code1) for joy0_W
+cart.o(rom_code) refers to sram.o(C$$code) for get_saved_sram
+ui.o(C$$code) refers to ui.o(C$$data)
+ui.o(C$$code) refers to main.o(C$$data) for selectedrom
+ui.o(C$$code) refers to boot.o(rom_code) for goomba_mb_gba
+ui.o(C$$code) refers to io.o(rom_code) for jump_r0
+ui.o(C$$code) refers to memmove.o(C$$code) for memcpy
+ui.o(C$$code) refers to main.o(C$$code) for drawtext
+ui.o(C$$code) refers to sgb.o(wram_globals4) for auto_border
+ui.o(C$$code) refers to gbz80.o(wram_globals0) for doubletimer
+ui.o(C$$code) refers to gbz80.o(rom_code) for update_doublespeed_ui
+ui.o(C$$code) refers to _sdiv.o(C$$code) for __16__rt_sdiv
+ui.o(C$$code) refers to lcd.o(wram_globals1) for sgb_palette_number
+ui.o(C$$code) refers to lcd.o(rom_code) for transfer_palette
+ui.o(C$$code) refers to io.o(wram_code1) for joycfg
+ui.o(C$$code) refers to sram.o(C$$code) for writeconfig
+ui.o(C$$code) refers to mbclient.o(C$$code) for SendMBImageToClient
+ui.o(C$$code) refers to lcd.o(wram_code1) for fpsenabled
+ui.o(C$$code) refers to gbz80.o(wram_globals5) for sleeptime
+ui.o(C$$code) refers to ui.o(C$$zidata) for str
+ui.o(C$$code) refers to ui.o(C$$constdata) for x$constdata
+ui.o(C$$code) refers to strcat.o(C$$code) for strcat
+ui.o(C$$code) refers to strcpy.o(C$$code) for strcpy
+ui.o(C$$code) refers to call_via.o(C$$code) for __call_via_r0
+ui.o(C$$code) refers to sram.o(C$$data) for sram_owner
+ui.o(C$$constdata) refers to ui.o(C$$code)
+ui.o(C$$constdata) refers to sram.o(C$$code) for managesram
+ui.o(C$$data) refers to ui.o(C$$constdata) for fnlist3
+mappers.o(wram_code3) refers to memory.o(wram_code2) for empty_W
+mappers.o(wram_code3) refers to cart.o(wram_code4) for mapAB_
+mappers.o(wram_code3) refers to io.o(rom_code) for gettime
+mappers.o(wram_code3) refers to rumble.o(C$$data) for DoRumble
+lcd.o(rom_code) refers to memory.o(rom_code) for memset_
+lcd.o(rom_code) refers to gbz80.o(wram_globals0) for GLOBAL_PTR_BASE
+lcd.o(rom_code) refers to lcd.o(wram_code1)
+lcd.o(rom_code) refers to gbz80.o(wram_globals6) for CHR_DECODE
+lcd.o(rom_code) refers to rumble.o(C$$code) for StartRumbleComs
+lcd.o(wram_code6) refers to gbz80.o(wram_globals6) for CHR_DECODE
+lcd.o(wram_code1) refers to rumble.o(C$$code) for RumbleInterrupt
+lcd.o(wram_code1) refers to lcd.o(wram_code6)
+lcd.o(wram_code1) refers to gbz80.o(wram_globals0) for GLOBAL_PTR_BASE
+lcd.o(wram_code1) refers to lcd.o(rom_code)
+lcd.o(wram_code1) refers to memory.o(wram_code2) for memcpy__
+lcd.o(wram_code1) refers to gbz80.o(wram_code0) for immediate_check_irq
+lcd.o(rom_code_) refers to lcd.o(wram_code1)
+memory.o(rom_code) refers to memory.o(wram_code2)
+gbz80.o(wram_code0) refers to lcd.o(wram_code1) for vram_W2
+gbz80.o(wram_code0) refers to gbz80.o(rom_code)
+gbz80.o(wram_code0) refers to io.o(wram_code1) for refreshNESjoypads
+gbz80.o(wram_code0) refers to gbz80.o(wram_globals0)
+gbz80.o(wram_code0) refers to cart.o(rom_code) for loadcart_after_sgb_border
+gbz80.o(wram_code0) refers to ui.o(C$$code) for ui
+gbz80.o(wram_code0) refers to sram.o(C$$code) for quickload
+gbz80.o(wram_code0) refers to io.o(rom_code) for suspend
+gbz80.o(rom_code) refers to io.o(rom_code_) for IO_reset
+gbz80.o(rom_code) refers to sound.o(rom_code) for Sound_reset
+gbz80.o(rom_code) refers to lcd.o(rom_code) for GFX_reset
+gbz80.o(rom_code) refers to sgb.o(rom_code7) for sgb_reset
+gbz80.o(rom_code) refers to gbz80.o(wram_globals0)
+gbz80.o(rom_code) refers to lcd.o(wram_code1) for FF41_modify1
+gbz80.o(rom_code) refers to io.o(wram_code1) for _FF70W
+gbz80.o(rom_code) refers to gbz80.o(wram_code0)
+gbz80.o(wram_globals0) refers to io.o(wram_code1) for IO_R
+gbz80.o(wram_globals0) refers to memory.o(wram_code2) for mem_RC0_2
+gbz80.o(wram_globals0) refers to gbz80.o(wram_code0)
+gbz80.o(wram_globals0) refers to gbz80.o(rom_code)
+gbz80.o(wram_globals0) refers to lcd.o(wram_code1) for vram_W
+cache.o(C$$code) refers to memmove.o(C$$code) for memcpy
+mbclient.o(C$$code) refers to mbclient.o(C$$constdata) for x$constdata
+mbclient.o(C$$code) refers to cart.o(wram_globals2) for romnum
+mbclient.o(C$$code) refers to boot.o(rom_code) for goomba_mb_gba
+mbclient.o(C$$code) refers to main.o(C$$code) for findrom
+rumble.o(C$$code) refers to main.o(C$$data) for gameboyplayer
+rumble.o(C$$code) refers to rumble.o(C$$data)
+rumble.o(C$$code) refers to rumble.o(C$$constdata) for x$constdata
+sram.o(C$$code) refers to sram.o(C$$data)
+sram.o(C$$code) refers to lcd.o(wram_globals1) for gammavalue
+sram.o(C$$code) refers to ui.o(C$$data) for autostate
+sram.o(C$$code) refers to sram.o(C$$constdata) for x$constdata
+sram.o(C$$code) refers to memmove.o(C$$code) for memcpy
+sram.o(C$$code) refers to cart.o(wram_globals2) for romstart
+sram.o(C$$code) refers to minilzo.o(C$$code) for lzo1x_decompress
+sram.o(C$$code) refers to main.o(C$$data) for textstart
+sram.o(C$$code) refers to gbz80.o(wram_globals0) for frametotal
+sram.o(C$$code) refers to ui.o(C$$code) for loadstate
+sram.o(C$$code) refers to main.o(C$$zidata) for pogoshell_romname
+sram.o(C$$code) refers to strncpy.o(C$$code) for strncpy
+sram.o(C$$code) refers to main.o(C$$code) for findrom
+sram.o(C$$code) refers to strcpy.o(C$$code) for strcpy
+sram.o(C$$code) refers to _sdiv.o(C$$code) for __16__rt_sdiv
+sram.o(C$$code) refers to sdiv10.o(C$$code) for __16__rt_sdiv10
+sram.o(C$$code) refers to io.o(rom_code) for waitframe
+sram.o(C$$code) refers to lcd.o(rom_code) for move_ui
+sgb.o(rom_code7) refers to memory.o(rom_code) for memset_
+sgb.o(rom_code7) refers to lcd.o(rom_code) for move_ui
+sgb.o(rom_code7) refers to gbz80.o(wram_code0) for _00
+sgb.o(rom_code7) refers to lcd.o(wram_code1) for update_ui_border_masks
+sgb.o(rom_code7) refers to gbz80.o(wram_globals6) for CHR_DECODE
+minilzo.o(C$$code) refers to minilzo.o(C$$data)
+minilzo.o(C$$code) refers to minilzo.o(C$$constdata) for x$constdata
+minilzo.o(C$$code) refers to minilzo.o(C$$zidata)
+minilzo.o(C$$code) refers to memset.o(C$$code) for memset
+minilzo.o(C$$code) refers to memmove.o(C$$code) for memmove
+minilzo.o(C$$code) refers to memcmp.o(C$$code) for memcmp
+minilzo.o(C$$code) refers to _udiv.o(C$$code) for __16__rt_udiv
+_sdiv.o(C$$code) refers to rt_div0.o(C$$code) for __16__rt_div0
+_udiv.o(C$$code) refers to rt_div0.o(C$$code) for __16__rt_div0
+
+
+Symbol Table
+
+rom_code$$Base           8000000
+rom_code$$Limit          8010420
+rom_code                 8000000
+Image$$RO$$Base          8000000
+Image$$RO$$Limit         8014544
+Image$$RW$$Base          3000000
+Image$$RW$$Limit         300791c
+Image$$ZI$$Base          30078d0
+Image$$ZI$$Limit         300791c
+C_entry                  800e288
+textstart                3007860
+max_multiboot_size       3007874
+font_lz77                800020c
+fontpal_bin              8000980
+goomba_mb_gba            80009c0
+goomba_mb_gba_size       00d8b0
+x$litpool$1              80001d8
+x$litpool_e$1            800020b
+wram_code1$$Base         3002ad0
+wram_code1$$Limit        30045a8
+rom_code_$$Base          8013b4c
+rom_code_$$Limit         8013d48
+wram_globals3$$Base      30053ac
+wram_globals3$$Limit     30053b4
+void                     30045a8
+empty_R                  30045a8
+empty_W                  30045b0
+mem_R00                  30045b4
+mem_R20                  30045c0
+mem_R40                  30045cc
+mem_R60                  30045d8
+mem_R80                  30045e4
+mem_RA0                  30045f0
+mem_RC0                  30045fc
+mem_RC0_2                3004608
+sram_W                   3004620
+sram_W2                  3004614
+wram_W                   300462c
+wram_W_2                 300463c
+echo_W                   3004658
+echo_R                   3004648
+memset_                  801245c
+memcpy_                  8012460
+memset__                 3004668
+memcpy__                 30046dc
+lcdstat                  300407c
+FF41_modify1             3004080
+FF41_R_vblank            3004074
+update_ui_border_masks   3003864
+newframe_vblank          3003ed0
+update_sgb_palette       801225c
+OAM_W                    30043b8
+OAM_R                    30043a4
+gbc_chr_update           3004af8
+GFX_init                 8011f30
+GFX_reset                8011fbc
+FF40_R                   3004010
+FF40_W                   3004018
+FF41_R                   300407c
+FF41_W                   3004058
+FF42_R                   8013cbc
+FF42_W                   3004098
+FF43_R                   8013cc4
+FF43_W                   30040bc
+FF44_R                   30040f0
+FF44_W                   8013ccc
+FF45_R                   3004100
+FF45_W                   3004108
+FF46_W                   3003ce0
+FF47_R                   8013cd0
+FF47_W                   3004140
+FF48_R                   8013cd8
+FF48_W                   30041c8
+FF49_R                   8013ce0
+FF49_W                   30041fc
+FF4A_R                   8013ce8
+FF4A_W                   3004230
+FF4B_R                   8013cf0
+FF4B_W                   3004298
+FF4F_W                   3004254
+FF4F_R                   3004290
+FF68_R                   8013cf8
+FF69_R                   8013d00
+FF6A_R                   8013d14
+FF6B_R                   8013d1c
+FF68_W                   8013d30
+FF69_W                   300434c
+FF6A_W                   8013d38
+FF6B_W                   300436c
+vram_W                   30042bc
+vram_W2                  3004320
+gbc_palette              30043e0
+debug_                   8012258
+newframe                 3004008
+lcdstate                 30052c0
+resetlcdregs             80120e0
+Sound_reset              8011954
+_FF10W                   8011998
+_FF11W                   80119a4
+_FF12W                   80119b0
+_FF13W                   80119bc
+_FF14W                   80119c8
+_FF16W                   80119d4
+_FF17W                   80119e0
+_FF18W                   80119ec
+_FF19W                   80119f8
+_FF1AW                   8011a04
+_FF1BW                   8011a18
+_FF1CW                   8011a24
+_FF1DW                   8011a34
+_FF1EW                   8011a40
+_FF20W                   8011a5c
+_FF21W                   8011a68
+_FF22W                   8011a74
+_FF23W                   8011a80
+_FF24W                   8011a8c
+_FF25W                   8011a98
+_FF26W                   8011aa4
+_FF30W                   8011a4c
+_FF10R                   8011ab0
+_FF11R                   8011abc
+_FF12R                   8011ac8
+_FF13R                   8011ad4
+_FF14R                   8011ae0
+_FF16R                   8011aec
+_FF17R                   8011af8
+_FF18R                   8011b04
+_FF19R                   8011b10
+_FF1AR                   8011b1c
+_FF1BR                   8011b2c
+_FF1CR                   8011b38
+_FF1DR                   8011b48
+_FF1ER                   8011b54
+_FF20R                   8011b70
+_FF21R                   8011b7c
+_FF22R                   8011b88
+_FF23R                   8011b94
+_FF24R                   8011ba0
+_FF25R                   8011bac
+_FF26R                   8011bb8
+_FF30R                   8011b60
+loadcart_after_sgb_border 801162c
+loadcart                 8011644
+map0123_                 30049e8
+map4567_                 3004a14
+mapAB_                   3004a5c
+novblankwait             30052b3
+XGB_RAM                  30053dc
+XGB_HRAM                 30073dc
+CHR_DECODE               300745c
+GLOBAL_PTR_BASE          3004ddc
+emu_reset                8013388
+default_scanlinehook     300279c
+cpustate                 300525c
+rommap                   300521c
+checkIRQ                 3002864
+line145_to_end           3002724
+gbc_mode                 3005281
+immediate_check_irq      3002758
+joy0_W_SGB               801356c
+joy0_R_SGB               8013558
+g_update_border_palette  30053c0
+sgb_reset                80134a4
+g_sgb_mask               30053bf
+_E0                      3002d9c
+_E2                      3002dd4
+_F0                      3002b20
+_F2                      3002b50
+IO_reset                 8013b4c
+IO_R                     3002b84
+IO_High_R                3002b90
+IO_W                     3002e10
+IO_High_W                3002e1c
+io_read_tbl              3002b9c
+io_write_tbl             3002e28
+joypad_write_ptr         3002e28
+joy0_W                   3003090
+joycfg                   3002b0c
+suspend                  80113f0
+refreshNESjoypads        3002ad0
+thumbcall_r1             801142c
+gettime                  8011430
+vbaprint                 80112a4
+waitframe                80112b4
+LZ77UnCompVram           80112ac
+CheckGBAVersion          80112c4
+_FF70W                   300304c
+FF41_R_ptr               3002ca0
+jump_r0                  80112fc
+rom_code                 801129c
+breakpoint               801129c
+doReset                  801138c
+wram_code1               3002ad0
+rom_code_                8013b4c
+wram_globals3            30053ac
+x$litpool$1              80114f8
+x$litpool_e$1            801151f
+x$litpool$2              3003158
+x$litpool_e$2            3003167
+x$litpool$3              8013ca0
+x$litpool_e$3            8013cbb
+C$$code$$Base            800e270
+C$$code$$Limit           801129c
+C$$data$$Base            300785c
+C$$data$$Limit           30078d0
+C$$zidata$$Base          30078d0
+C$$zidata$$Limit         300791c
+oldinput                 300785c
+ewram_start              3007864
+roms                     3007868
+selectedrom              300786c
+pogoshell                3007870
+rtc                      3007871
+gameboyplayer            3007872
+gbaversion               3007873
+loadfont                 800e270
+x$litpool$0              800e280
+x$litpool_e$0            800e287
+vbldummy                 30031f8
+vblankfptr               30031fc
+GFX_init_irq             8011ef8
+SerialIn                 30078a0
+buffer1                  30078bc
+buffer2                  30078c0
+buffer3                  30078c4
+pogoshell_romname        30078d0
+memcpy                   8010fc8
+splash                   800e480
+memset                   8011050
+vblankinterrupt          300320c
+__lzo_init2              8010862
+$T                       800e408
+readconfig               801046c
+rommenu                  800e4e8
+x$litpool$1              800e428
+x$litpool_e$1            800e47f
+setbrightnessall         800e874
+x$litpool$2              800e4d8
+x$litpool_e$2            800e4e7
+cls                      800e7b4
+ui_x                     300531c
+setdarkness              800e868
+make_ui_visible          800e884
+backup_gb_sram           80100fc
+ui                       800e9e0
+g_emuflags               300539c
+AGBinput                 30052b8
+drawmenu                 800e6c8
+move_ui                  8011ec8
+getinput                 800e764
+__16__rt_sdiv            801108c
+run                      8013428
+autostate                3007883
+quickload                80100f0
+make_ui_invisible        800e8a8
+x$litpool$3              800e650
+x$litpool_e$3            800e667
+findrom2                 800e668
+x$litpool$4              800e6a4
+x$litpool_e$4            800e6ab
+findrom                  800e6ac
+$T                       800e6ae
+x$litpool$5              800e6c4
+x$litpool_e$5            800e6c7
+ui_y                     3005320
+$T                       800e72c
+drawtextl                800e810
+x$litpool$6              800e75c
+x$litpool_e$6            800e763
+EMUinput                 30052bc
+x$litpool$7              800e7a8
+x$litpool_e$7            800e7b3
+x$litpool$8              800e7fc
+x$litpool_e$8            800e803
+drawtext                 800e804
+x$litpool$9              800e860
+x$litpool_e$9            800e867
+darkness                 300530a
+x$litpool$10             800e870
+x$litpool_e$10           800e873
+x$litpool$11             800e880
+x$litpool_e$11           800e883
+ui_border_visible        3005307
+$T                       800e890
+$T                       800e896
+x$litpool$12             800e8a4
+x$litpool_e$12           800e8a7
+x$litpool$13             800e8bc
+x$litpool_e$13           800e8bf
+Lib$$Request$$armlib$$_i.16l ?????? Undefined, WEAK Reference
+wram_code4$$Base         30049d8
+wram_code4$$Limit        3004a84
+wram_globals2$$Base      3005360
+wram_globals2$$Limit     30053ac
+mbc0init                 3004780
+mbc1init                 3004794
+mbc2init                 3004808
+mbc3init                 300483c
+mbc4init                 30049bc
+mbc5init                 3004908
+mbc6init                 30049bc
+mbc7init                 3004948
+mmm01init                30049bc
+huc1init                 3004984
+huc3init                 30049a8
+get_saved_sram           801028c
+make_instant_pages       800f770
+init_cache               800f7d0
+g_sramsize               30053a9
+g_rammask                30053a4
+XGB_SRAM                 2038000
+romstart                 3005394
+romnum                   3005398
+g_cartflags              30053a8
+g_banks                  3005360
+MULTIBOOT_LIMIT          2029730
+INSTANT_PAGES            6004c00
+SramName                 2028c80
+fatBuffer                2028d80
+fatWriteBuffer           2028d80
+globalBuffer             2028f80
+openFiles                2029280
+lfnName                  2029180
+rom_code                 8011520
+wram_code4               30049d8
+wram_globals2            3005360
+x$litpool$1              8011904
+x$litpool_e$1            8011953
+x$litpool$2              3004a7c
+x$litpool_e$2            3004a83
+C$$constdata$$Base       8013d48
+C$$constdata$$Limit      80144c4
+autoA                    3007880
+autoB                    3007881
+stime                    3007882
+selected                 3007884
+mainmenuitems            3007888
+oldkey                   300788c
+savestate                800e8c0
+loadstate                800e8c4
+print_1_func             800e8c6
+strmerge_str             800e8e2
+text1_str                800e908
+print_2_func             800e8d4
+text2_str                800e93c
+str                      30078f0
+strcpy                   80110d4
+strcat                   801111c
+x$litpool$0              800e904
+x$litpool_e$0            800e907
+x$litpool$1              800e934
+x$litpool_e$1            800e93b
+x$litpool$2              800e960
+x$litpool_e$2            800e967
+multifnlist              8013d48
+autoBset                 800f2c0
+autoAset                 800f280
+ui3                      800ec0c
+ui2                      800ec00
+multiboot                800f3a4
+sleep_                   800f498
+restart                  800f454
+exit_                    800f470
+fnlist1                  8013d68
+savestatemenu            8010054
+loadstatemenu            80103cc
+managesram               800ffd8
+go_multiboot             800f618
+fnlist2                  8013d98
+vblset                   800f34c
+fpsset                   800f364
+sleepset                 800f300
+swapAB                   800f548
+autostateset             800f55c
+timermode                800f5dc
+gbtype                   800f594
+changeautoborder         800f604
+gbatype                  800f5b4
+fnlist3                  8013dbc
+chpalette                800f570
+brightset                800f378
+sgbpalnum                800f5c8
+fnlistX                  3007890
+drawuiX                  8013dc8
+drawui1                  800ee3e
+drawui2                  800efcc
+drawui3                  800f148
+MENUXITEMS               8013dd8
+getmenuinput             800e968
+x$litpool$3              800e9d8
+x$litpool_e$3            800e9df
+x$constdata              8013d48
+FPSValue                 30052b4
+drawclock                800f1f0
+$T                       800ea9c
+__call_via_r0            8011138
+sram_owner               30078b8
+writeconfig              80103d2
+x$litpool$4              800eb40
+x$litpool_e$4            800eb6f
+subui                    800eb70
+scrolll                  800f4ee
+$T                       800eb96
+scrollr                  800f520
+x$litpool$5              800ebe4
+x$litpool_e$5            800ebff
+$T                       800ec04
+$T                       800ec16
+text                     800ec24
+x$litpool$6              800ec50
+x$litpool_e$6            800ec53
+text2                    800ec54
+x$litpool$7              800ec74
+x$litpool_e$7            800ec77
+strmerge                 800ec78
+autotxt                  8013ddc
+vsynctxt                 8013de8
+sleeptxt                 8013df4
+brightxt                 8013e04
+hostname                 8013e18
+ctrltxt                  8013e2c
+bordtxt                  8013e40
+paltxt                   8013e50
+gbtxt                    8013e90
+clocktxt                 8013ea0
+palnumtxt                8013eac
+$T                       800ee58
+$T                       800ee7e
+$T                       800ee8a
+$T                       800ee90
+$T                       800ee96
+$T                       800ee9c
+$T                       800eeac
+$T                       800eeb2
+$T                       800eeb8
+$T                       800eebe
+$T                       800eec4
+$T                       800eeca
+$T                       800eed0
+$S28                     800eee8
+$S24                     800ef04
+$S16                     800ef24
+$S16                     800ef34
+$S12                     800ef44
+$S20                     800ef50
+$S16                     800ef64
+$S8                      800ef74
+$S16                     800ef7c
+$S16                     800ef8c
+$S16                     800ef9c
+$S16                     800efac
+$S8                      800efbc
+$S8                      800efc4
+x$litpool$8              800eedc
+x$litpool_e$8            800efcb
+$T                       800efee
+fpsenabled               30043dc
+$T                       800effe
+$T                       800f00e
+$T                       800f022
+$T                       800f032
+doubletimer              30052b0
+$T                       800f042
+request_gb_type          30052b2
+$T                       800f052
+auto_border              30053c1
+$T                       800f060
+request_gba_mode         30052b1
+$T                       800f06e
+$S24                     800f078
+$S8                      800f098
+$S12                     800f0a8
+$S12                     800f0bc
+$S12                     800f0cc
+$S20                     800f0d8
+$S16                     800f0f4
+$S12                     800f10c
+$S20                     800f11c
+$S20                     800f134
+x$litpool$9              800f078
+x$litpool_e$9            800f147
+palettebank              300534c
+$T                       800f16a
+gammavalue               3005309
+$T                       800f17a
+sgb_palette_number       3005308
+$T                       800f18a
+$S24                     800f194
+$S12                     800f1b4
+$S8                      800f1c8
+$S24                     800f1d8
+x$litpool$10             800f194
+x$litpool_e$10           800f1ef
+$S32                     800f260
+x$litpool$11             800f258
+x$litpool_e$11           800f27f
+x$litpool$12             800f2b4
+x$litpool_e$12           800f2bf
+x$litpool$13             800f2f4
+x$litpool_e$13           800f2ff
+sleeptime                30053d4
+x$litpool$14             800f338
+x$litpool_e$14           800f34b
+x$litpool$15             800f360
+x$litpool_e$15           800f363
+x$litpool$16             800f374
+x$litpool_e$16           800f377
+transfer_palette         80121b4
+x$litpool$17             800f39c
+x$litpool_e$17           800f3a3
+SendMBImageToClient      800f832
+$S24                     800f3f0
+$S24                     800f408
+$S28                     800f420
+$S24                     800f43c
+x$litpool$18             800f3f0
+x$litpool_e$18           800f453
+x$litpool$19             800f46c
+x$litpool_e$19           800f46f
+fadetowhite              800f4c4
+x$litpool$20             800f494
+x$litpool_e$20           800f497
+x$litpool$21             800f4c0
+x$litpool_e$21           800f4c3
+x$litpool$22             800f51c
+x$litpool_e$22           800f51f
+x$litpool$23             800f544
+x$litpool_e$23           800f547
+x$litpool$24             800f558
+x$litpool_e$24           800f55b
+x$litpool$25             800f56c
+x$litpool_e$25           800f56f
+paletteinit              801215c
+PaletteTxAll             8012108
+x$litpool$26             800f590
+x$litpool_e$26           800f593
+x$litpool$27             800f5b0
+x$litpool_e$27           800f5b3
+x$litpool$28             800f5c4
+x$litpool_e$28           800f5c7
+x$litpool$29             800f5d8
+x$litpool_e$29           800f5db
+update_doublespeed_ui    80132ec
+x$litpool$30             800f600
+x$litpool_e$30           800f603
+x$litpool$31             800f614
+x$litpool_e$31           800f617
+$T                       800f692
+$S32                     800f6ec
+$S32                     800f70c
+$S24                     800f72c
+$S20                     800f744
+x$litpool$32             800f6e0
+x$litpool_e$32           800f76f
+rom_code                 8011954
+x$litpool$1              8011bc4
+x$litpool_e$1            8011bc7
+wram_code3$$Base         3004748
+wram_code3$$Limit        30049d8
+wram_code3               3004748
+DoRumble                 30078a4
+x$litpool$1              30049d0
+x$litpool_e$1            30049d7
+wram_code6$$Base         3004a84
+wram_code6$$Limit        3004d9c
+wram_globals1$$Base      30052b4
+wram_globals1$$Limit     3005360
+RumbleInterrupt          800f9d0
+StartRumbleComs          800fad8
+g_scanline               30052c4
+vcountfptr               3003204
+vcountinterrupt          3003e30
+WINDOWBUFF               202a810
+rom_code                 8011bc8
+wram_code6               3004a84
+wram_code1               3003168
+rom_code_                8013cbc
+wram_globals1            30052b4
+x$litpool$1              8012354
+x$litpool_e$1            801245b
+x$litpool$2              3004d74
+x$litpool_e$2            3004d9b
+x$litpool$3              30032dc
+x$litpool_e$3            30032f3
+x$litpool$4              3003764
+x$litpool_e$4            300376f
+x$litpool$5              30044e0
+x$litpool_e$5            30045a7
+x$litpool$6              8013d40
+x$litpool_e$6            8013d47
+wram_code2$$Base         30045a8
+wram_code2$$Limit        3004748
+wram_code2               30045a8
+rom_code                 801245c
+x$litpool$2              8012464
+x$litpool_e$2            801246b
+wram_code0$$Base         3000000
+wram_code0$$Limit        3002ad0
+wram_globals5$$Base      30053d0
+wram_globals5$$Limit     30053dc
+wram_globals0$$Base      3004d9c
+wram_globals0$$Limit     30052b4
+wram_globals6$$Base      30053dc
+wram_globals6$$Limit     300785c
+wram_code0               3000000
+quicksave                80100f6
+dontstop                 30053d8
+XGB_VRAM                 2034000
+GBC_EXRAM                202e000
+op_table                 3004ddc
+g_memmap_tbl             300521c
+frametotal               3005290
+_00                      3000020
+g_hackflags              30053d9
+g_readmem_tbl            3004d9c
+g_writemem_tbl           30051dc
+rom_code                 801246c
+wram_globals5            30053d0
+wram_globals0            3004d9c
+wram_globals6            30053dc
+x$litpool$2              3002a98
+x$litpool_e$2            3002acf
+x$litpool$3              801248c
+x$litpool_e$3            801248f
+x$litpool$4              801342c
+x$litpool_e$4            801344b
+bank_0                   8013ebc
+bank_1                   8013ec0
+bank_2                   8013ec4
+x$litpool$0              800f7c4
+x$litpool_e$0            800f7cf
+Client                   8013ec8
+delay                    800f7d4
+DelayCycles              800f7de
+xfer                     800f7fa
+$T                       800f80c
+x$litpool$0              800f824
+x$litpool_e$0            800f82b
+swi25                    800f82c
+$T                       800f876
+$T                       800f87c
+$T                       800f88c
+$T                       800f896
+$T                       800f8a4
+x$constdata              8013ec8
+$T                       800f8ca
+$T                       800f8d0
+$T                       800f8f4
+$T                       800f910
+$T                       800f91e
+$T                       800f924
+$T                       800f936
+$T                       800f93e
+$T                       800f956
+$T                       800f96a
+$T                       800f988
+x$litpool$1              800f9a4
+x$litpool_e$1            800f9cf
+RumbleCnt                30078a8
+stage                    30078ac
+ind                      30078ae
+SerOut0                  30078b0
+SerOut1                  30078b2
+GBPData                  8014474
+x$constdata              8014474
+x$litpool$0              800f9f0
+x$litpool_e$0            800f9f5
+x$litpool$1              800fab0
+x$litpool_e$1            800fad7
+x$litpool$2              800fb10
+x$litpool_e$2            800fb23
+totalstatesize           30078b4
+bytecopy                 800fb24
+flush_end_sram           800fb36
+flush_xgb_sram           800fb50
+x$litpool$0              800fb68
+x$litpool_e$0            800fb6b
+getsram                  800fb6c
+$T                       800fb82
+x$litpool$1              800fb98
+x$litpool_e$1            800fb9f
+checksum                 800fba0
+x$litpool$2              800fbe8
+x$litpool_e$2            800fbeb
+writeerror               800fbec
+$S28                     800fc3c
+$S24                     800fc58
+x$litpool$3              800fc34
+x$litpool_e$3            800fc6f
+updatestates             800fc70
+$T                       800fd26
+x$litpool$4              800fd34
+x$litpool_e$4            800fd37
+twodigits                800fd38
+__16__rt_sdiv10          8011148
+getstatetimeandsize      800fd50
+$T                       800fd6c
+$T                       800fd88
+$T                       800fda2
+$T                       800fdac
+$T                       800fdb4
+$S20                     800fdc0
+x$litpool$5              800fdc0
+x$litpool_e$5            800fdd7
+drawstates               800fdd8
+$T                       800fe7e
+$S24                     800fef8
+$S8                      800ff10
+$S12                     800ff18
+$S12                     800ff24
+$S12                     800ff30
+x$litpool$6              800fef0
+x$litpool_e$6            800ff3b
+compressstate            800ff3c
+lzo1x_1_compress         8010b1c
+$T                       800ff86
+strncpy                  801118c
+x$litpool$7              800ffc0
+x$litpool_e$7            800ffd7
+$T                       800ffde
+$T                       800ffee
+$T                       8010016
+$T                       8010034
+x$litpool$8              801004c
+x$litpool_e$8            8010053
+findstate                801005a
+$T                       8010060
+x$litpool$9              801009c
+x$litpool_e$9            801009f
+uncompressstate          80100a0
+lzo1x_decompress         8010bb6
+setup_sram_after_loadstate 8010364
+x$litpool$10             80100d8
+x$litpool_e$10           80100df
+using_flashcart          80100e0
+x$litpool$11             80100ec
+x$litpool_e$11           80100ef
+$T                       801010e
+$T                       8010114
+$T                       8010134
+$T                       801017c
+$T                       8010184
+$T                       8010198
+$T                       80101b2
+$T                       80101c6
+$T                       801020c
+$T                       801021a
+no_sram_owner            801034c
+x$litpool$12             8010224
+x$litpool_e$12           8010237
+save_new_sram            8010238
+$T                       801026c
+$T                       8010276
+x$litpool$13             8010280
+x$litpool_e$13           801028b
+$T                       801028e
+$T                       80102a8
+$T                       80102b4
+$T                       80102be
+$T                       80102e6
+$T                       8010306
+register_sram_owner      801032c
+x$litpool$14             8010318
+x$litpool_e$14           801032b
+$T                       8010332
+x$litpool$15             8010344
+x$litpool_e$15           801034b
+$T                       8010358
+x$litpool$16             8010360
+x$litpool_e$16           8010363
+$T                       8010372
+$T                       801037e
+$T                       8010390
+$T                       801039c
+$T                       80103a6
+$T                       80103ae
+$T                       80103b2
+x$litpool$17             80103bc
+x$litpool_e$17           80103cb
+configtemplate           8014480
+$T                       80103d4
+$T                       80103e2
+x$constdata              8014480
+$T                       8010434
+$T                       8010448
+x$litpool$18             8010454
+x$litpool_e$18           801046b
+$T                       801046e
+$T                       801047c
+x$litpool$19             80104b8
+x$litpool_e$19           80104cb
+wram_globals4$$Base      30053b4
+wram_globals4$$Limit     30053d0
+rom_code7$$Base          801344c
+rom_code7$$Limit         8013b4c
+wram_globals4            30053b4
+rom_code7                801344c
+x$litpool$2              8013afc
+x$litpool_e$2            8013b4b
+__lzo_ptr_linear         80104cc
+__lzo_align_gap          80104ce
+$T                       80104d2
+__16__rt_udiv            80111ec
+lzo_assert               80104ec
+__lzo_copyright          80144b0
+lzo_copyright            80104f8
+x$constdata              80144b0
+x$litpool$0              80104fc
+x$litpool_e$0            80104ff
+lzo_version              8010500
+x$litpool$1              8010504
+x$litpool_e$1            8010507
+lzo_version_string       8010508
+$S8                      801050c
+x$litpool$2              801050c
+x$litpool_e$2            8010513
+lzo_version_date         8010514
+$S12                     8010518
+x$litpool$3              8010518
+x$litpool_e$3            8010523
+_lzo_version_string      8010524
+_lzo_version_date        801052a
+lzo_adler32              8010530
+x$litpool$4              80105f0
+x$litpool_e$4            80105f7
+lzo_memcmp               80105f8
+memcmp                   801121c
+lzo_memcpy               8010602
+lzo_memmove              801060c
+memmove                  8010fc8
+lzo_memset               8010616
+basic_integral_check     8010620
+basic_ptr_check          8010624
+ptr_check                8010628
+$T                       801063e
+$T                       8010724
+x$litpool$5              8010794
+x$litpool_e$5            8010797
+x                        3007910
+_lzo_config_check        8010798
+$T                       801079a
+$T                       80107a2
+schedule_insns_bug       8010828
+strength_reduce_bug      8010844
+$T                       801080a
+x$litpool$6              8010820
+x$litpool_e$6            8010827
+x$litpool$7              8010840
+x$litpool_e$7            8010843
+__lzo_init_done          30078cc
+$T                       80108f4
+x$litpool$8              80108fc
+x$litpool_e$8            80108ff
+_lzo1x_1_do_compress     8010900
+x$litpool$9              8010b14
+x$litpool_e$9            8010b1b
+$T                       8010b3c
+x$litpool$10             8010d54
+x$litpool_e$10           8010d57
+lzo1x_decompress_safe    8010d58
+x$litpool$11             8010fc4
+x$litpool_e$11           8010fc7
+C$$code                  8010fc8
+$$                       8010fc8
+C$$code                  8011050
+$$                       8011050
+C$$code                  8011084
+__16__rt_div0            8011258
+__16x$divide             8011084
+__rt_sdiv                8011084
+$$                       8011084
+$$                       801108c
+$T                       80110a0
+C$$code                  80110d4
+$$                       80110d4
+C$$code                  8011138
+__call_via_r1            801113a
+__call_via_r2            801113c
+__call_via_r3            801113e
+__call_via_r4            8011140
+__call_via_r5            8011142
+__call_via_r6            8011144
+__call_via_r7            8011146
+$$                       8011138
+C$$code                  8011148
+__16_kernel_sdiv10       8011148
+_kernel_sdiv10           8011148
+__rt_sdiv10              801114c
+$$                       8011148
+$$                       801114c
+C$$code                  801118c
+$$                       801118c
+C$$code                  80111e4
+__16x$udivide            80111e4
+__rt_udiv                80111e4
+$$                       80111e4
+$$                       80111ec
+$T                       80111f2
+C$$code                  801121c
+$$                       801121c
+C$$code                  8011258
+__rt_trap                ?????? Undefined, WEAK Reference
+__rt_div0                801125c
+$$                       8011258
+$$                       801125c
+x$litpool$1              8011298
+x$litpool_e$1            801129b
+_etext                   8014544
+_edata                   30078d0
+_end                     300791c
+IWV$$Code$$Base          80144c4
+IWV$$Code$$Limit         8014544
+
+AREA map of C:\gba\goombacolor_gcc\sdt_yay_newcpu\GBABIN\goomba.gba:
+
+Base     Size     Type RO? Name
+8000000  e270     CODE RO  rom_code from object file boot.o
+800e270  650      CODE RO  C$$code from object file main.o
+800e8c0  eb0      CODE RO  C$$code from object file ui.o
+800f770  64       CODE RO  C$$code from object file cache.o
+800f7d4  1fc      CODE RO  C$$code from object file mbclient.o
+800f9d0  154      CODE RO  C$$code from object file rumble.o
+800fb24  9a8      CODE RO  C$$code from object file sram.o
+80104cc  afc      CODE RO  C$$code from object file minilzo.o
+8010fc8  88       CODE RO  C$$code from object file memmove.o
+8011050  34       CODE RO  C$$code from object file memset.o
+8011084  50       CODE RO  C$$code from object file _sdiv.o
+80110d4  48       CODE RO  C$$code from object file strcpy.o
+801111c  1c       CODE RO  C$$code from object file strcat.o
+8011138  10       CODE RO  C$$code from object file call_via.o
+8011148  44       CODE RO  C$$code from object file sdiv10.o
+801118c  58       CODE RO  C$$code from object file strncpy.o
+80111e4  38       CODE RO  C$$code from object file _udiv.o
+801121c  3c       CODE RO  C$$code from object file memcmp.o
+8011258  44       CODE RO  C$$code from object file rt_div0.o
+801129c  284      CODE RO  rom_code from object file io.o
+8011520  434      CODE RO  rom_code from object file cart.o
+8011954  274      CODE RO  rom_code from object file sound.o
+8011bc8  894      CODE RO  rom_code from object file lcd.o
+801245c  10       CODE RO  rom_code from object file memory.o
+801246c  fe0      CODE RO  rom_code from object file gbz80.o
+801344c  700      CODE RO  rom_code7 from object file sgb.o
+8013b4c  170      CODE RO  rom_code_ from object file io.o
+8013cbc  8c       CODE RO  rom_code_ from object file lcd.o
+8013d48  174      DATA RO  C$$constdata from object file ui.o
+8013ebc  c        DATA RO  C$$constdata from object file cache.o
+8013ec8  5ac      DATA RO  C$$constdata from object file mbclient.o
+8014474  c        DATA RO  C$$constdata from object file rumble.o
+8014480  30       DATA RO  C$$constdata from object file sram.o
+80144b0  14       DATA RO  C$$constdata from object file minilzo.o
+80144c4  80       DATA RO  IWV$$Code from object file <anon>
+3000000  2ad0     CODE RW  wram_code0 from object file gbz80.o
+3002ad0  698      CODE RW  wram_code1 from object file io.o
+3003168  1440     CODE RW  wram_code1 from object file lcd.o
+30045a8  1a0      CODE RW  wram_code2 from object file memory.o
+3004748  290      CODE RW  wram_code3 from object file mappers.o
+30049d8  ac       CODE RW  wram_code4 from object file cart.o
+3004a84  318      CODE RW  wram_code6 from object file lcd.o
+3004d9c  518      CODE RW  wram_globals0 from object file gbz80.o
+30052b4  ac       CODE RW  wram_globals1 from object file lcd.o
+3005360  4c       CODE RW  wram_globals2 from object file cart.o
+30053ac  8        CODE RW  wram_globals3 from object file io.o
+30053b4  1c       CODE RW  wram_globals4 from object file sgb.o
+30053d0  c        CODE RW  wram_globals5 from object file gbz80.o
+30053dc  2480     CODE RW  wram_globals6 from object file gbz80.o
+300785c  24       DATA RW  C$$data from object file main.o
+3007880  20       DATA RW  C$$data from object file ui.o
+30078a0  14       DATA RW  C$$data from object file rumble.o
+30078b4  14       DATA RW  C$$data from object file sram.o
+30078c8  8        DATA RW  C$$data from object file minilzo.o
+30078d0  20       ZERO RW  C$$zidata from object file main.o
+30078f0  20       ZERO RW  C$$zidata from object file ui.o
+3007910  c        ZERO RW  C$$zidata from object file minilzo.o
+
+
+Image entry point : 8000000
+Entry area : "rom_code" from object file boot.o
+object file         code   inline   inline  'const'       RW   0-Init    debug
+                    size     data  strings     data     data     data     data
+boot.o             57916       52        0        0        0        0        0
+io.o                2624       84        0        0        0        0        0
+main.o              1416      200        0        0       36       32        0
+cart.o              1236       88        0        0        0        0        0
+ui.o                2712      364      684      372       32       32        0
+sound.o              624        4        0        0        0        0        0
+mappers.o            648        8        0        0        0        0        0
+lcd.o               7936      548        0        0        0        0        0
+memory.o             424        8        0        0        0        0        0
+gbz80.o            25592       92        0        0        0        0        0
+cache.o               88       12        0       12        0        0        0
+mbclient.o           456       52        0     1452        0        0        0
+rumble.o             272       68        0       12       20        0        0
+sram.o              2120      212      140       48       20        0        0
+sgb.o               1740       80        0        0        0        0        0
+minilzo.o           2740       52       20       20        8       12        0
+<anon>                 0        0        0      128        0        0        0
+
+library member      code   inline   inline  'const'       RW   0-Init    debug
+                    size     data  strings     data     data     data     data
+memmove.o            136        0        0        0        0        0        0
+memset.o              52        0        0        0        0        0        0
+_sdiv.o               80        0        0        0        0        0        0
+strcpy.o              72        0        0        0        0        0        0
+strcat.o              28        0        0        0        0        0        0
+call_via.o            16        0        0        0        0        0        0
+sdiv10.o              68        0        0        0        0        0        0
+strncpy.o             88        0        0        0        0        0        0
+_udiv.o               56        0        0        0        0        0        0
+memcmp.o              60        0        0        0        0        0        0
+rt_div0.o             64        4        0        0        0        0        0
+
+                    code   inline   inline  'const'       RW   0-Init    debug
+                    size     data  strings     data     data     data     data
+Object totals     108544     1924      844     2044      116       76        0
+Library totals       720        4        0        0        0        0        0
+Grand totals      109264     1928      844     2044      116       76        0
+ARM Linker: finished,  0 informational, 1 warning and 0 error messages.

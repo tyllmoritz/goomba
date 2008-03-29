@@ -307,7 +307,7 @@ char *const clocktxt[]={"None","Timers","Full"};
 char *const palnumtxt[]={"0","1","2","3"};
 
 #if SPEEDHACK2
-char *const hacknames[]={"jr z","jr nz", "jr c", "jr nc"};
+char *const hacknames[]={"jr nz","jr z", "jr nc", "jr c"};
 #endif
 
 void drawui1()
@@ -708,10 +708,10 @@ void go_multiboot()
 #if SPEEDHACK2
 u32*const speedhack_buffers[]=
 {
-	SPEEDHACK_FIND_JR_Z_BUF,
 	SPEEDHACK_FIND_JR_NZ_BUF,
-	SPEEDHACK_FIND_JR_C_BUF,
-	SPEEDHACK_FIND_JR_NC_BUF
+	SPEEDHACK_FIND_JR_Z_BUF,
+	SPEEDHACK_FIND_JR_NC_BUF,
+	SPEEDHACK_FIND_JR_C_BUF
 };
 const int num_speedhack_buffers=4;
 const int MAX_SPEEDHACK_LENGTH=16;

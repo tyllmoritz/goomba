@@ -1,6 +1,13 @@
 Goomba revision history
 -=-=-=-=-=-=-=-=-=-=-=-
 
+version 2008-03-29
+   Rearranged VRAM
+   Allowed more leeway in games crossing past page #0
+   Frame Rate counter now visible
+   Optimized memory reads by 1 cycle
+   Fixed LCD status polling for real (Final Fantasy Legend 1&2 work again)
+
 version 2008-03-18
    Some minor CPU optimizations
    Fixed fast LCD status polling

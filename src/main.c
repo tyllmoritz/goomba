@@ -1,6 +1,10 @@
 #include "includes.h"
 
-#define SCREENBASE (u16*)0x6007000
+#define UI_TILEMAP_NUMBER 30
+#define SCREENBASE (u16*)(MEM_VRAM+UI_TILEMAP_NUMBER*2048)
+#define FONT_MEM (u16*)(MEM_VRAM+0x4000)
+#define COLOR_ZERO_TILES (u16*)(MEM_VRAM+0xC000)
+
 
 #if MOVIEPLAYER
 int usinggbamp;
@@ -81,7 +85,7 @@ int main()
 
 void loadfont()
 {
-	LZ77UnCompVram(&font_lz77,(u16*)0x600C000);
+	LZ77UnCompVram(&font_lz77,FONT_MEM);
 }
 
 #if LITTLESOUNDDJ
@@ -269,7 +273,7 @@ void C_entry()
 	REG_DISPCNT=0;					//screen ON, MODE0
 
 	//clear VRAM
-	memset((void*)0x06000000,0,0x18000);
+	memset(MEM_VRAM,0,0x18000);
 	//Start up interrupt system
 	GFX_init();
 	vblankfptr=&vblankinterrupt;
@@ -283,7 +287,7 @@ void C_entry()
 
 	//make 16 solid tiles
 	{
-		u32*  p=(u32*)0x06004000;
+		u32*  p=(u32*)COLOR_ZERO_TILES;
 		for (i=0;i<16;i++)
 		{
 			u32 val=i*0x11111111;
@@ -591,17 +595,26 @@ int getinput()
 	return dpad|(keyhit&(A_BTN+B_BTN+START));
 }
 
-
 void cls(int chrmap)
 {
-	int i=0,len=0x200;
+	int i,len;
 	u32 *scr=(u32*)SCREENBASE;
-	if(chrmap>=2)
-		len=0x400;
-	if(chrmap==2)
-		i=0x200;
-	for(;i<len;i++)				//512x256
-		scr[i]=0x00000000;
+	if (chrmap&1)
+	{
+		len=0x540/4;
+		for(i=0;i<len;i++)				//512x256
+		{
+			scr[i]=0x00000000;
+		}
+	}
+	if(chrmap&2)
+	{
+		len=0x540/4+0x200;
+		for(i=0x200;i<len;i++)				//512x256
+		{
+			scr[i]=0x00000000;
+		}
+	}
 	ui_y=0;
 	move_ui();
 }

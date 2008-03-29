@@ -91,6 +91,14 @@ debugwait
 ;	cmp r0,#0
 ;	bne debugwait
 ;	fetch 0
+
+;_XX
+;	ldr r0,lastbank
+;	sub gb_pc,gb_pc,r0
+;	sub gb_pc,gb_pc,#1
+;	encodePC
+;	b _GO
+
 ;----------------------------------------------------------------------------
 _xx;	???					;invalid opcode
 ;----------------------------------------------------------------------------
@@ -2499,7 +2507,7 @@ updatespeed
 	ldr r0,FF41_modifydata
 	str r0,[r12]
 	ldr r0,FF41_modifydata+4
-	str r0,[r12,#8]
+	str r0,[r12,#12]
 	
 	ldrb r0,doublespeed
 	tst r0,#0x80
@@ -2518,14 +2526,14 @@ updatespeed
 	ldr r0,FF41_modifydata+8
 	str r0,[r12]
 	ldr r0,FF41_modifydata+12
-	str r0,[r12,#8]
+	str r0,[r12,#12]
 	bx lr
 
 FF41_modifydata
-	cmp cycles,#376*CYCLE
 	cmp cycles,#204*CYCLE
-	cmp cycles,#376*CYCLE*2
+	cmp cycles,#376*CYCLE
 	cmp cycles,#204*CYCLE*2
+	cmp cycles,#376*CYCLE*2
 
 
  [ PROFILE
@@ -2563,7 +2571,8 @@ opindex
 	DCD op_table+0x20*4,op_table+0x28*4,op_table+0x30*4,op_table+0x38*4
 
 cpuhack_reset
-	stmfd sp!,{r0-r4}
+	stmfd sp!,{r0-r4,r10}
+	ldr r10,=GLOBAL_PTR_BASE
 	ldrb r0,hackflags
 	cmp r0,#1
 	adreq r2,finderops
@@ -2588,7 +2597,7 @@ cpuhack_reset
 	ldrb r1,hackflags2
 	strb r1,[r0,#5*4]
 1
-	ldmfd sp!,{r0-r4}
+	ldmfd sp!,{r0-r4,r10}
 	bx lr
 	]
 ;----------------------------------------------------------------------------
@@ -2669,6 +2678,30 @@ g_hackflags2 DCB 0 ;hackflags2
 ;----------------------------------------------------------------------------
 	AREA wram_globals0, CODE, READWRITE
 ;----------------------------------------------------------------------------
+
+  ;readmem_tbl_begin
+g_readmem_tbl
+;table is backwards for speed
+
+	DCD IO_R	;$F000	IO
+	DCD IO_R	;$E000	IO
+	DCD mem_RC0_2	;$D000	WRAM
+	DCD mem_RC0	;$C000	WRAM
+	DCD mem_RA0	;$B000	ERAM/SRAM (in cartridge)
+	DCD mem_RA0	;$A000	ERAM/SRAM (in cartridge)
+	DCD mem_R80	;$9000	VRAM
+	DCD mem_R80	;$8000	VRAM
+	DCD mem_R60	;$7000	ROM/
+	DCD mem_R60	;$6000	ROM/
+	DCD mem_R40	;$5000	ROM-- Switchable (in cartridge)
+	DCD mem_R40	;$4000	ROM-- Switchable (in cartridge)
+	DCD mem_R20	;$3000	ROM/
+	DCD mem_R20	;$2000	ROM/
+	DCD mem_R00	;$1000	ROM-- Non switchable (in cartridge)
+	DCD mem_R00	;$0000	ROM-- Non switchable (in cartridge)
+
+;readmem_tbl_ is 4 bytes behind this point
+
 GLOBAL_PTR_BASE
 op_table
 	DCD _00,_01,_02,_03,_04,_05,_06,_07,_08,_09,_0A,_0B,_0C,_0D,_0E,_0F
@@ -2687,24 +2720,6 @@ op_table
 	DCD _D0,_D1,_D2,_xx,_D4,_D5,_D6,_D7,_D8,_D9,_DA,_xx,_DC,_xx,_DE,_DF
 	DCD _E0,_E1,_E2,_xx,_xx,_E5,_E6,_E7,_E8,_E9,_EA,_xx,_xx,_ED,_EE,_EF
 	DCD _F0,_F1,_F2,_F3,_xx,_F5,_F6,_F7,_F8,_F9,_FA,_FB,_xx,_xx,_FE,_FF
-  ;readmem_tbl
-g_readmem_tbl
-	DCD mem_R00	;$0000	ROM-- Non switchable (in cartridge)
-	DCD mem_R00	;$1000	ROM-- Non switchable (in cartridge)
-	DCD mem_R20	;$2000	ROM/
-	DCD mem_R20	;$3000	ROM/
-	DCD mem_R40	;$4000	ROM-- Switchable (in cartridge)
-	DCD mem_R40	;$5000	ROM-- Switchable (in cartridge)
-	DCD mem_R60	;$6000	ROM/
-	DCD mem_R60	;$7000	ROM/
-	DCD mem_R80	;$8000	VRAM
-	DCD mem_R80	;$9000	VRAM
-	DCD mem_RA0	;$A000	ERAM/SRAM (in cartridge)
-	DCD mem_RA0	;$B000	ERAM/SRAM (in cartridge)
-	DCD mem_RC0	;$C000	WRAM
-	DCD mem_RC0_2	;$D000	WRAM
-	DCD IO_R	;$E000	IO
-	DCD IO_R	;$F000	IO
   ;writemem_tbl
 g_writemem_tbl
 	DCD void	;$0000  filled in by initmapper.
@@ -2740,31 +2755,37 @@ cpustate
 	DCB 0 ;gb_ime:	(interrupt master enable)
 	DCB 0 ;gb_ie:	(interrupt enable, adr $FFFF)
 	DCB 0 ;gb_if:	(interrupt flags, adr $FF0F)
-	DCB 0
-	DCD 0 ;lastbank: last memmap added to PC (used to calculate current PC)
+	DCB 0 ;_
+
+	DCB 0 ;rambank
+gbc_mode
+	DCB 0 ;gbcmode
+sgb_mode
+	DCB 0 ;sgbmode
+	DCB 0 ;_
 
 	DCD 0 ;dividereg
 	DCD 0 ;timercounter
 	DCB 0 ;timermodulo
 	DCB 0 ;timerctrl
 	DCB 0 ;stctrl
-	DCB 0 ;debugstop
+	DCB 0 ;_
+frametotal		;let ui.c see frame count for savestates
+	DCD 0 ;frame
+;;end of cpustate
+
 	DCD 0 ;nexttimeout:  jump here when cycles runs out
 	DCD 0 ;nexttimeout_alt
 	DCD 0 ;scanlinehook
-frametotal		;let ui.c see frame count for savestates
-	DCD 0 ;frame
+	DCD 0 ;lastbank: last memmap added to PC (used to calculate current PC)
+
 	DCD 0 ;cyclesperscanline (DMG=456*CYCLE, CGB=912*CYCLE)
+	DCD 0 ;scanline_oam_position (DMG=204*CYCLE, CGB=408*CYCLE)
 	DCD 0 ;timercyclesperscanline
- [ PROFILE
-	DCD 0x02008000 ;profiler
- ]
-	DCB 0 ;rambank
-gbc_mode
-	DCB 0 ;gbcmode
-sgb_mode
-	DCB 0 ;sgbmode
-	DCB 0 ; #
+; [ PROFILE
+;	DCD 0x02008000 ;profiler
+; ]
+
 doubletimer
 	DCB 2 ;doubletimer_
 request_gba_mode
@@ -2773,8 +2794,6 @@ request_gb_type
 	DCB 2 ;request_gb_type_
 novblankwait
 	DCB 0 ;novblankwait_
-
-	DCD 0 ;scanline_oam_position (DMG=204*CYCLE, CGB=408*CYCLE)
 
 
  [ RESIZABLE

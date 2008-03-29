@@ -460,8 +460,8 @@ LSDJ_MAP2
 	str r1,writemem_tbl+40
 	str r1,writemem_tbl+44
 	ldr r1,=mem_RA0
-	str r1,readmem_tbl+40
-	str r1,readmem_tbl+44
+	str r1,readmem_tbl_-40
+	str r1,readmem_tbl_-44
 	ldr r1,=M3_SRAM_BUFFER-0xA000
 	ldr r2,=0x1FFFF
 	and r0,r2,r0,lsl#13

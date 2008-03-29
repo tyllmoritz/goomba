@@ -36,8 +36,8 @@ RamEnable
 	str r1,writemem_tbl+44
 	adrne r1,empty_R
 	adreq r1,mem_RA0
-	str r1,readmem_tbl+40
-	str r1,readmem_tbl+44
+	str r1,readmem_tbl_-40
+	str r1,readmem_tbl_-44
 	ldrb r0,mapperdata+4		;rambank
 	b mapAB_
 
@@ -152,8 +152,8 @@ mbc3bank
 	adreq r1,clk_dayL
 	cmp r0,#0xC
 	adreq r1,clk_dayH
-	str r1,readmem_tbl+40
-	str r1,readmem_tbl+44
+	str r1,readmem_tbl_-40
+	str r1,readmem_tbl_-44
 	mov pc,lr
 
 ;------------------------------
