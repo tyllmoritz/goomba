@@ -1643,8 +1643,10 @@ line0x
 ;	tst r1,#0x80
 	adrl r1,lcdstat
 	ldrb r0,[r1]		;
-	and r0,r0,#0x7C		;reset lcd mode flags (vblank/hblank/oam/lcd)
-	strb r0,[r1]		;
+	and r2,r0,#0x7C		;reset lcd mode flags (vblank/hblank/oam/lcd)
+	cmp r0,r2
+	strneb r2,[r1]		;
+	strneb r2,[r1,#-12] ;FIXME
 
 	ldr r0,cyclesperscanline
 	add cycles,cycles,r0
@@ -1652,7 +1654,9 @@ line0x
 	adr r0,line1_to_71
 	str r0,nexttimeout
 
-	ldr r0,=FF41_R
+	adrl r1,FF41_R_function
+	ldr r0,[r1]
+;	ldr r0,=FF41_R
 	ldr r1,=FF41_R_ptr
 	str r0,[r1]
 
@@ -1733,7 +1737,9 @@ line144 ;------------------------
 	tst r0,#0x80
 	beq novbirq
 
-	ldr r0,=FF41_R_vblank
+	adrl r1,FF41_R_vblank_function
+	ldr r0,[r1]
+;	ldr r0,=FF41_R_vblank
 	ldr r1,=FF41_R_ptr
 	str r0,[r1]
 
@@ -1742,6 +1748,8 @@ line144 ;------------------------
 	and r0,r0,#0x7C
 	orr r0,r0,#0x01
 	strb r0,[r1]		;vbl flag
+	strb r0,[r1,#-12] ;FIXME
+
 
 	ldrb r0,gb_if
 	orr r0,r0,#0x01		;1=VBL
@@ -1815,10 +1823,12 @@ checkScanlineIRQ
 	ldrb r0,lcdyc
 	cmp r0,r1
 	adrl r1,lcdstat
-	ldrb r2,[r1]
-	orreq r2,r2,#4
-	bicne r2,r2,#4
-	strb r2,[r1]
+	ldrb r0,[r1]
+	orreq r2,r0,#4
+	bicne r2,r0,#4
+	cmp r2,r0
+	strneb r2,[r1]
+	strneb r2,[r1,#-12] ;FIXME
 	
 	;screen turned on?  (not sure if this is correct)
 	ldrb r1,lcdctrl

@@ -76,6 +76,9 @@ TILEMAP1	EQU 10 ;formerly 26
 TILEMAP2	EQU 13 ;formerly 29
 UI_TILEMAP	EQU 30 ;formerly 15
 BORDER_TILEMAP EQU 29 ;formerly 13
+COLORZERO_CHARBASE EQU 2 ;formerly 0
+BORDER_CHARBASE EQU 3 ;formerly 1
+UI_CHARBASE EQU 1 ;formerly 3
 DEBUGSCREEN EQU VRAM_BASE+(UI_TILEMAP+1)*2048
 
  [ RUMBLE
@@ -87,6 +90,9 @@ DEBUGSCREEN EQU VRAM_BASE+(UI_TILEMAP+1)*2048
  	EXPORT lcdstat
  	EXPORT FF41_modify1
  	EXPORT FF41_R_vblank
+ 	
+ 	EXPORT g_lcdhack
+ 	EXPORT update_lcdhack
  	
 	EXPORT ui_border_visible
 	EXPORT ui_y
@@ -434,6 +440,7 @@ GFX_reset	;called with CPU reset
 	mov r0,#0
 	ldr r1,=lcdstat
 	strb r0,[r1];lcdstat		;flags off
+	strb r0,[r1,#-12] ;fixme
 	strb r0,scrollX
 	strb r0,scrollY
 	strb r0,windowX
@@ -1286,14 +1293,22 @@ entermode2_
 	cmp r0,#1
 	orreq r1,r1,#0x0003	;For GBC, low priority for all layers
 	addne r1,r1,#0x0100	;For non-gbc, make all tiles color zero
+	[ COLORZERO_CHARBASE = 2
 	orrne r1,r1,#0x0008
+	|
+	bicne r1,r1,#0x000C
+	]
 0
 	str r1,bg01cnt
 	add r1,r1,#0x00000100 ;for color 0 tiles (BG)
 	add r1,r1,#0x01000000
+	[ COLORZERO_CHARBASE = 2
 	orr r1,r1,#0x00000008
 	orr r1,r1,#0x00080000
-	orrne r1,r1,#0x0008
+	|
+	bic r1,r1,#0x0000000C
+	bic r1,r1,#0x000C0000
+	]
 	str r1,bg23cnt
 
 mode2_update_scroll
@@ -1357,14 +1372,22 @@ entermode0_
 	orr r1,r1,r1,lsl#16
 	add r1,r1,#0x01000000 ;for color 0 tiles
 	orr r1,r1,#0x00010000
+	[ COLORZERO_CHARBASE = 2
 	orr r1,r1,#0x00080000
+	|
+	bic r1,r1,#0x000C0000
+	]
 	tst r0,#0x01 ;BG enable
 	bne %f0
 	ldrb r0,gbcmode
 	cmp r0,#1
 	addne r1,r1,#0x0100
 ;	orrne r1,r1,#0x0001  ;because there's the unconditional right below this
+	[ COLORZERO_CHARBASE = 2
 	orrne r1,r1,#0x0008
+	|
+	bicne r1,r1,#0x000C
+	]
 	orr r1,r1,#0x0001
 	movs r0,#0
 0	
@@ -1414,7 +1437,11 @@ entermode1_
 	orr r1,r1,r1,lsl#16
 	add r1,r1,#0x01000000 ;for color 0 tiles
 	orr r1,r1,#0x00010000
+	[ COLORZERO_CHARBASE = 2
 	orr r1,r1,#0x00080000
+	|
+	bic r1,r1,#0x000C0000
+	]
 	tst r0,#0x01 ;BG enable
 	bne %f0
 	ldrb r0,gbcmode
@@ -1743,7 +1770,7 @@ update_ui_border_masks_2
 1 ;UI visible
 	ldr r0,=0xFFFF0000
 	str r0,ui_border_cnt_bic
-	ldr r0,=0x40040000 + UI_TILEMAP*0x1000000
+	ldr r0,=0x40000000 + UI_TILEMAP*0x1000000 + UI_CHARBASE*0x40000
 	str r0,ui_border_cnt_orr
 
 	mov r0,r1,lsr#8    ;ui_x
@@ -1756,7 +1783,7 @@ update_ui_border_masks_2
 2 ;Border visible
 	ldr r0,=0xFFFF0000
 	str r0,ui_border_cnt_bic
-	ldr r0,=0x000C0000 + BORDER_TILEMAP*0x1000000
+	ldr r0,= BORDER_TILEMAP*0x1000000 + BORDER_CHARBASE*0x40000
 	str r0,ui_border_cnt_orr
 ;snes_screen_y = (224-144)/2 = 40
 ;gba_screen_y = (160-144)/2 = 8
@@ -1768,7 +1795,7 @@ update_ui_border_masks_2
 3 ;UI and Border visible
 	mvn r0,#0
 	str r0,ui_border_cnt_bic
-	ldr r0,=0x000C4004 + BORDER_TILEMAP*0x1000000 + UI_TILEMAP*0x100
+	ldr r0,=0x00004000 + BORDER_TILEMAP*0x1000000 + BORDER_CHARBASE*0x40000 + UI_TILEMAP*0x100 + UI_CHARBASE*0x04
 	str r0,ui_border_cnt_orr
 	ldr r0,= (40-SCREEN_Y_START)*65536 + (48-SCREEN_X_START)
 	str r0,ui_border_scroll3
@@ -2862,18 +2889,25 @@ FF40_W;		LCD Control
 FF41_W;		LCD Status
 ;----------------------------------------------------------------------------
 	ldrb r1,lcdstat
-	and r1,r1,#0x05		;Save VBlank bit and LCDYC bit.
+	and r2,r1,#0x05		;Save VBlank bit and LCDYC bit.
 	and r0,r0,#0x78
-	orr r0,r0,r1
-	strb r0,lcdstat
+	orr r0,r0,r2
+	cmp r0,r1
+	strneb r0,lcdstat
+	strneb r0,lcdstat2
 	ldrb r0,lcdyc
 	b_long lcdyc_check
 ;	mov pc,lr
 
 
+FF41_R_vblank_hack
+	sub cycles,cycles,#21*CYCLE
 FF41_R_vblank
-	ldrb r0,lcdstat
+lcdstat2
+	mov r0,#1
 	bx lr
+FF41_R_hack
+	sub cycles,cycles,#21*CYCLE
 ;----------------------------------------------------------------------------
 FF41_R;		LCD Status
 ;----------------------------------------------------------------------------
@@ -2887,6 +2921,9 @@ FF41_modify2	cmp cycles,#376*CYCLE
 ;	orr r0,r0,#3
 	orrge r0,r0,#3
 	bx lr
+
+
+
 
 ;----------------------------------------------------------------------------
 FF42_W;		SCY - Scroll Y
@@ -2924,23 +2961,38 @@ scrollx_entry
 ;----------------------------------------------------------------------------
 FF44_R;      LCD Scanline
 ;----------------------------------------------------------------------------
-   ldrb r0,lcdctrl
-   ands r0,r0,#0x80
-   ldrneb r0,scanline
-;   ldr r0,scanline
-   mov pc,lr
-;;----------------------------------------------------------------------------
-;FF44_R;		LCD Scanline
-;;----------------------------------------------------------------------------
-;
-;
-;	ldr r0,scanline
-;;	cmp r0,#153
-;;	moveq r0,#0
-;	
-;	
-;;	sub cycles,cycles,#23*CYCLE	;LCD hack?
-;	mov pc,lr
+	ldrb r0,lcdctrl
+	ands r0,r0,#0x80
+	ldrneb r0,scanline
+	;ldr r0,scanline
+	mov pc,lr
+;----------------------------------------------------------------------------
+FF44_R_hack;		LCD Scanline
+;----------------------------------------------------------------------------
+	ldrb r0,lcdctrl
+	ands r0,r0,#0x80
+	ldrneb r0,scanline
+	ldrb r1,[gb_pc]
+	cmp r1,#0xFE		;CP instruction
+	bne %f0
+	ldrb r1,[gb_pc,#1]
+	cmp r0,r1
+	beq %f0
+number_of_times
+	mov r1,#1
+	add r1,r1,#1
+	strb r1,number_of_times
+	cmp r1,#2
+	bxne lr
+	and cycles,cycles,#CYC_MASK  ;LCD HACK
+0
+	mov r1,#0
+	strb r1,number_of_times
+ 	bx lr
+ 
+ 
+   
+   
 
 ;----------------------------------------------------------------------------
 FF45_R;		LCD Y Compare
@@ -2958,6 +3010,7 @@ lcdyc_check
 	orreq r0,r0,#4
 	bicne r0,r0,#4
 	strb r0,lcdstat
+	strb r0,lcdstat2
 	bxne lr
 	tst r0,#0x40
 	bxeq lr
@@ -3493,6 +3546,44 @@ FF6A_W	;OCPS - OBJ Color Palette Specification
 	strb r0,OCPS_index
 	bx lr
 
+update_lcdhack
+	stmfd sp!,{r3,r4,r10,lr}
+	ldr r10,=GLOBAL_PTR_BASE
+	
+	ldrb r0,lcdhack
+	movs r0,r0
+	adrne r1,hack_cycle_subtractions-4
+	ldrne r4,[r1,r0,lsl#2]
+	movne r0,#1
+	
+	
+	adr r3,lcdhacks
+	ldr r2,[r3,r0,lsl#2]!
+	ldr r1,=FF44_R_ptr
+	str r2,[r1]
+	
+	adrl r1,FF41_R_function
+	ldr r2,[r3,#8]!
+	str r2,[r1]
+	strne r4,[r2]
+	ldr r2,[r3,#8]!
+	str r2,[r1,#4]
+	strne r4,[r2]
+	
+	ldmfd sp!,{r3,r4,r10,lr}
+	bx lr
+hack_cycle_subtractions
+	sub cycles,cycles,#21*CYCLE
+	sub cycles,cycles,#84*CYCLE
+	sub cycles,cycles,#255*CYCLE
+lcdhacks
+	DCD FF44_R,FF44_R_hack
+FF41_R_functions
+	DCD FF41_R,FF41_R_hack
+	DCD FF41_R_vblank,FF41_R_vblank_hack
+
+
+
 
 	AREA wram_globals1, CODE, READWRITE
 
@@ -3581,8 +3672,14 @@ palettebank	DCD 1			;_palettebank
 	
 	DCB 0 ;bg_cache_full
 	DCB 0 ;bg_cache_updateok
+g_lcdhack	DCB 0
 	DCB 0
-	DCB 0
+
+	AREA wram_globals7, CODE, READWRITE
+	DCD FF41_R 	;FF41_R_function
+	DCD FF41_R_vblank ;FF41_R_vblank_function
+
+
 
 ;...update load/savestate if you move things around in here
 ;----------------------------------------------------------------------------
