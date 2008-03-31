@@ -1,4 +1,4 @@
-Goomba Color 03-29-2008
+Goomba Color 03-31-2008
 -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 By Dwedit (Dan Weiss)
 http://www.dwedit.org/gba/goombacolor.php
@@ -89,16 +89,6 @@ Go Multiboot: Allows you to play without a cartridge!  For small games only,
   Note: You can't eject a cartridge from a Gamecube Game Boy Player while it is
   running.
 
-Double Speed:  Controls whether the emulated GBC runs in double speed mode or
-not.
-There are two modes for this option:
-    Full   - Emulates the GBC at full double speed.  This can be twice as slow
-             as emulating it at normal speed.
-             This is the default mode.
-    Timers - Only the GBC's internal clock runs at double speed, the processor
-             stays at single speed.  Games may run faster at this setting.
-             This setting may cause some games to crash.
-
 Pogoshell Plugin: If you wish to use Goomba Color with Pogoshell,
   copy goomba.gba to your plugins directory,
   then edit pogoshell's configuration file.
@@ -110,6 +100,36 @@ GameBoy Player:
   GameBoy Player logo, the easiest way to get it is by downloading it from
   Flubba's  homepage. Otherwise you can rip it from any other game that displays
   it (SMA4 & Pokemon Pinball). This is a must if you want rumble to work.
+
+
+Speed Hacks
+-=-=-=-=-=-
+Goomba Color now has some speed hacks available to try to speed up games.
+Leave speedhacks off if the game's speed does not improve.
+
+Double Speed:  Controls whether the emulated GBC runs in double speed mode or
+               not.  There are two modes for this option:
+
+  Full       - Emulates the GBC at full double speed.  While games are getting 
+               all the CPU time they need, the emulator may not be able to 
+               keep up, so games may run half as fast.
+               This is the default mode.
+  Half Speed - GBC's processor stays at half-speed.
+               Some games will reach realtime speed, other games may be
+               starved for the CPU and run half as fast.
+               This setting may cause some games to crash.
+
+LCD Hack:  Many games have idle loops which repeatedly poll the LCD Status registers or scanline number.  The LCD hack options make the emulator skip ahead 
+in time when a game reads from the scanline number or LCD status register, so 
+games run faster in the emulator.
+Some games may crash with this turned on.  Many games will fail to do wavy 
+backgrounds correctly with this setting turned on.
+
+  OFF     - The default setting.  Disables all LCD hacks.
+  Low     - Turns on the scanline number hack, and eats some cycles on LCD 
+            status polling.
+  Medium  - Eats more cycles on LCD status polling.
+  High    - Eats a lot of cycles on LCD status polling, crashes some games.
 
 
 Files Included

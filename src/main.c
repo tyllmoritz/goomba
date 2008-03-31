@@ -535,10 +535,46 @@ u8 *findrom(int n)
 	return p;
 }
 
+char *getcartname(u8 *rom_base)
+{
+	//assigns cartridge name (with gamecode removed) to global variable, str
+	bool gbcmode;
+	char *cartname;
+	int i;
+	bool anyzeroes;
+
+	cartname=str;
+	strncpy(cartname,(char*)(rom_base+0x134),16);
+	cartname[16]=0;
+	gbcmode=rom_base[0x143] >= 0x80;
+	if (gbcmode)
+	{
+		cartname[15]=0;
+		anyzeroes=false;
+		for (i=11;i<=14;i++)
+		{
+			if (cartname[i]==0)
+			{
+				anyzeroes=true;
+				break;
+			}
+		}
+		if (!anyzeroes)
+		{
+			for (i=11;i<=14;i++)
+			{
+				cartname[i]=0;
+			}
+		}
+	}
+	return cartname;
+}
+
 //returns options for selected rom
 int drawmenu(int sel)
 {
 	int i,j,topline,toprow,romflags=0;
+	int top_displayed_line=0;
 	u8 *p;
 //	romheader *ri;
 
@@ -546,27 +582,34 @@ int drawmenu(int sel)
 		topline=8*(roms-20)*sel/(roms-1);
 		toprow=topline/8;
 		j=(toprow<roms-20)?21:20;
+
+		ui_y=topline%8;
 	} else {
+		int ui_row;
+		
+		ui_row = (160-roms*8)/2;
+		ui_row/=4;
+		if (ui_row&1)
+		{
+			ui_y=4;
+			ui_row++;
+		}
+		ui_row/=2;
+		top_displayed_line=ui_row;
+
 		toprow=0;
 		j=roms;
 	}
 
-	if(roms>20)
-	{
-		ui_y=topline%8;
-		move_ui();
-	}
-	else
-	{
-		ui_y=176+roms*4;
-		move_ui();
-	}
+	move_ui();
 	waitframe();
 
 	for(i=0;i<j;i++)
 	{
+		char *cartname;
 		p=findrom(toprow+i);
-		if(roms>1)drawtextl(i,(char*)p+0x134,i==(sel-toprow)?1:0,15);
+		cartname=getcartname(p);
+		if(roms>1)drawtextl(i+top_displayed_line,cartname,i==(sel-toprow)?1:0,15);
 		if(i==sel-toprow) {
 			//ri=(romheader*)p;
 			//romflags=(*ri).flags|(*ri).spritefollow<<16;

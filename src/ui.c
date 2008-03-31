@@ -74,13 +74,13 @@ int text2_str(int row)
 //
 //const char MENUXITEMS[]={CARTMENUITEMS,MULTIBOOTMENUITEMS,MENU2ITEMS,MENU3ITEMS};
 
-const fptr multifnlist[]={autoBset,autoAset,ui3,ui2,
+const fptr multifnlist[]={autoBset,autoAset,ui3,ui2,ui4,
 #if MULTIBOOT
 multiboot,
 #endif
 sleep_,restart,exit_};
 
-const fptr fnlist1[]={autoBset,autoAset,ui3,ui2,
+const fptr fnlist1[]={autoBset,autoAset,ui3,ui2,ui4,
 #if MULTIBOOT
 multiboot,
 #endif
@@ -97,14 +97,20 @@ const fptr fnlist2[]={vblset,fpsset,sleepset,swapAB,autostateset,
 #if SPEEDHACK2
 autodetect_speedhack,
 #endif
-timermode,gbtype,changeautoborder,gbatype};
+gbtype,changeautoborder,gbatype};
 const fptr fnlist3[]={chpalette,brightset,sgbpalnum};
 
-const fptr* fnlistX[]={fnlist1,multifnlist,fnlist2,fnlist3};
-const fptr drawuiX[]={drawui1,drawui1,drawui2,drawui3};
+const fptr fnlist4[]={
+#if SPEEDHACK2
+autodetect_speedhack,
+#endif
+timermode,changelcdhack};
+
+const fptr* fnlistX[]={fnlist1,multifnlist,fnlist2,fnlist3,fnlist4};
+const fptr drawuiX[]={drawui1,drawui1,drawui2,drawui3,drawui4};
 const char MENUXITEMS[]=
 {
-	ARRSIZE(fnlist1),ARRSIZE(multifnlist),ARRSIZE(fnlist2),ARRSIZE(fnlist3)
+	ARRSIZE(fnlist1),ARRSIZE(multifnlist),ARRSIZE(fnlist2),ARRSIZE(fnlist3),ARRSIZE(fnlist4)
 };
 
 
@@ -271,6 +277,11 @@ void ui3()
 	subui(3);
 	setdarkness(8);
 }
+void ui4()
+{
+	subui(4);
+}
+
 
 int text(int row,char *str) {
 	drawtext(row+10-mainmenuitems/2,str,selected==row);
@@ -301,7 +312,9 @@ char *const paltxt[16]={"Yellow","Grey","Multi1","Multi2","Zelda","Metroid",
 				"AdvIsland","AdvIsland2","BaloonKid","Batman","BatmanROTJ",
 				"BionicCom","CV Adv","Dr.Mario","Kirby","DK Land"};
 char *const gbtxt[]={"GB","Prefer SGB over GBC","Prefer GBC over SGB","GBC+SGB"};
-char *const clocktxt[]={"None","Timers","Full"};
+char *const clocktxt[]={"Full","Half speed"};
+char *const lcdhacktxt[]={"OFF","Low","Medium","High"};
+
 #define EMUNAME "Goomba Color"
 //char *const emuname = "Goomba Color ";
 char *const palnumtxt[]={"0","1","2","3"};
@@ -322,6 +335,7 @@ void drawui1()
 	print_1("A autofire: ",autotxt[autoA]);
 	print_1_1("Display->");
 	print_1_1("Other Settings->");
+	print_1_1("Speed Hacks->");
 #if MULTIBOOT
 	print_1_1("Link Transfer");
 #endif
@@ -352,17 +366,6 @@ void drawui2()
 	print_2("Autosleep: ",sleeptxt[stime]);
 	print_2("Swap A-B: ",autotxt[(joycfg>>10)&1]);
 	print_2("Autoload state: ",autotxt[autostate&1]);
-#if SPEEDHACK2
-	if (g_hackflags==0)
-	{
-		print_2_1("Autodetect Speed Hack");
-	}
-	else
-	{
-		print_2("Speed Hack: ",hacknames[(g_hackflags-2)&3]);
-	}
-#endif
-	print_2("Double Speed: ",clocktxt[doubletimer]);
 	print_2("Game Boy: ",gbtxt[request_gb_type]);
 	print_2("Auto SGB border: ",autotxt[auto_border]);
 	print_2("Identify as GBA: ",autotxt[request_gba_mode]);
@@ -377,6 +380,27 @@ void drawui3()
 	print_2("Gamma: ",brightxt[gammavalue]);
 	print_2("SGB Palette Number: ",palnumtxt[sgb_palette_number]);
 }
+
+void drawui4()
+{
+	int row=0;
+	cls(2);
+	/////////////0123456789ABCDEF0123456789ABCD
+	drawtext(32, "        Speed Hacks",0);
+#if SPEEDHACK2
+	if (g_hackflags==0)
+	{
+		print_2_1("Autodetect Speed Hack");
+	}
+	else
+	{
+		print_2("Speed Hack: ",hacknames[(g_hackflags-2)&3]);
+	}
+#endif
+	print_2("Double Speed: ",clocktxt[doubletimer==1]);
+	print_2("LCD scanline hack: ", lcdhacktxt[g_lcdhack]);
+}
+
 
 void drawclock()
 {
@@ -609,6 +633,13 @@ void changeautoborder()
 {
 	auto_border=!auto_border;
 }
+void changelcdhack()
+{
+	g_lcdhack++;
+	if (g_lcdhack>=4) g_lcdhack=0;
+	update_lcdhack();
+}
+
 
 #if GOMULTIBOOT
 void go_multiboot()

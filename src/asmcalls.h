@@ -175,6 +175,8 @@ extern u32 palettebank;		//from lcd.s palette bank
 //extern u32 bcolor;			//from lcd.s ,border color, black, grey, blue
 extern u8 gammavalue;	//from lcd.s
 
+extern u8 g_lcdhack;
+void update_lcdhack(void);
 
 //ppu.s
 /*

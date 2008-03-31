@@ -37,6 +37,7 @@
 ;	EXPORT gbpadress
 	EXPORT _FF70W
 	EXPORT FF41_R_ptr
+	EXPORT FF44_R_ptr
 	EXPORT jump_r0
  [ RESIZABLE
 	IMPORT add_exram
@@ -336,6 +337,7 @@ FF41_R_ptr
 	DCD FF41_R	;STAT - LCDC Status
 	DCD FF42_R	;SCY - Scroll Y
 	DCD FF43_R	;SCX - Scroll X
+FF44_R_ptr
 	DCD FF44_R	;LY - LCD Y-Coordinate
 	DCD FF45_R	;LYC - LCD Y Compare
 	DCD void	;DMA - DMA Transfer and Start Address (W?)

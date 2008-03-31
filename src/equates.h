@@ -423,7 +423,8 @@ bg_cache_base # 4
 bg_cache_limit # 4
 bg_cache_full # 1
 bg_cache_updateok # 1
-	# 2
+lcdhack	# 1
+	# 1
 
 ;VRAM_name0_ptr # 4
 
@@ -484,6 +485,11 @@ hackflags2	 # 1
 xgb_ram	# 0x2000
 xgb_hram # 0x80
 chr_decode # 0x400
+
+			;lcd.s (wram_globals7)
+FF41_R_function # 4
+FF41_R_vblank_function # 4
+
 
 ;----------------------------------------------------------------------------
 ;IRQ_VECTOR EQU 0xfffe ; IRQ/BRK interrupt vector address
