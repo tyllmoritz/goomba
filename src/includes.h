@@ -1,6 +1,10 @@
 #ifndef __INCLUDES_H__
 #define __INCLUDES_H__
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 #include "config.h"
 
 //#if !RESIZABLE
@@ -19,12 +23,15 @@
 #include "ui.h"
 #include "sram.h"
 #include "rumble.h"
-//#include "speedhack.h"
 #include "mbclient.h"
 #include "cache.h"
 
 #if MOVIEPLAYER
 #include "filemenu.h"
+#endif
+
+#ifdef __cplusplus
+	}
 #endif
 
 #endif

@@ -6,26 +6,39 @@
 @	#include "gbz80.h"
 @	#include "gbz80mac.h"
 @	#include "sgb.h"
+	
+	.global _E0
+	.global _E2
+	.global _F0
+	.global _F2
+	
 	.global IO_reset
 	.global IO_R
 	.global IO_High_R
 	.global IO_W
 	.global IO_High_W
+	
+	.global io_read_tbl
+	.global io_write_tbl
+	
 	.global joypad_write_ptr
 	.global joy0_W
 	.global joycfg
 	.global suspend
 	.global refreshNESjoypads
-	.global serialinterrupt
-	.global resetSIO
+@	.global serialinterrupt
+@	.global resetSIO
 	.global thumbcall_r1
 	.global gettime
 	.global vbaprint
 	.global waitframe
 	.global LZ77UnCompVram
 	.global CheckGBAVersion
-	.global gbpadress
+@	.global gbpadress
 	.global _FF70W
+	.global FF41_R_ptr
+	.global FF44_R_ptr
+	.global jump_r0
  .if RESIZABLE
 	@IMPORT add_exram
  .endif
@@ -37,10 +50,10 @@
  .align
  .pool
 
-@	EXPORT breakpoint
-@breakpoint
-@	mov r11,r11
-@	bx lr
+	.global breakpoint
+breakpoint:
+	mov r11,r11
+	bx lr
 
 
 
@@ -72,29 +85,23 @@ CheckGBAVersion:
 	mov r0,r12
 	bx lr
 
-resetSIO:
-	b_long resetSIO_core
+jump_r0:
+	bx r0
+
 
 @----------------------------------------------------------------------------
-IO_reset:
-@----------------------------------------------------------------------------
-	mov r0,#0
-	str_ r0,joy0state
-	str_ r0,joy0serial
-	strb_ r0,stctrl
+	.if VISOLY
+	#include "visoly.s"
+	.else
+	.global doReset
+	.global doReset2
+doReset:
+	mov pc,#0x08000000
+doReset2:
+	ldr pc,=0x08260000+8
 
-	ldrb_ r0,sgbmode
-	movs r0,r0
-	ldreq r0,=joy0_W
-	ldrne r0,=joy0_W_SGB
-	ldr r1,=joypad_write_ptr
-	str r0,[r1]
-	ldreq r0,=joy0_R
-	ldrne r0,=joy0_R_SGB
-	ldr r1,=joypad_read_ptr
-	str r0,[r1]
 	
-	bx lr
+	.endif
 @----------------------------------------------------------------------------
 suspend:	@called from ui.c and 6502.s
 @----------------------------------------------------------------------------
@@ -184,8 +191,6 @@ RTCLoop3:
 	str_ r0,mapperdata+28
 
 	bx lr
-@----------------------------------------------------------------------------
-	#include "visoly.s"
 
  .align
  .pool
@@ -193,6 +198,77 @@ RTCLoop3:
  .subsection 1
  .align
  .pool
+
+@----------------------------------------------------------------------------
+refreshNESjoypads:	@call every frame
+@exits with Z flag clear if update incomplete (waiting for other player)
+@is my multiplayer code butt-ugly?  yes, I thought so.
+@i'm not trying to win any contests here.
+@----------------------------------------------------------------------------
+	ldr_ r1,frame
+	movs r0,r1,lsr#2 @C=frame&2 (autofire alternates every other frame)
+	ldr_ r1,XGBjoypad
+	and r0,r1,#0xf0
+	ldr r2,joycfg
+	andcs r1,r1,r2
+	movcss addy,r1,lsr#9	@R?
+	andcs r1,r1,r2,lsr#16
+	and r1,r1,#0x0f		@startselectBA
+	tst r2,#0x400			@Swap A/B?
+	adrne addy,ssba2ssab
+	ldrneb r1,[addy,r1]	@startselectBA
+	orr r0,r1,r0		@r0=joypad state
+	
+	str_ r0,joy0state
+	bx lr
+
+joycfg: .word 0x40ff01ff @byte0=auto mask, byte1=(saves R)bit2=SwapAB, byte2=R auto mask
+@bit 31=single/multi, 30,29=1P/2P, 27=(multi) link active, 24=reset signal received
+ssba2ssab: .byte 0x00,0x02,0x01,0x03, 0x04,0x06,0x05,0x07, 0x08,0x0a,0x09,0x0b, 0x0c,0xe0,0xd0,0x0f
+
+
+@----------------------------------------------------------------------------
+_F0:@	LD A,($FF00+nn)
+@----------------------------------------------------------------------------
+	ldrb r2,[gb_pc],#1
+	adr lr,_after_IO_High_R
+@----------------------------------------------------------------------------
+_IO_High_R:	@I/O read
+@----------------------------------------------------------------------------
+	tst r2,#0x80
+	adr r1,io_read_tbl
+	ldreq pc,[r1,r2,lsl#2]
+@----------------------------------------------------------------------------
+_HRAM_R:@		(FF80-FFFF)
+@----------------------------------------------------------------------------
+	adr_ r1,xgb_hram-0x80
+	ldrb r0,[r1,r2]
+_after_IO_High_R:
+	mov gb_a,r0,lsl#24
+	fetch 12
+
+@----------------------------------------------------------------------------
+_F2:@	LD A,($FF00+C)
+@----------------------------------------------------------------------------
+	mov r2,gb_bc,lsr#16
+	and r2,r2,#0xFF
+	adr lr,_after_IO_High_R_2
+@----------------------------------------------------------------------------
+_IO_High_R_2:	@I/O read
+@----------------------------------------------------------------------------
+	tst r2,#0x80
+	adr r1,io_read_tbl
+	ldreq pc,[r1,r2,lsl#2]
+@----------------------------------------------------------------------------
+_HRAM_R_2:@		(FF80-FFFF)
+@----------------------------------------------------------------------------
+	adr_ r1,xgb_hram-0x80
+	ldrb r0,[r1,r2]
+_after_IO_High_R_2:
+	mov gb_a,r0,lsl#24
+	fetch 8
+
+
 @----------------------------------------------------------------------------
 IO_R:		@I/O read
 @----------------------------------------------------------------------------
@@ -277,9 +353,11 @@ joypad_read_ptr:
 	.word _FF30R
 
 	.word FF40_R	@LCDC - LCD Control
+FF41_R_ptr:
 	.word FF41_R	@STAT - LCDC Status
 	.word FF42_R	@SCY - Scroll Y
 	.word FF43_R	@SCX - Scroll X
+FF44_R_ptr:
 	.word FF44_R	@LY - LCD Y-Coordinate
 	.word FF45_R	@LYC - LCD Y Compare
 	.word void	@DMA - DMA Transfer and Start Address (W?)
@@ -359,6 +437,53 @@ joypad_read_ptr:
 @	movpl pc,lr
 @	sub addy,addy,#0x2000		;C000-DCFF mirror.
 @	b wram_W
+
+@----------------------------------------------------------------------------
+_E0:@	LD ($FF00+nn),A
+@----------------------------------------------------------------------------
+	ldrb r2,[gb_pc],#1
+	mov r0,gb_a,lsr#24
+	
+	adr lr,_after_IO_High_W
+@----------------------------------------------------------------------------
+_IO_High_W:	@I/O write
+@----------------------------------------------------------------------------
+	tst r2,#0x80
+	adr r1,io_write_tbl
+	ldreq pc,[r1,r2,lsl#2]
+@----------------------------------------------------------------------------
+_HRAM_W:@	(FF80-FFFF)
+@----------------------------------------------------------------------------
+	adr_ r1,xgb_hram-0x80
+	strb r0,[r1,r2]
+	cmp r2,#0xFF
+	beq HRAM_W_IE_
+_after_IO_High_W:
+	fetch 12
+@----------------------------------------------------------------------------
+_E2:@	LD ($FF00+C),A
+@----------------------------------------------------------------------------
+	mov r2,gb_bc,lsr#16
+	and r2,r2,#0xFF
+	mov r0,gb_a,lsr#24
+	
+	adr lr,_after_IO_High_W_2
+@----------------------------------------------------------------------------
+_IO_High_W_2:	@I/O write
+@----------------------------------------------------------------------------
+	tst r2,#0x80
+	adr r1,io_write_tbl
+	ldreq pc,[r1,r2,lsl#2]
+@----------------------------------------------------------------------------
+_HRAM_W_2:@	(FF80-FFFF)
+@----------------------------------------------------------------------------
+	adr_ r1,xgb_hram-0x80
+	strb r0,[r1,r2]
+	cmp r2,#0xFF
+	beq HRAM_W_IE_
+_after_IO_High_W_2:
+	fetch 8
+
 
 @----------------------------------------------------------------------------
 IO_W:		@I/O write
@@ -514,40 +639,163 @@ joypad_write_ptr:
 @----------------------------------------------------------------------------
 HRAM_W:@		(FF80-FFFF)
 @----------------------------------------------------------------------------
-	ldr r1,=XGB_HRAM-0x80
+	adr_ r1,xgb_hram-0x80
 	strb r0,[r1,r2]
 	cmp r2,#0xFF
-	movne pc,lr
-	strb_ r0,gb_ie		@0xFFFF=Interrupt Enable.
-	ldrb_ r1,gb_if
-	ands r1,r1,r0
-	moveq pc,lr
-	ldrb_ r0,gb_ime
-	movs r0,r0
-	moveq pc,lr
-	
-	@different ugly hack which doesn't mess up timing,
-	@this is necessary because goomba can't handle GB interrupts from within a memory write
-	sub cycles,cycles,#1024*CYCLE  @this just makes it go somewhere else instead of the next instruction
-	ldr_ r0,nexttimeout
-	str_ r0,nexttimeout_alt
-	ldr r0,=no_more_irq_hack
-	str_ r0,nexttimeout
-	bx lr
-
-no_more_irq_hack:
-	add cycles,cycles,#1024*CYCLE
-	ldr_ r0,nexttimeout_alt
-	str_ r0,nexttimeout
-	b checkIRQ
-
+	bxne lr
+HRAM_W_IE_:
+	strb_ r0,gb_ie
+	b immediate_check_irq
 
 @----------------------------------------------------------------------------
 HRAM_R:@		(FF80-FFFF)
 @----------------------------------------------------------------------------
-	ldr r1,=XGB_HRAM-0x80
+	adr_ r1,xgb_hram-0x80
 	ldrb r0,[r1,r2]
+	bx lr
+@----------------------------------------------------------------------------
+_FF70W:@		SVBK - CGB Mode Only - WRAM Bank
+@----------------------------------------------------------------------------
+	strb_ r0,rambank
+	and r0,r0,#7
+	cmp r0,#2
+	bge select_gbc_ram
+	ldr_ r1,memmap_tbl+48
+	str_ r1,memmap_tbl+52
+	ldr r1,=wram_W
+	str_ r1,writemem_tbl+52
 	mov pc,lr
+select_gbc_ram:
+ .if RESIZABLE
+	ldr_ r1,gbc_exram
+	subs r1,r1,#0xD000+0x2000
+	bmi add_exram_
+ .else	
+	ldr r1,=GBC_EXRAM-0xD000-0x2000
+ .endif
+	add r1,r1,r0,lsl#12
+	@D000
+	str_ r1,memmap_tbl+52
+	ldr r1,=wram_W_2
+	str_ r1,writemem_tbl+52
+
+	mov pc,lr
+ .if RESIZABLE
+add_exram_:
+	stmfd sp!,{r0-addy,lr}
+	ldr r1,=add_exram
+	mov lr,pc
+	bx r1
+@	bl thumbcall_r1
+	ldmfd sp!,{r0-addy,lr}
+	ldr_ r1,lastbank
+	sub gb_pc,gb_pc,r1
+	stmfd sp!,{r0}
+	encodePC
+	ldmfd sp!,{r0}
+	b select_gbc_ram
+ .endif
+
+@----------------------------------------------------------------------------
+_FF70R:@		SVBK - CGB Mode Only - WRAM Bank
+@----------------------------------------------------------------------------
+	ldrb_ r0,rambank
+	mov pc,lr
+
+@----------------------------------------------------------------------------
+joy0_W:		@FF00
+@----------------------------------------------------------------------------
+	orr r0,r0,#0xCF
+	mov r2,#0x0
+	ldrb_ r1,joy0state
+	tst r0,#0x10		@Direction
+	orreq r2,r2,r1,lsr#4
+	tst r0,#0x20		@Buttons
+	orreq r2,r2,r1
+
+	and r2,r2,#0x0F
+	eor r2,r2,r0
+	ldrb_ r1,joy0serial
+	strb_ r2,joy0serial
+	
+	bx lr
+@----------------------------------------------------------------------------
+joy0_R:		@FF00
+@----------------------------------------------------------------------------
+	ldrb_ r0,joy0serial
+	mov pc,lr
+@----------------------------
+
+FF55_W:	@HDMA5
+	tst r0,#0x80
+@	bxne lr
+	bic r0,r0,#0x80
+	
+	beq hdma
+	ldr_ r1,cyclesperscanline
+	cmp r1,#DOUBLE_SPEED
+	add r1,r0,#1
+	moveq r1,r1,lsl#1
+	mov r1,r1,lsl#7
+	sub cycles,cycles,r1
+hdma:	
+	
+	stmfd sp!,{r0-addy,lr}
+	
+	ldr_ r3,dma_src
+	mov r4,r3,lsr#16
+	ldr r1,=0xFFFF
+	and r3,r3,r1
+
+	and r5,r0,#0x7F
+	add r5,r5,#1
+	mov r5,r5,lsl#4
+	
+dma5_loop:
+	mov addy,r3
+	readmem
+	mov addy,r4
+	writemem
+	add r3,r3,#1
+	add r4,r4,#1
+	bic r4,r4,#0xE000
+	orr r4,r4,#0x8000
+	
+	subs r5,r5,#1
+	bne dma5_loop
+
+	orr r3,r3,r4,lsl#16
+	str_ r3,dma_src
+	
+	ldmfd sp!,{r0-addy,lr}
+	bx lr
+
+ .align
+ .pool
+ .text
+ .align
+ .pool
+@----------------------------------------------------------------------------
+IO_reset:
+@----------------------------------------------------------------------------
+	mov r0,#0
+	str_ r0,joy0state
+	str_ r0,joy0serial
+	strb_ r0,stctrl
+
+	ldrb_ r0,sgbmode
+	movs r0,r0
+	ldreq r0,=joy0_W
+	ldrne r0,=joy0_W_SGB
+	ldr r1,=joypad_write_ptr
+	str r0,[r1]
+	ldreq r0,=joy0_R
+	ldrne r0,=joy0_R_SGB
+	ldr r1,=joypad_read_ptr
+	str r0,[r1]
+
+	bx lr
+
 @----------------------------------------------------------------------------
 _FF01W:@		SB - Serial Transfer Data
 @----------------------------------------------------------------------------
@@ -597,49 +845,8 @@ _FF50W:@		Undocumented BIOS banking
 @----------------------------------------------------------------------------
 	cmp r0,#1
 	mov r0,#0
-	beq map0123_
+	beq_long map0123_
 	mov pc,lr
-@----------------------------------------------------------------------------
-_FF70W:@		SVBK - CGB Mode Only - WRAM Bank
-@----------------------------------------------------------------------------
-	strb_ r0,rambank
-	and r0,r0,#7
-	cmp r0,#2
-	bge select_gbc_ram
-	ldr_ r1,memmap_tbl+48
-	str_ r1,memmap_tbl+52
-	mov pc,lr
-select_gbc_ram:
- .if RESIZABLE
-	ldr_ r1,gbc_exram
-	subs r1,r1,#0xD000+0x2000
-	bmi add_exram_
- .else	
-	ldr r1,=GBC_EXRAM-0xD000-0x2000
- .endif
-	add r1,r1,r0,lsl#12
-	@D000
-	str_ r1,memmap_tbl+52
-	mov pc,lr
- .if RESIZABLE
-add_exram_:
-	stmfd sp!,{r0-addy,lr}
-	ldr r1,=add_exram
-	bl thumbcall_r1
-	ldmfd sp!,{r0-addy,lr}
-	ldr_ r1,lastbank
-	sub gb_pc,gb_pc,r1
-	encodePC
-	b select_gbc_ram
- .endif
-
-@----------------------------------------------------------------------------
-_FF70R:@		SVBK - CGB Mode Only - WRAM Bank
-@----------------------------------------------------------------------------
-	ldrb_ r0,rambank
-	mov pc,lr
-
-
 @----------------------------------------------------------------------------
 _FF01R:@		SB - Serial Transfer Data
 @----------------------------------------------------------------------------
@@ -681,352 +888,6 @@ _FF0FR:
 @----------------------------------------------------------------------------
 	ldrb_ r0,gb_if
 	mov pc,lr
-@----------------------------------------------------------------------------
-serialinterrupt:
-@----------------------------------------------------------------------------
-	mov r3,#REG_BASE
-	add r3,r3,#0x100
-
-	mov r0,#0x1
-serWait:	subs r0,r0,#1
-	bne serWait
-	mov r0,#0x100		@time to wait.
-	ldrh r1,[r3,#REG_SIOCNT]
-	tst r1,#0x80		@Still transfering?
-	bne serWait
-
-	tst r1,#0x40		@communication error? resend?
-	bne sio_err
-
-	ldr r0,[r3,#REG_SIOMULTI0]	@Both SIOMULTI0&1
-	ldr r1,[r3,#REG_SIOMULTI2]	@Both SIOMULTI2&3
-
-	and r2,r0,#0xff00	@From Master
-	cmp r2,#0xaa00
-	beq resetrequest	@$AAxx means Master GBA wants to restart
-
-	ldr r2,sending
-	tst r2,#0x10000
-	beq sio_err
-	strne r0,received0	@store only if we were expecting something
-	strne r1,received1	@store only if we were expecting something
-	eor r2,r2,r0		@Check if master sent what we expected
-	ands r2,r2,#0xff00
-	strne r0,received2	@otherwise print value.
-	strne r1,received3	@otherwise print value.
-
-@	mov r3,#AGB_PALETTE
-@	mov r1,#-1		;white
-@	strh r1,[r3]		;BG palette
-sio_err:
-	strb r3,sending+2	@send completed, r3b=0
-	bx lr
-
-resetrequest:
-@	mov r3,r1,asr#16
-@	cmp r3,#-1
-@	moveq r3,#3		;up to 3 players.
-@	movne r3,#4		;all 4 players
-@	cmp r1,#-1
-@	moveq r3,#2		;only 2 players.
-@	mov r3,#3
-@	str r3,nrplayers
-
-	ldr r2,joycfg
-	strh r0,received0
-	orr r2,r2,#0x01000000
-	bic r2,r2,#0x08000000
-	str r2,joycfg
-	bx lr
-
-sending: .word 0
-lastsent: .word 0
-received0: .word 0
-received1: .word 0
-received2: .word 0
-received3: .word 0
-@---------------------------------------------
-xmit:	@send byte in r0
-@returns REG_SIOCNT in r1, received P1/P2 in r2, received P3/P4 in r3, Z set if successful, r4-r5 destroyed
-@---------------------------------------------
-	ldr r3,sending
-	tst r3,#0x10000		@last send completed?
-	movne pc,lr
-
-	mov r5,#REG_BASE
-	add r5,r5,#0x100
-	ldrh r1,[r5,#REG_SIOCNT]
-	tst r1,#0x80		@clear to send?
-	movne pc,lr
-
-	ldrb_ r4,frame
-	eor r4,r4,#0x55
-	bic r4,r4,#0x80
-	orr r0,r0,r4,lsl#8	@r0=new data to send
-
-	ldr r2,received0
-	ldr r3,received1
-	cmp r2,#-1		@Check for uninitialized
-	eoreq r2,r2,#0xf00
-	ldr r4,nrplayers
-	cmp r4,#2
-	beq players2
-	cmp r4,#3
-	beq players3
-players4:
-	eor r4,r2,r3,lsr#16	@P1 & P4
-	tst r4,#0xff00		@not in sync yet?
-	beq players3
-	ldr r1,lastsent
-	eor r4,r1,r3,lsr#16	@Has P4 missed an interrupt?
-	tst r4,#0xff00
-	streq r1,sending	@Send the value before this.
-	b iofail
-players3:
-	eor r4,r2,r3		@P1 & P3
-	tst r4,#0xff00		@not in sync yet?
-	beq players2
-	ldr r1,lastsent
-	eor r4,r1,r3		@Has P3 missed an interrupt?
-	tst r4,#0xff00
-	streq r1,sending	@Send the value before this.
-	b iofail
-players2:
-	eor r4,r2,r2,lsr#16	@P1 & P2
-	tst r4,#0xff00		@in sync yet?
-	beq checkold
-	ldr r1,lastsent
-	eor r4,r1,r2,lsr#16	@Has P2 missed an interrupt?
-	tst r4,#0xff00
-	streq r1,sending	@Send the value before this.
-	b iofail
-checkold:
-	ldr r4,sending
-	ldr r1,lastsent
-	eor r4,r4,r1		@Did we send an old value last time?
-	tst r4,#0xff00
-	bne iogood		@bne
-	ldr r1,sending
-	str r0,sending
-	str r1,lastsent
-iofail:	orrs r4,r4,#1		@Z=0 fail
-	b notyet
-iogood:	ands r4,r4,#0		@Z=1 ok
-notyet:	ldr r1,sending
-	streq r1,lastsent
-	movne r0,r1		@resend last.
-
-	orr r0,r0,#0x10000
-	str r0,sending
-	strh r0,[r5,#REG_SIOMLT_SEND]	@put data in buffer
-	ldrh r1,[r5,#REG_SIOCNT]
-	tst r1,#0x4			@Check if we're Master.
-	bne endSIO
-
-multip:	ldrh r1,[r5,#REG_SIOCNT]
-	tst r1,#0x8			@Check if all machines are in multi mode.
-	beq multip
-
-	orr r1,r1,#0x80			@Set send bit
-	strh r1,[r5,#REG_SIOCNT]	@start send
-
-endSIO:
-	teq r4,#0
-	mov pc,lr
-@----------------------------------------------------------------------------
-resetSIO_core:	@r0=joycfg
-@----------------------------------------------------------------------------
-	bic r0,r0,#0x0f000000
-	str r0,joycfg
-
-	mov r2,#2		@only 2 players.
-	mov r1,r0,lsr#29
-	cmp r1,#0x6
-	moveq r2,#4		@all 4 players
-	cmp r1,#0x5
-	moveq r2,#3		@3 players.
-	str r2,nrplayers
-
-	mov r2,#REG_BASE
-	add r2,r2,#0x100
-
-	mov r1,#0
-@	strh r1,[r2,#REG_RCNT]
-
-	tst r0,#0x80000000
-	moveq r1,#0x2000
-	movne r1,   #0x6000
-	addne r1,r1,#0x0002	@16bit multiplayer, 57600bps
-@	strh r1,[r2,#REG_SIOCNT]
-
-	bx lr
-@----------------------------------------------------------------------------
-refreshNESjoypads:	@call every frame
-@exits with Z flag clear if update incomplete (waiting for other player)
-@is my multiplayer code butt-ugly?  yes, I thought so.
-@i'm not trying to win any contests here.
-@----------------------------------------------------------------------------
-	mov r6,lr		@return with this..
-
-@	ldr r0,=SerCounter
-@	ldr r0,[r0]
-@	mov r1,#4
-@	bl debug_
-@	ldr r0,received1
-@	mov r1,#5
-@	bl debug_
-@	ldr r0,received2
-@	mov r1,#7
-@	bl debug_
-@	ldr r0,received3
-@	mov r1,#8
-@	bl debug_
-@	ldr r0,sending
-@	mov r1,#10
-@	bl debug_
-@	ldr r0,lastsent
-@	mov r1,#11
-@	bl debug_
-
-		ldr_ r4,frame
-		movs r0,r4,lsr#2 @C=frame&2 (autofire alternates every other frame)
-	ldr_ r1,XGBjoypad
-	and r0,r1,#0xf0
-		ldr r2,joycfg
-		andcs r1,r1,r2
-		movcss addy,r1,lsr#9	@R?
-		andcs r1,r1,r2,lsr#16
-	and r1,r1,#0x0f		@startselectBA
-	tst r2,#0x400			@Swap A/B?
-	adrne addy,ssba2ssab
-	ldrneb r1,[addy,r1]	@startselectBA
-	orr r0,r1,r0		@r0=joypad state
-
-	tst r2,#0x80000000
-	bne multi
-
-no4scr:	tst r2,#0x20000000
-	streqb_ r0,joy0state
-	strneb_ r0,joy1state
-	ands r0,r0,#0		@Z=1
-	mov pc,r6
-multi:				@r2=joycfg
-	tst r2,#0x08000000	@link active?
-	beq link_sync
-
-	bl xmit			@send joypad data for NEXT frame
-	movne pc,r6		@send was incomplete!
-
-	strb_ r2,joy0state		@master is player 1
-	mov r2,r2,lsr#16
-	strb_ r2,joy1state		@slave1 is player 2
-	ldr r4,nrplayers
-	cmp r4,#3
-	bmi fin
-	strb_ r3,joy2state
-	mov r3,r3,lsr#16
-	strhib_ r3,joy3state
-fin:	ands r0,r0,#0		@Z=1
-	mov pc,r6
-
-link_sync:
-	mov r1,#0x8000
-	str r1,lastsent
-	tst r2,#0x03000000
-	beq stage0
-	tst r2,#0x02000000
-	beq stage1
-stage2:
-	mov r0,#0x2200
-	bl xmit			@wait til other side is ready to go
-
-	moveq r1,#0x8000
-	streq r1,lastsent
-	ldr r2,joycfg
-	biceq r2,r2,#0x03000000
-	orreq r2,r2,#0x08000000
-	str r2,joycfg
-
-	b badmonkey
-stage1:		@other GBA wants to reset
-	bl sendreset		@one last time..
-	bne badmonkey
-
-	orr r2,r2,#0x02000000	@on to stage 2..
-	str r2,joycfg
-
-	ldr_ r0,romnumber
-	tst r4,#0x4		@who are we?
-	beq sg1
-	ldrb r3,received0	@slaves uses master's timing flags
-	bic r1,r1,#USEPPUHACK+CPUHACK
-	orr r1,r1,r3
-sg1:	
-	bl_long loadcart		@game reset
-
-	mov r1,#0
-	str r1,sending		@reset sequence numbers
-	str r1,received0
-	str r1,received1
-badmonkey:
-	orrs r0,r0,#1		@Z=0 (incomplete xfer)
-	mov pc,r6
-stage0:	@self-initiated link reset
-	bl sendreset		@keep sending til we get a reply
-	b badmonkey
-sendreset:       @exits with r1=emuflags, r4=REG_SIOCNT, Z=1 if send was OK
-	mov r5,#REG_BASE
-	add r5,r5,#0x100
-
-        ldr_ r1,emuflags
-	and r0,r1,#USEPPUHACK+CPUHACK
-	orr r0,r0,#0xaa00		@$AAxx, xx=timing flags
-
-	ldrh r4,[r5,#REG_SIOCNT]
-	tst r4,#0x80			@ok to send?
-	movne pc,lr
-
-	strh r0,[r5,#REG_SIOMLT_SEND]
-	orr r4,r4,#0x80
-	strh r4,[r5,#REG_SIOCNT]	@send!
-	mov pc,lr
-
-gbpadress: .word 0x04000000
-joycfg: .word 0x40ff01ff @byte0=auto mask, byte1=(saves R)bit2=SwapAB, byte2=R auto mask
-@bit 31=single/multi, 30,29=1P/2P, 27=(multi) link active, 24=reset signal received
-nrplayers: .word 0		@Number of players in multilink.
-ssba2ssab: .byte 0x00,0x02,0x01,0x03, 0x04,0x06,0x05,0x07, 0x08,0x0a,0x09,0x0b, 0x0c,0xe0,0xd0,0x0f
-
-@----------------------------------------------------------------------------
-joy0_W:		@FF00
-@----------------------------------------------------------------------------
-	orr r0,r0,#0xCF
-	mov r2,#0x0
-	ldrb_ r1,joy0state
-	tst r0,#0x10		@Direction
-	orreq r2,r2,r1,lsr#4
-	tst r0,#0x20		@Buttons
-	orreq r2,r2,r1
-
-	and r2,r2,#0x0F
-	eor r2,r2,r0
-	ldrb_ r1,joy0serial
-	strb_ r2,joy0serial
-	
-	bx lr
-@
-@	
-@	ldrb r2,sgbmode
-@	movs r2,r2
-@	bxeq lr
-@	b SGB_transfer_bit
-
-@----------------------------------------------------------------------------
-joy0_R:		@FF00
-@----------------------------------------------------------------------------
-	ldrb_ r0,joy0serial
-	mov pc,lr
-@----------------------------
 
 FF51_R:	@HDMA1
 	ldrb_ r0,dma_src+1
@@ -1061,49 +922,6 @@ FF54_W:	@HDMA4  Dest Low
 	bic r0,r0,#0xF
 	strb_ r0,dma_dest
 	mov pc,lr
-FF55_W:	@HDMA5
-	tst r0,#0x80
-@	bxne lr
-	bic r0,r0,#0x80
-	
-	beq hdma
-	ldr_ r1,cyclesperscanline
-	cmp r1,#DOUBLE_SPEED
-	add r1,r0,#1
-	moveq r1,r1,lsl#1
-	mov r1,r1,lsl#7
-	sub cycles,cycles,r1
-hdma:	
-	
-	stmfd sp!,{r0-addy,lr}
-	
-	ldr_ r3,dma_src
-	mov r4,r3,lsr#16
-	ldr r1,=0xFFFF
-	and r3,r3,r1
-
-	and r5,r0,#0x7F
-	add r5,r5,#1
-	mov r5,r5,lsl#4
-	
-dma5_loop:
-	mov addy,r3
-	readmem
-	mov addy,r4
-	writemem
-	add r3,r3,#1
-	add r4,r4,#1
-	bic r4,r4,#0xE000
-	orr r4,r4,#0x8000
-	
-	subs r5,r5,#1
-	bne dma5_loop
-
-	orr r3,r3,r4,lsl#16
-	str_ r3,dma_src
-	
-	ldmfd sp!,{r0-addy,lr}
-	bx lr
 
 FF4D_R:	@KEY1 - bit 7, Read current speed of CPU - CGB Mode Only
 	ldrb_ r0,doublespeed
@@ -1116,6 +934,7 @@ FF4D_W:	@KEY1 - prepare double speed
 	strb_ r0,doublespeed
 	bx lr
 
+	
 
  .align
  .pool

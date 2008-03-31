@@ -57,4 +57,9 @@ void loadstatemenu(void);
 void writeconfig(void);
 void readconfig(void);
 
+static __inline u32 get_sram_owner()
+{
+	return sram_owner;
+}
+
 #endif

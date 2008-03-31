@@ -1,5 +1,8 @@
 	VERSION_IN_ROM = 1
-	GBAMPVERSION = 0
+#ifndef _GBAMP_VERSION
+#define _GBAMP_VERSION 0
+#endif
+	GBAMPVERSION = _GBAMP_VERSION
 
 	#include "macro.h"
 
@@ -14,6 +17,8 @@
 
 		@GBLL SRAM_32
 
+		@GBLL VISOLY
+
 		@GBLL LITTLESOUNDDJ
 
  SRAM_32		= 0
@@ -27,10 +32,12 @@
  MOVIEPLAYER		= 1
  RESIZABLE		= 1
  RUMBLE	= 0
+ VISOLY = 0
  .else
  MOVIEPLAYER		= 0
  RESIZABLE		= 0
  RUMBLE	= 1
+ VISOLY = 1
  .endif
 
  SAVESTATES	= 0
@@ -38,53 +45,17 @@
 @BUILD		SETS "DEBUG"/"GBA"	(defined at cmdline)
 @----------------------------------------------------------------------------
 
- XGB_RAM		= 0x3005400
- XGB_HRAM	= XGB_RAM+0x2000
- CHR_DECODE	= XGB_HRAM+0x80
-@?		EQU CHR_DECODE+0x400
+ MAX_RECENT_TILES = 96  @if you change this, change RECENT_TILES as well!
+ BG_CACHE_SIZE = 512
+
 
 @statck starts at 0x03007700
 
- BORDER_PALETTE = 0x06006F80
+ BORDER_PALETTE = 0x0600EF80	@formerly 0x06006F80
 
-				@This area can probably be overwritten when making a savestate.
-  .if RESIZABLE
-
- SCROLLBUFF1		= 0x06002000-160*16
- SCROLLBUFF2		= SCROLLBUFF1-160*16
- BG0CNTBUFF		= SCROLLBUFF2-164*8
- WINBUFF		= BG0CNTBUFF-160*8
-
-	.if SPEEDHACKS
- speedhacks  = 0x2040000-512
- MAPPED_RGB		= speedhacks-16*4	@mapped GB palette.
-	.else
- MAPPED_RGB		= 0x2040000-16*4	@mapped GB palette.
-	.endif
-@palbuff			EQU MAPPED_RGB - 512
-
- INSTANT_PAGES = MAPPED_RGB-1024
- openFiles       = INSTANT_PAGES-1200
- lfnName			= openFiles-256
-@fatBuffer	EQU lfnName-512
- globalBuffer    = lfnName-512
- fatBuffer	= globalBuffer-512
- SramName		= fatBuffer-256
-
-
-@77552
-
-@10664 bytes for these:
- DISPCNTBUFF		= SramName-164*2
-
- END_OF_EXRAM	= DISPCNTBUFF-0000	@How much data is left for Multiboot to work.
- DMA1BUFF		= DISPCNTBUFF
- fatWriteBuffer = fatBuffer
 
 
   
-  .else
- MAX_RECENT_TILES = 96  @if you change this, change RECENT_TILES as well!
 
 @VRAM areas:
 @0x600 bytes at 06006200
@@ -94,31 +65,72 @@
 @0x300 at 06007D00-06008000
 
 @SGB border areas coincide with the GBA areas reserved for them
- SNES_VRAM	= 0x06004220 @one tile ahead, too bad if games don't write low tiles then high tiles, also overlaps with recent_tiles...
- SNES_MAP	= 0x06006780 @overlaps with recent_tiles, map must be updated in reverse order
- RECENT_TILES	= 0x06006200 @DIRTY_TILES-(MAX_RECENT_TILES*16)
+ SNES_VRAM	= 0x0600C220 @one tile ahead, too bad if games don't write low tiles then high tiles, also overlaps with recent_tiles...
+ SNES_MAP	= 0x0600E780 @overlaps with recent_tiles, map must be updated in reverse order
+ RECENT_TILES	= 0x0600E200 @DIRTY_TILES-(MAX_RECENT_TILES*16)
 
+ AGB_SGB_MAP		= 0x0600E800
+ AGB_SGB_VRAM	= 0x0600C200
 
+	@GBLA Next
 
  MEM_END	= 0x02040000
 
- XGB_SRAM	= MEM_END-0x8000
+ Next = MEM_END
+
+	.if MOVIEPLAYER
+ FAT_MEM_END = MEM_END
+ FAT_MEM_START = FAT_MEM_END-4096
+ fatBuffer	= FAT_MEM_END-512
+ fatWriteBuffer = fatBuffer
+ globalBuffer    = fatBuffer-512
+ lfnName			= globalBuffer-256
+ SramName		= lfnName-256
+ openFiles       = SramName-1200
+ stateexist	= openFiles-36
+ System	= stateexist-4
+ PALMode = System-4
+ rom_file = PALMode-4
+ nocash	= rom_file-4
+ rom_filesize = nocash-4
+
+ Next = FAT_MEM_START
+	.endif
+
+	.if RESIZABLE
+	.else
+ XGB_SRAM	= Next-0x8000
  XGB_VRAM	= XGB_SRAM-0x4000
  GBC_EXRAM	= XGB_VRAM-0x6000
- SGB_PACKET	= GBC_EXRAM-112
- INSTANT_PAGES	= 0x0600cc00 @SGB_PACKET-1024
- SGB_PALETTE	= SGB_PACKET-16*4
+ Next = GBC_EXRAM
+	.endif
+
+ INSTANT_PAGES	= 0x06004c00 @SGB_PACKET-1024		;formerly 0x0600CC00
+
+ SGB_PALETTE	= Next-16*4
 
  DIRTY_ROWS = SGB_PALETTE-48
  DIRTY_TILES = DIRTY_ROWS-768-4
  RECENT_TILENUM	= DIRTY_TILES-(MAX_RECENT_TILES+2)*2
 
- SGB_PALS	= RECENT_TILENUM-4096
+ BG_CACHE	= RECENT_TILENUM-BG_CACHE_SIZE
+
+ Next	= BG_CACHE
+
+	.if RESIZABLE
+	.else
+ SGB_PALS	= BG_CACHE-4096
  SGB_ATFS	= SGB_PALS-4096
- sgb_attributes = SGB_ATFS-360
+ SGB_PACKET	= SGB_ATFS-112
+ SGB_ATTRIBUTES = SGB_PACKET-360
+
+ Next	= SGB_ATTRIBUTES
+	.endif
 
 
- GBOAMBUFF1	= sgb_attributes-160
+
+
+ GBOAMBUFF1	= Next-160
  GBOAMBUFF2	= GBOAMBUFF1-160
 
  BG0CNT_SCROLL_BUFF	= GBOAMBUFF2-144*24
@@ -129,6 +141,8 @@
  WINDOWBUFF2	= BG0CNT_SCROLL_BUFF2-144*2
  DISPCNTBUFF2	= WINDOWBUFF2-144*2
 
+ Next	= DISPCNTBUFF2
+
 @WXBUFF1	EQU DISPCNTBUFF-144
 @YSCROLLBUFF1	EQU WXBUFF1-144
 @XSCROLLBUFF1	EQU YSCROLLBUFF1-144
@@ -138,44 +152,17 @@
 @XSCROLLBUFF2	EQU YSCROLLBUFF2-144
 @LCDCBUFF2	EQU XSCROLLBUFF2-144
 
- MULTIBOOT_LIMIT	= DISPCNTBUFF2-0	@How much data is left for Multiboot to work.
+	.if SPEEDHACKS
+ SPEEDHACK_FIND_JR_Z_BUF		= DISPCNTBUFF2-64
+ SPEEDHACK_FIND_JR_NZ_BUF	= SPEEDHACK_FIND_JR_Z_BUF-64
+ SPEEDHACK_FIND_JR_C_BUF		= SPEEDHACK_FIND_JR_NZ_BUF-64
+ SPEEDHACK_FIND_JR_NC_BUF	= SPEEDHACK_FIND_JR_C_BUF-64
+ Next	= SPEEDHACK_FIND_JR_NC_BUF
+	.endif
+ MULTIBOOT_LIMIT	= Next	@How much data is left for Multiboot to work.
+ END_OF_EXRAM = MULTIBOOT_LIMIT
 
- openFiles	= DISPCNTBUFF2-1200
- lfnName	= openFiles-256
- globalBuffer	= lfnName-512
- fatBuffer	= globalBuffer-512
- SramName	= fatBuffer-256
- fatWriteBuffer	= fatBuffer
 
-
-
-@MEM_END	EQU 0x02040000
-@GBOAMBUFF1	EQU -160
-@GBOAMBUFF2	EQU -160
-@SCROLLBUFF	EQU -144*16
-@BG0CNTBUFF	EQU -144*8
-@DISPCNTBUFF	EQU -144*2
-@XSCROLLBUFF1	EQU -144
-@XSCROLLBUFF2	EQU -144
-@YSCROLLBUFF1	EQU -144
-@YSCROLLBUFF2	EQU -144
-@LCDCONTROLBUFF1	EQU -144
-@LCDCONTROLBUFF2	EQU -144  ;0x1200 + 0x140
-@XGB_SRAM	EQU -0x8000
-@XGB_VRAM	EQU -0x4000
-@GBC_EXRAM	EQU -0x6000
-@INSTANT_PAGES	EQU -1024
-@MAPPED_RGB	EQU -16*4
-@openFiles	EQU -1200
-@lfnName	EQU -256
-@globalBuffer	EQU -512
-@fatBuffer	EQU -512
-@SramName	EQU -256
-@MULTIBOOT_LIMIT	EQU -0	;How much data is left for Multiboot to work.
-
-@speedhacks  EQU -512
-
-  .endif
 
 
 
@@ -184,14 +171,6 @@
  AGB_VRAM		= 0x6000000
  AGB_OAM			= 0x7000000
  AGB_SRAM		= 0xE000000
-
-@map1        0x06001000
-@map2        0x06001800
-@map1 blocks 0x06002000
-@map2 blocks 0x06002800
-
- AGB_BG			= AGB_VRAM+0xA000
- AGB_BG_GBMODE		= AGB_VRAM+0x4000
 
  REG_BASE		= 0x4000000
  REG_DISPCNT		= 0x00
@@ -287,52 +266,48 @@
 		@r15=PC
 @----------------------------------------------------------------------------
 
-@ MAP 0,gb_zpage
-@xgb_ram # 0x2000
-@xgb_hram # 0x80
-@chr_decode # 0x400
-
 @everything in wram_globals* areas:
 
- start_map 0,globalptr	@gb-z80.s
+ start_map 0,globalptr	@gbz80.s
+ _m_ readmem_tbl_begin,-16*4
+ _m_ readmem_tbl_end,16*4
+ _m_ ,-4
+ _m_ readmem_tbl_,0
+ _m_ ,4
  _m_ opz,256*4
- _m_ readmem_tbl,16*4
  _m_ writemem_tbl,16*4
  _m_ memmap_tbl,16*4
  _m_ cpuregs,8*4
  _m_ gb_ime,1
  _m_ gb_ie,1
  _m_ gb_if,1
- _m_ gb_ic,1  @not actually used
- _m_ lastbank,4
+ _m_ ,1  
+ _m_ rambank,1
+ _m_ gbcmode,1
+ _m_ sgbmode,1
+ _m_ ,1
+
  _m_ dividereg,4
  _m_ timercounter,4
  _m_ timermodulo,1
  _m_ timerctrl,1
  _m_ stctrl,1
- _m_ debugstop,1 @align
+ _m_ ,1
+ _m_ frame,4
  _m_ nexttimeout,4
  _m_ nexttimeout_alt,4
  _m_ scanlinehook,4
- _m_ frame,4
+ _m_ lastbank,4
  _m_ cyclesperscanline,4
  _m_ timercyclesperscanline,4
- .if SPEEDHACKS
- _m_ numspeedhacks,4
- _m_ speedhacks_p,4
- .endif
- .if PROFILE
- _m_ profiler,4
- .endif
- _m_ rambank,1
- _m_ gbcmode,1
- _m_ sgbmode,1
- _m_ hackflags,1
+ _m_ scanline_oam_position,4
+@ .if PROFILE
+@ _m_ profiler,4
+@ .endif
  _m_ doubletimer_,1
  _m_ gbamode,1
  _m_ request_gb_type_,1
  _m_ novblankwait_,1
- _m_ hblankposition,4
 
  .if RESIZABLE
  _m_ xgb_sram,4
@@ -342,14 +317,22 @@
  _m_ gbc_exram,4
  _m_ gbc_exramsize,4
  _m_ end_of_exram,4
+ _m_ xgb_vram_1800,4
+ _m_ xgb_vram_1C00,4
+ _m_ sgb_pals,4
+ _m_ sgb_atfs,4
+ _m_ sgb_packet,4
+ _m_ sgb_attributes,4
+ _m_ ,12 @padding
  .endif
+@#6 word (of 8)
 			@lcd.s (wram_globals1)
  _m_ fpsvalue,4
  _m_ AGBjoypad,4
  _m_ XGBjoypad,4
 
  _m_ lcdctrl,1
- _m_ lcdstat,1
+ _m_ lcdstat_save,1
  _m_ scrollX,1
  _m_ scrollY,1
 
@@ -370,6 +353,8 @@
 
  _m_ dma_src,2
  _m_ dma_dest,2
+ _m_ dirty_tiles,4
+ _m_ dirty_rows,4
 
 	_m_ bigbuffer,4
 		_m_ bg01cnt,4
@@ -387,6 +372,11 @@
  _m_ rendermode,1
  _m_ _ui_border_visible,1
 
+ _m_ _sgb_palette_number,1
+ _m_ _gammavalue,1
+ _m_ _darkness,1
+ _m_ ,1
+
  _m_ ui_border_cnt_bic,4
  _m_ ui_border_cnt_orr,4
  _m_ ui_border_scroll2,4
@@ -396,13 +386,6 @@
  _m_ _ui_border_request,4
  _m_ _ui_border_screen,4
  _m_ _ui_border_buffer,4
-
- _m_ _sgb_palette_number,1
- _m_ _gammavalue,1
- _m_ _darkness,1
- _m_ ,1
-
-			@lcd.s (wram_globals1)
 
  _m_ dispcntbase,4
  _m_ dispcntbase2,4
@@ -416,11 +399,18 @@
 
  _m_ gboambuff,4
  _m_ active_gboambuff,4
- _m_ dirty_tiles,4
- _m_ dirty_rows,4
 
  _m_ _palettebank,4
 
+ _m_ bg_cache_cursor,4
+ _m_ bg_cache_base,4
+ _m_ bg_cache_limit,4
+ _m_ bg_cache_full,1
+ _m_ bg_cache_updateok,1
+	_m_ lcdhack,1
+	_m_ ,1
+
+@VRAM_name0_ptr # 4
 
 			@cart.s (wram_globals2)
  _m_ bank0,4
@@ -472,10 +462,18 @@
  _m_ fiveminutes_,4
    _m_ sleeptime_,4
     _m_ dontstop_,1
- _m_ ,3
+	 _m_ hackflags,1
+	 _m_ hackflags2,1
+ _m_ ,1
+			@gbz80.s (wram_globals6)
+	_m_ xgb_ram,0x2000
+ _m_ xgb_hram,0x80
+ _m_ chr_decode,0x400
 
-   
-   
+			@lcd.s (wram_globals7)
+ _m_ FF41_R_function,4
+ _m_ FF41_R_vblank_function,4
+
 
 @----------------------------------------------------------------------------
 @IRQ_VECTOR EQU 0xfffe ; IRQ/BRK interrupt vector address
@@ -512,8 +510,11 @@
 
  SINGLE_SPEED = 456*CYCLE
  DOUBLE_SPEED = 912*CYCLE
- SINGLE_SPEED_HBLANK = 204*CYCLE  @should be 204
- DOUBLE_SPEED_HBLANK = 408*CYCLE
+ SINGLE_SPEED_SCANLINE_OAM_POSITION = 172*CYCLE  @should be 204
+ DOUBLE_SPEED_SCANLINE_OAM_POSITION = 172*2*CYCLE
+
+@SINGLE_SPEED_HBLANK EQU 204*CYCLE  ;should be 204
+@DOUBLE_SPEED_HBLANK EQU 408*CYCLE
 
 
  WINDOW_TOP = 8

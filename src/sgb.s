@@ -96,31 +96,46 @@ sgb_reset:
 	mvn r0,#0
 	strb_ r0,joy0serial
 	
-	mov r0,#0
-	ldr r1,=SGB_PALS
-	mov r2,#4096/4
-	bl filler_
-	ldr r1,=SGB_ATFS
-	mov r2,#4096/4
-	bl filler_
-	ldr r1,=sgb_attributes
-	mov r2,#360/4
-	bl filler_
+	mov r1,#0
+	.if RESIZABLE
+	ldr_ r0,sgb_pals
+	mov r2,#4096
+	movs r0,r0
+	blne memset_
+	ldr_ r0,sgb_atfs
+	mov r2,#4096
+	movs r0,r0
+	blne memset_
+	ldr_ r0,sgb_attributes
+	mov r2,#360
+	movs r0,r0
+	blne memset_
+	.else
+	ldr r0,=SGB_PALS
+	mov r2,#4096
+	bl memset_
+	ldr r0,=SGB_ATFS
+	mov r2,#4096
+	bl memset_
+	ldr r0,=SGB_ATTRIBUTES
+	mov r2,#360
+	bl memset_
+	.endif
 	
 	@don't remove border after we went through everything to add it
 	ldrb_ r0,autoborderstate
 	cmp r0,#2
 	beq 0f
 	
-	mov r0,#0
+	mov r1,#0
 	@erase SGB border
-	ldr r1,=0x06006800
-	mov r2,#0x800/4
-	bl filler_
+	ldr r0,=AGB_SGB_MAP
+	mov r2,#0x800
+	bl memset_
 	@erase SGB border tiles
-	ldr r1,=0x06004200
-	mov r2,#0x2000/4
-	bl filler_
+	ldr r0,=AGB_SGB_VRAM
+	mov r2,#0x2000
+	bl memset_
 	
 	ldrb_ r1,_ui_border_visible
 	bic r1,r1,#2
@@ -133,10 +148,18 @@ sgb_reset:
 	str_ r0,auto_border_reboot_frame
 	
 	@erase SGB packet for no reason
-	mov r0,#0
-	ldr r1,=SGB_PACKET
-	mov r2,#0x112/4
-	bl filler_
+	.if RESIZABLE
+	mov r1,#0
+	ldr_ r0,sgb_packet
+	mov r2,#112
+	movs r0,r0
+	blne memset_
+	.else
+	mov r1,#0
+	ldr r0,=SGB_PACKET
+	mov r2,#112
+	bl memset_
+	.endif
 	
 	ldmfd sp!,{pc}
 
@@ -213,7 +236,11 @@ SGB_transfer_bit:
 	cmp r1,#0x30
 	bne invalidpacket
 	tst r0,#0x20 @write a zero, otherwise write a 1
+	.if RESIZABLE
+	ldr_ addy,sgb_packet
+	.else
 	ldr addy,=SGB_PACKET
+	.endif
 	ldr_ r0,packetcursor
 	ldr_ r1,packetbitcursor
 	ldr r2,[addy,r0]
@@ -382,7 +409,11 @@ SOU_TRN:   @Transfer Sound PRG/DATA
 PAL_SET:   @Set SGB Palette Indirect
 	stmfd sp!,{r3-r4,lr}
 	ldr r2,=SGB_PALETTE
+	.if RESIZABLE
+	ldr_ r3,sgb_pals
+	.else
 	ldr r3,=SGB_PALS
+	.endif
 	mov r4,#4
 0:
 	ldrb r0,[addy,#1]!
@@ -413,7 +444,11 @@ PAL_SET:   @Set SGB Palette Indirect
 	bl update_sgb_palette
 	ldmfd sp!,{r3-r4,pc}
 PAL_TRN:   @Set System Color Palette Data
+	.if RESIZABLE
+	ldr_ r1,sgb_pals
+	.else
 	ldr r1,=SGB_PALS
+	.endif
 sgb_vram_transfer:
 	mov r2,#4096
 sgb_vram_transfer2:
@@ -429,11 +464,17 @@ sgb_vram_transfer2:
 	stmfd sp!,{r3-r7,lr}
 
 	mov r7,#20
-	ldr r4,=XGB_VRAM
 	ldrb_ r3,lcdctrl
 	tst r3,#0x08
+	.if RESIZABLE
+	ldr_ r4,xgb_vram
+	ldreq_ r5,xgb_vram_1800
+	ldrne_ r5,xgb_vram_1C00
+	.else
+	ldr r4,=XGB_VRAM
 	ldreq r5,=XGB_VRAM+0x1800
 	ldrne r5,=XGB_VRAM+0x1C00
+	.endif
 1:
 	ldrb r0,[r5],#1
 	@correct for the messed up tile numbers thing on the GB
@@ -508,7 +549,11 @@ PCT_TRN:   @Set Screen Data Color Data
 	bl draw_sgb_border
 	ldmfd sp!,{pc}
 ATTR_TRN:  @Set Attribute from ATF
+	.if RESIZABLE
+	ldr_ r1,sgb_atfs
+	.else
 	ldr r1,=SGB_ATFS
+	.endif
 	b sgb_vram_transfer
 ATTR_SET:  @Set Data to ATF
 	ldrb r0,[addy,#1]!
@@ -521,9 +566,15 @@ set_atf:
 	stmfd sp!,{r3-r4,lr}
 	@r0 = atf #
 	mov r1,#90
+	.if RESIZABLE
+	ldr_ r3,sgb_atfs
+	mla r2,r0,r1,r3
+	ldr_ r3,sgb_attributes
+	.else
 	ldr r3,=SGB_ATFS
 	mla r2,r0,r1,r3
-	ldr r3,=sgb_attributes
+	ldr r3,=SGB_ATTRIBUTES
+	.endif
 	mov r4,#5*18
 0:
 	ldrb r0,[r2],#1
@@ -560,7 +611,7 @@ convert_snes_vram:
 	@r0 = page number, 0 or 1 (tiles 0-127, or tiles 128-255)
 	stmfd sp!,{r3-r7,lr}
 	mov r7,#128
-	ldr r6,=0x06004200
+	ldr r6,=AGB_SGB_VRAM
 	add r6,r6,r0,lsl#12
 	ldr r5,=SNES_VRAM
 	add r5,r5,r0,lsl#12
@@ -596,7 +647,7 @@ draw_sgb_border:
 	@6f00-80
 	
 	mov r7,#32*28
-	ldr r6,=0x06006800+0x700
+	ldr r6,=AGB_SGB_MAP+0x700
 	ldr r5,=SNES_MAP+0x700
 0:
 	ldrh r0,[r5,#-2]!

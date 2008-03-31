@@ -3,9 +3,9 @@
 #define page_size (16)
 #define page_size_2 (page_size*1024)
 
-u8 *const bank_0=(u8*)0x0600C000;
-u8 *const bank_1=(u8*)0x06014000;
-u8 *const bank_2=(u8*)0x06008000;
+#define CRAP_AMOUNT 512
+
+u8 *const bank_1=(u8*)0x06010000-CRAP_AMOUNT;
 
 #if MOVIEPLAYER
 int cache_queue_cursor;
@@ -20,6 +20,8 @@ u8 *make_instant_pages(u8* rom_base)
 {
 	//this is for cases where there is no caching!
 	u32 *p=(u32*)rom_base;
+	u8 *page0_rom;
+//	u8 cartsizebyte;
 	int i;
 	
 #if MOVIEPLAYER
@@ -50,7 +52,17 @@ u8 *make_instant_pages(u8* rom_base)
 			INSTANT_PAGES[i]=rom_base+16384*(i);//&page_mask);
 		}
 	}
-	return INSTANT_PAGES[0];
+	page0_rom=INSTANT_PAGES[0];
+//	cartsizebyte=page0_rom[0x148];
+
+//	if (cartsizebyte>0)
+	{
+		//copy bank 0 to VRAM
+//		memcpy(bank_1,page0_rom,16384);
+		memcpy(bank_1,page0_rom,16384+CRAP_AMOUNT);
+		INSTANT_PAGES[0]=bank_1;
+	}
+	return page0_rom;
 }
 
 #if !MOVIEPLAYER
@@ -79,15 +91,12 @@ void init_cache()
 	//set up cache locations, first few are sequential
 	for (i=0;i<cachepages;i++)
 	{
-		cache_location[i]=cachebase+page_size_2*i;
+		cache_location[i+1]=cachebase+page_size_2*i;
 	}
-	//two extra pages, then one more for GB mode
-	if (gb_mode==0)
-	{
-		cache_location[cachepages++]=bank_2;
-	}
-	cache_location[cachepages++]=bank_0;
-	cache_location[cachepages++]=bank_1;
+	//extra page in VRAM to accelerate games
+	cache_location[0]=bank_1;
+	cachepages++;
+	
 	clear_instant_prg();
 	flushcache();
 //	usingcompcache=0;
@@ -155,7 +164,7 @@ void getbank(int kilobyte)
 	u32 i,j;
 	int slotcontent;
 //	u8 *src, *dest;
-	u8 *banks=g_banks;
+	u32 *banks=g_banks;
 	bank=kilobyte/page_size;
 	
 	//page is in cache?
@@ -208,7 +217,7 @@ slot_is_locked:
 
 void get_rom_map()
 {
-	u8 *banks=g_banks;
+	u32 *banks=g_banks;
 	u8**memmap = g_memmap_tbl;
 	u8**instant_prg = INSTANT_PAGES;
 	int i;
@@ -227,7 +236,7 @@ void update_cache()
 {
 	//updates the cache's state, and all the lookup tables
 	//also fixes the memory map and vram map
-	u8 *banks=g_banks;
+	u32 *banks=g_banks;
 	int i;
 
 	clear_instant_prg();
@@ -251,6 +260,7 @@ void add_exram()
 }
 #endif
 
+/*
 void reload_vram_page1()
 {
 	int i=cachepages-2;
@@ -260,6 +270,6 @@ void reload_vram_page1()
 		loadcachepage(i,bank);
 	}
 }
-
+*/
 
 #endif

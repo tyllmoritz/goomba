@@ -1,4 +1,4 @@
-	@IMPORT gboambuff
+	@IMPORT update_ui_border_masks
 	@IMPORT newframe_vblank
 
 	@IMPORT update_sgb_palette

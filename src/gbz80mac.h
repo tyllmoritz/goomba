@@ -18,6 +18,14 @@
 	add gb_pc,gb_pc,r0
 	.endm
 
+	.macro encodePC_afterpush16		@push16 already does "adr r2,memmap_tbl"
+	and r1,gb_pc,#0xF000
+@	adr r2,memmap_tbl
+	ldr r0,[r2,r1,lsr#10]
+	str_ r0,lastbank
+	add gb_pc,gb_pc,r0
+	.endm
+
 	.macro encodeFLG		@pack GB-Z80 flags into r0
 	and r0,gb_flg,#0xA0000000	@nC
 	and r1,gb_flg,#0x50000000	@Zh
@@ -49,10 +57,9 @@
 	.endm
 
 	.macro readmem
-	and r1,addy,#0xF000
-	adr_ r2,readmem_tbl
+	mvn r1,addy,lsr#12
 	adr lr,0f
-	ldr pc,[r2,r1,lsr#10]	@in: addy,r1=addy&0xE000 (for rom_R)
+	ldr pc,[r10,r1,lsl#2]	@in: addy,r1=addy&0xE000 (for rom_R)
 0:				@out: r0=val (bits 8-31=0 ), addy preserved for RMW instructions
 	.endm
 
@@ -74,18 +81,27 @@
 @note: stack writes to SRAM do not properly save to GBA sram as well.
 
 	.macro push16		@push r0
-	sub gb_sp,gb_sp,#0x00020000
+	subs gb_sp,gb_sp,#0x00020000	@use "negative flag" as indicator we are writing to ROM
 	and r1,gb_sp,#0xF0000000
 	adr_ r2,memmap_tbl
 	ldr r2,[r2,r1,lsr#26]
-	strb r0,[r2,gb_sp,lsr#16]
-	add addy,gb_sp,#0x00010000
+	strmib r0,[r2,gb_sp,lsr#16]		@reject rom write
+	adds addy,gb_sp,#0x00010000
 	mov r0,r0,lsr#8
-	strb r0,[r2,addy,lsr#16]
+	strmib r0,[r2,addy,lsr#16]		@reject rom write
+	tstmi r1,#0x60000000	@just to solve some games
+	bleq vram_W2			@that use push16 to write to vram
+	.endm		@r1,r2=?
 
-	cmp r1,#0x80000000	@ just to solve some games
-	cmpne r1,#0x90000000
-	bleq vram_W2		@ that use push16 to write to vram
+	.macro push16_novram		@push r0 with no VRAM check (because who would fill VRAM with PC?)
+	subs gb_sp,gb_sp,#0x00020000	@use "negative flag" as indicator we are writing to ROM
+	and r1,gb_sp,#0xF0000000
+	adr_ r2,memmap_tbl
+	ldr addy,[r2,r1,lsr#26]
+	strmib r0,[addy,gb_sp,lsr#16]		@reject rom write
+	adds r1,gb_sp,#0x00010000
+	mov r0,r0,lsr#8
+	strmib r0,[addy,r1,lsr#16]		@reject rom write
 	.endm		@r1,r2=?
 
 	.macro pop16 x		@pop BC,DE,HL,PC

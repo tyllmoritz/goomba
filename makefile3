@@ -1,0 +1,9 @@
+goomba_mb.gba:
+	make -f makefile_mb
+
+goomba.gba: goomba_mb.gba
+	make -f makefile_cart
+
+
+all:	goomba.gba goomba_mb.gba
+	

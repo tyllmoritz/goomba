@@ -35,14 +35,14 @@ RamEnable:
 	strb_ r0,mapperdata+2
 	and r0,r0,#0x0F
 	cmp r0,#0x0A
-	adrne r1,empty_W
+	adrnel r1,empty_W
 	ldreq_ r1,sramwptr
 	str_ r1,writemem_tbl+40
 	str_ r1,writemem_tbl+44
-	adrne r1,empty_R
-	adreq r1,mem_RA0
-	str_ r1,readmem_tbl+40
-	str_ r1,readmem_tbl+44
+	adrnel r1,empty_R
+	adreql r1,mem_RA0
+	str_ r1,readmem_tbl_-40
+	str_ r1,readmem_tbl_-44
 	ldrb_ r0,mapperdata+4		@rambank
 	b mapAB_
 
@@ -143,7 +143,7 @@ mbc3bank:
 	strb_ r0,mapperdata+4
 	tst r0,#8
 	beq RamSelect
-	ldr r1,=empty_W
+	adrl r1,empty_W
 	str_ r1,writemem_tbl+40
 	str_ r1,writemem_tbl+44
 	adrl r1,empty_R
@@ -157,8 +157,8 @@ mbc3bank:
 	adreq r1,clk_dayL
 	cmp r0,#0xC
 	adreq r1,clk_dayH
-	str_ r1,readmem_tbl+40
-	str_ r1,readmem_tbl+44
+	str_ r1,readmem_tbl_-40
+	str_ r1,readmem_tbl_-44
 	mov pc,lr
 
 @------------------------------

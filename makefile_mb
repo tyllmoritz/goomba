@@ -1,4 +1,4 @@
-MAKEFILE	:=	makefile
+MAKEFILE	:=	makefile_mb
 
 #---------------------------------------------------------------------------------
 # Clear the implicit built in rules
@@ -25,9 +25,9 @@ include $(DEVKITARM)/gba_rules
 
 OBJCOPY		:=	$(OBJCOPY) -R.pad
 
-#%_mb.elf:
-#	@echo linking multiboot
-#	@$(LD) -specs=gba_mb.specs $(LDFLAGS) $(OFILES) $(LIBPATHS) $(LIBS) -o $@
+%_mb.elf:
+	@echo linking my multiboot
+	@$(LD) -specs=../src/my_mb.specs $(LDFLAGS) $(OFILES) $(LIBPATHS) $(LIBS) -o $@
 %.elf:
 	@echo linking cartridge
 	@$(LD) $(LDFLAGS) $(OFILES) $(LIBPATHS) $(LIBS) -specs=../src/my.specs -o $@
@@ -42,8 +42,8 @@ OBJCOPY		:=	$(OBJCOPY) -R.pad
 # SOURCES is a list of directories containing source code
 # INCLUDES is a list of directories containing extra header files
 #---------------------------------------------------------------------------------
-TARGET		:=	goomba
-BUILD		:=	build
+TARGET		:=	goomba_mb
+BUILD		:=	build_mb
 SOURCES		:=	src
 INCLUDES	:=
 
@@ -56,7 +56,8 @@ CFLAGS	:=	-g -Wall -Os\
 		-mcpu=arm7tdmi -mtune=arm7tdmi\
  		-fomit-frame-pointer\
 		-ffast-math \
-		$(ARCH)
+		$(ARCH) \
+		-D _MB_VERSION
 
 CFLAGS	+=	$(INCLUDE)
 
@@ -100,7 +101,6 @@ CPPFILES	:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
 SFILES		:=	all.s
 DATA1		:=	font.lz77
 DATA2		:=	fontpal.bin
-DATA3		:=	../goomba_mb.gba
 
 #---------------------------------------------------------------------------------
 # use CXX for linking C++ projects, CC for standard C
@@ -116,7 +116,7 @@ else
 endif
 #---------------------------------------------------------------------------------
 
-export OFILES	:= $(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o) $(DATA1:.lz77=.o) $(DATA2:.bin=.o) $(DATA3:.gba=.o)
+export OFILES	:= $(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o) $(DATA1:.lz77=.o) $(DATA2:.bin=.o)
 
 #---------------------------------------------------------------------------------
 # build a list of include paths
@@ -159,6 +159,14 @@ DEPENDS	:=	$(OFILES:.o=.d)
 %.o	:	%.gba
 	@echo $(notdir $<)
 	@$(bin2o)
+
+
+
+#---------------------------------------------------------------------------------
+%.gba: %.elf
+	@$(OBJCOPY) -O binary $< $@
+	@echo LOL ... $(notdir $@)
+	@gbafix $@ -tGoomba\ Color -cGMBC
 
 
 #---------------------------------------------------------------------------------

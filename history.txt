@@ -1,6 +1,34 @@
 Goomba revision history
 -=-=-=-=-=-=-=-=-=-=-=-
 
+version 2008-03-31
+   Amazing new speedhacks to make some games run faster
+   Fixed some graphical garbage while rom menu scrolls out
+   Rom menu no longer shows game codes of GBC games
+
+version 2008-03-29
+   Rearranged VRAM
+   Allowed more leeway in games crossing past page #0
+   Frame Rate counter now visible
+   Optimized memory reads by 1 cycle
+   Fixed LCD status polling for real (Final Fantasy Legend 1&2 work again)
+
+version 2008-03-18
+   Some minor CPU optimizations
+   Fixed fast LCD status polling
+
+version 2008-02-20
+   Moved GB rom bank 0 to GBA VRAM for higher speed!
+   Faster LCD status polling
+
+version 2008-01-29
+   Fixed an IRQ issue that affected Final Fantasy Adventure
+   Fixed junk graphics when backgrounds are supposed to be disabled
+
+version 2008-01-26
+   Tilemaps now updated in sync with tile graphics
+   Lots of little optimizations and other internal changes
+
 version 2008-01-16
    Fixed double speed timers mode
    Adds SGB borders to games which support both GBC and SGB mode

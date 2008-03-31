@@ -27,8 +27,10 @@
 	.global echo_W
 	.global echo_R
 	
-	.global filler_
-	.global copy_
+	.global memset_
+	.global memcpy_
+	.global memset__
+	.global memcpy__
 @----------------------------------------------------------------------------
 empty_R:		@read bad address (error)
 @----------------------------------------------------------------------------
@@ -118,13 +120,14 @@ sram_W:	@sram write ($A000-$BFFF)
 	strb r0,[r1,addy]
 	mov pc,lr
 @----------------------------------------------------------------------------
-wram_W:	@wram write ($C000-$DFFF)
+wram_W:	@wram write ($C000-$CFFF)
 @----------------------------------------------------------------------------
-	ldr_ r1,memmap_tbl+48
+@	ldr r1,memmap_tbl+48
+	adrl_ r1,xgb_ram-0xC000
 	strb r0,[r1,addy]
 	mov pc,lr
 @----------------------------------------------------------------------------
-wram_W_2:	@wram write ($C000-$DFFF)
+wram_W_2:	@wram write ($D000-$DFFF)
 @----------------------------------------------------------------------------
 	ldr_ r1,memmap_tbl+52
 	strb r0,[r1,addy]
@@ -143,26 +146,101 @@ echo_W:
 	b wram_W_2
 
 
-@----------------------------------------------------------------------------
+memset__:
+@word aligned only
+@r0 = dest, r1 = data, r2 = byte count
+	subs r2,r2,#32
+	blt 2f
+	stmfd sp!,{r3-r9}
+	mov r3,r1
+	mov r4,r1
+	mov r5,r1
+	mov r6,r1
+	mov r7,r1
+	mov r8,r1
+	mov r9,r1
+0:	
+	stmia r0!,{r1,r3-r9}
+	subs r2,r2,#32
+	blt 1f
+	stmia r0!,{r1,r3-r9}
+	subs r2,r2,#32
+	blt 1f
+	stmia r0!,{r1,r3-r9}
+	subs r2,r2,#32
+	blt 1f
+	stmia r0!,{r1,r3-r9}
+	subs r2,r2,#32
+	bge 0b
+1:
+	ldmfd sp!,{r3-r9}
+2:
+	adds r2,r2,#32
+	bxeq lr
+0:
+	str r1,[r0],#4
+	subs r2,r2,#4
+	bne 0b
+	bx lr
+memcpy__:
+@word aligned only
+@r0=dest, r1=src, r2=byte count
+	subs r2,r2,#32
+	blt 2f
+	stmfd sp!,{r3-r10}
+0:
+	ldmia r1!,{r3-r10}
+	stmia r0!,{r3-r10}
+	subs r2,r2,#32
+	blt 1f
+	ldmia r1!,{r3-r10}
+	stmia r0!,{r3-r10}
+	subs r2,r2,#32
+	blt 1f
+	ldmia r1!,{r3-r10}
+	stmia r0!,{r3-r10}
+	subs r2,r2,#32
+	blt 1f
+	ldmia r1!,{r3-r10}
+	stmia r0!,{r3-r10}
+	subs r2,r2,#32
+	bge 0b
+1:
+	ldmfd sp!,{r3-r10}
+2:
+	adds r2,r2,#32
+	bxeq lr
+0:
+	ldr r12,[r1],#4
+	str r12,[r0],#4
+	subs r2,r2,#4
+	bne 0b
+	bx lr
+
  .align
  .pool
  .text
  .align
  .pool
-filler_: @r0=data r1=dest r2=word count
-@	exit with r0 unchanged
-@----------------------------------------------------------------------------
-	subs r2,r2,#1
-	str r0,[r1,r2,lsl#2]
-	bne filler_
-	bx lr
-@----------------------------------------------------------------------------
-copy_:
-	@r0=dest, r1=src, r2=count, addy=destroyed
-	subs r2,r2,#1
-	ldr addy,[r1,r2,lsl#2]
-	str addy,[r0,r2,lsl#2]
-	bne copy_
-	bx lr
+memset_:
+	b_long memset__
+memcpy_:
+	b_long memcpy__
+ 
+@filler_ ;r0=data r1=dest r2=word count
+@@	exit with r0 unchanged
+@@----------------------------------------------------------------------------
+@	subs r2,r2,#1
+@	str r0,[r1,r2,lsl#2]
+@	bne filler_
+@	bx lr
+@@----------------------------------------------------------------------------
+@copy_
+@	;r0=dest, r1=src, r2=count, addy=destroyed
+@	subs r2,r2,#1
+@	ldr addy,[r1,r2,lsl#2]
+@	str addy,[r0,r2,lsl#2]
+@	bne copy_
+@	bx lr
 
 	@.end

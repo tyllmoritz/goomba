@@ -7,6 +7,8 @@ extern int usinggbamp;
 extern int usingcache;
 extern File rom_file;
 extern char save_slot;
+
+extern int rom_filesize;
 #endif
 
 #define TRIM 0x4D495254

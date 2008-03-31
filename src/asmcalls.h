@@ -1,8 +1,27 @@
 #ifndef __ASMCALLS_H__
 #define __ASMCALLS_H__
 
+static __inline void breakpoint()
+{
+	__asm volatile ("mov r11,r11");
+}
+
+
 //#include "fs.h"
 //#include "cache.h"
+
+#if ROMVERSION
+	extern u8 goomba_mb_gba[];
+	#if !GCC
+		extern u32 goomba_mb_gba_size[];
+		#define GOOMBA_MB_GBA_SIZE ((u32)(&goomba_mb_gba_size))
+	#else
+		extern u32 goomba_mb_gba_size;
+		#define GOOMBA_MB_GBA_SIZE goomba_mb_gba_size
+	#endif
+#endif
+
+void jump_r0(u32);
 
 extern u8 auto_border;
 
@@ -24,6 +43,16 @@ extern u8 Image$$RW$$Limit[];
 extern u32 max_multiboot_size;
 
 //gbz80.s
+#if SPEEDHACK2
+extern u32 SPEEDHACK_FIND_JR_Z_BUF[16];
+extern u32 SPEEDHACK_FIND_JR_NZ_BUF[16];
+extern u32 SPEEDHACK_FIND_JR_C_BUF[16];
+extern u32 SPEEDHACK_FIND_JR_NC_BUF[16];
+extern u8 g_hackflags;
+extern u8 g_hackflags2;
+
+#endif
+
 void update_doublespeed_ui(void);
 
 void emu_reset(void);
@@ -53,20 +82,23 @@ extern u8 gbc_mode;
 extern u8 sgb_mode;
 extern u8 doubletimer;
 
-extern u32 dontstop;
+extern u8 dontstop;
 
 //extern u8* g_gbz80_pc;
 //extern u8* g_lastbank;
 
 extern u8 XGB_RAM[0x2000];
 extern u8 XGB_HRAM[128];
+#if !RESIZABLE
 extern u8 XGB_SRAM[0x8000];
+#endif
 extern u8 XGB_VRAM[0x4000];
 extern u8 GBC_EXRAM[0x6000];
 
 #if RESIZABLE
 extern u8 *XGB_sram, *XGB_vram, *GBC_exram, *END_of_exram;
 extern u32 XGB_sramsize,XGB_vramsize,GBC_exramsize;
+extern u8 *XGB_vram_1800, *XGB_vram_1C00;
 #endif
 
 //apack.s
@@ -81,7 +113,7 @@ extern u8 fontpal_bin[];				//from boot.s
 extern u8* INSTANT_PAGES[256];
 
 extern u32 g_rammask;
-extern u8 g_banks[2];
+extern u32 g_banks[2];
 
 void loadcart(int rom_number,int emu_flags);			//from cart.s
 void map0123_(int page);
@@ -117,7 +149,7 @@ extern int bcolor;		//Border Color
 
 //io.s
 extern u32 joycfg;				//from io.s
-void resetSIO(u32);				//io.s
+//void resetSIO(u32);				//io.s
 void vbaprint(const char *text);		//io.s
 void LZ77UnCompVram(void *source,u16 *destination);		//io.s
 void waitframe(void);			//io.s
@@ -157,6 +189,8 @@ extern u32 palettebank;		//from lcd.s palette bank
 //extern u32 bcolor;			//from lcd.s ,border color, black, grey, blue
 extern u8 gammavalue;	//from lcd.s
 
+extern u8 g_lcdhack;
+void update_lcdhack(void);
 
 //ppu.s
 /*

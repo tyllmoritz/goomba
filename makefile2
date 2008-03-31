@@ -1,4 +1,5 @@
-MAKEFILE	:=	makefile
+MAKEFILE	:=	makefile2
+MAKEFILE_MB	:=	makefile_mb
 
 #---------------------------------------------------------------------------------
 # Clear the implicit built in rules
@@ -43,7 +44,7 @@ OBJCOPY		:=	$(OBJCOPY) -R.pad
 # INCLUDES is a list of directories containing extra header files
 #---------------------------------------------------------------------------------
 TARGET		:=	goomba
-BUILD		:=	build
+BUILD		:=	build2
 SOURCES		:=	src
 INCLUDES	:=
 

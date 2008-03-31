@@ -21,6 +21,19 @@
 
 	.global GLOBAL_PTR_BASE
 
+	.global dontstop
+	
+	.global immediate_check_irq
+	
+ .if SPEEDHACKS
+	.global g_hackflags
+	.global g_hackflags2
+	.global SPEEDHACK_FIND_JR_Z_BUF
+	.global SPEEDHACK_FIND_JR_NZ_BUF
+	.global SPEEDHACK_FIND_JR_C_BUF
+	.global SPEEDHACK_FIND_JR_NC_BUF
+ .endif	
+	.global CHR_DECODE
 	.global XGB_RAM
 	.global XGB_HRAM
  .if RESIZABLE
@@ -48,8 +61,8 @@
 	.global gbc_mode
 	
 	.if SPEEDHACKS
-	.global num_speedhacks
-	.global speedhacks
+	.global g_hackflags
+	.global g_hackflags2
 	.global cpuhack_reset
 	.endif
 	.global g_hackflags
@@ -66,8 +79,13 @@
 	.global GBC_exram
 	.global GBC_exramsize
 	.global END_of_exram
+	.global XGB_vram_1800
+	.global XGB_vram_1C00
 	.endif
 
+	.if MOVIEPLAYER
+	.ascii "WRAM"
+	.endif
 
 @----------------------------------------------------------------------------
 _GO:@	Continue running
@@ -83,6 +101,14 @@ debugwait:
 @	cmp r0,#0
 @	bne debugwait
 @	fetch 0
+
+@_XX
+@	ldr r0,lastbank
+@	sub gb_pc,gb_pc,r0
+@	sub gb_pc,gb_pc,#1
+@	encodePC
+@	b _GO
+
 @----------------------------------------------------------------------------
 _xx:@	???					;invalid opcode
 @----------------------------------------------------------------------------
@@ -191,28 +217,6 @@ _0F:@	RRCA	rotate accu right
 	orrcs gb_a,gb_a,#0x00000080
 	mov gb_a,gb_a,lsl#24
 	fetch 4
-@----------------------------------------------------------------------------
-_10:@	STOP	stops the processor until an (joypad) interrupt.
-@----------------------------------------------------------------------------
-	ldrb_ r0,doublespeed
-	tst r0,#1
-	blne_long speedswitch
-	
-@	b _noStop
-@@	b _76 ;halt instead?
-@	ldrb r1,gb_ime
-@	tst r1,#1			;no Halt if IRQ disabled.
-@	beq _noStop
-@	ldrb r0,gb_ic		;interrupt confirm
-@	cmp r0,#0
-@	movne r0,#0
-@	strneb r0,gb_ic
-@	subeq gb_pc,gb_pc,#1
-@	moveq cycles,#0
-_noStop:
-@	add gb_pc,gb_pc,#1
-	fetch 4
-	
 	.ltorg
 @----------------------------------------------------------------------------
 _11:@	LD DE,#nnnn
@@ -299,40 +303,17 @@ _1F:@	RRA	rotate accu right through C
 	fetch 4
 
 	.if SPEEDHACKS
-@binary search through hacks list
-checkjump:
-	ldr_ r0,lastbank
-	sub gb_pc,gb_pc,r0
-	mov r1,#0
-	ldr_ r2,numspeedhacks
-	ldr_ addy,speedhacks_p
-checkjump_loop:
-	add r0,r1,r2
-	mov r0,r0,lsr#1
-	ldrh lr,[addy,r0]
-	cmp lr,gb_pc
-	beq checkjump_foundit
-	subgt r2,r0,#1
-	addlt r1,r0,#1
-	cmp r1,r2
-	ble checkjump_loop
-checkjump_foundit:
-	subeq cycles,cycles,#100*CYCLE
-	ldr_ r0,lastbank
-	add gb_pc,gb_pc,r0
-	b nojump_20x
-
 @----------------------------------------------------------------------------
 _20x:@	JR NZ,*	jump if not zero - speedhack version
 @----------------------------------------------------------------------------
 	ldrsb r0,[gb_pc],#1
 	tst gb_flg,#PSR_Z
-	bne nojump_20x
+	bne 0f
 	add gb_pc,gb_pc,r0
 	sub cycles,cycles,#4*CYCLE
-	cmp r0,#-11
-	bgt checkjump
-nojump_20x:
+	cmp r0,#-4
+	andeq cycles,cycles,#CYC_MASK
+0:
 	fetch 8
 	.endif
 @----------------------------------------------------------------------------
@@ -375,54 +356,18 @@ _25:@	DEC H
 _26:@	LD H,#nn
 @----------------------------------------------------------------------------
 	opLDIM8H gb_hl
-@----------------------------------------------------------------------------
-_27:@	DAA	decimal adjust ackumulator
-@----------------------------------------------------------------------------
-	mov r0,#0
-
-	and r1,gb_a,#0x0F000000
-	cmp r1,#0x0A000000
-	orrpl r0,r0,#0x06000000
-	cmppl gb_a,#0x90000000
-	cmpmi gb_a,#0xA0000000
-	orrhs gb_flg,gb_flg,#PSR_C			@C
-noextra:
-	tst gb_flg,#PSR_h					@half carry.
-	orrne r0,r0,#0x06000000
-
-	tst gb_flg,#PSR_C					@carry.
-	orrne r0,r0,#0x60000000
-
-	tst gb_flg,#PSR_n					@check if last instruction was add or sub.
-	bne doSUBconv
-
-doADDconv:
-	and gb_flg,gb_flg,#PSR_C+PSR_n	@keep C & n
-	adds gb_a,gb_a,r0
-	orreq gb_flg,gb_flg,#PSR_Z
-	cmp r1,#0x0A000000
-	orrpl gb_flg,gb_flg,#PSR_h
-	fetch 4
-
-doSUBconv:
-	and gb_flg,gb_flg,#PSR_C+PSR_n+PSR_h	@keep C & n & H
-	subs gb_a,gb_a,r0
-	orreq gb_flg,gb_flg,#PSR_Z
-	cmp r1,#0x06000000
-	bicpl gb_flg,gb_flg,#PSR_h
-	fetch 4
 	.if SPEEDHACKS
 @----------------------------------------------------------------------------
 _28x:@	JR Z,*	jump if zero - speedhack version
 @----------------------------------------------------------------------------
 	tst gb_flg,#PSR_Z
 	ldrsb r0,[gb_pc],#1
-	beq nojump_28x
+	beq 0f
 	add gb_pc,gb_pc,r0
 	sub cycles,cycles,#4*CYCLE
-	cmp r0,#-11
-	bgt checkjump
-nojump_28x:
+	cmp r0,#-4
+	andeq cycles,cycles,#CYC_MASK
+0:
 	fetch 8
 	.endif
 @----------------------------------------------------------------------------
@@ -477,12 +422,12 @@ _30x:@	JR NC,*	jump if no carry - speedhack version
 @----------------------------------------------------------------------------
 	tst gb_flg,#PSR_C
 	ldrsb r0,[gb_pc],#1
-	bne nojump_30x
+	bne 0f
 	add gb_pc,gb_pc,r0
 	sub cycles,cycles,#4*CYCLE
-	cmp r0,#-11
-	bgt checkjump
-nojump_30x:
+	cmp r0,#-4
+	andeq cycles,cycles,#CYC_MASK
+0:
 	fetch 8
 	.endif
 @----------------------------------------------------------------------------
@@ -543,12 +488,12 @@ _38x:@	JR C,*	jump if carry - speedhack version
 @----------------------------------------------------------------------------
 	tst gb_flg,#PSR_C
 	ldrsb r0,[gb_pc],#1
-	beq nojump_38x
+	beq 0f
 	add gb_pc,gb_pc,r0
 	sub cycles,cycles,#4*CYCLE
-	cmp r0,#-11
-	bgt checkjump
-nojump_38x:
+	cmp r0,#-4
+	andeq cycles,cycles,#CYC_MASK
+0:
 	fetch 8
 	.endif
 @----------------------------------------------------------------------------
@@ -569,11 +514,6 @@ _3A:@	LDD A,(HL)	load A from (HL), decr HL
 	readmemHL
 	sub gb_hl,gb_hl,#0x00010000
 	mov gb_a,r0,lsl#24
-	fetch 8
-@----------------------------------------------------------------------------
-_3B:@	DEC SP
-@----------------------------------------------------------------------------
-	opDEC16 gb_sp
 	fetch 8
 @----------------------------------------------------------------------------
 _3C:@	INC A
@@ -922,19 +862,6 @@ _73:@	LD (HL),E
 	writememHL
 	fetch 8
 @----------------------------------------------------------------------------
-_74:@	LD (HL),H
-@----------------------------------------------------------------------------
-	mov r0,gb_hl,lsr#24
-	writememHL
-	fetch 8
-@----------------------------------------------------------------------------
-_75:@	LD (HL),L		special...
-@----------------------------------------------------------------------------
-	mov addy,gb_hl,lsr#16
-	and r0,addy,#0xFF
-	writemem
-	fetch 8
-@----------------------------------------------------------------------------
 _76:@	HALT, wait for interrupt.
 @----------------------------------------------------------------------------
 	ldrb_ r0,gb_ie
@@ -1254,10 +1181,6 @@ _BE:@	CP (HL)
 	readmemHL
 	opCPb
 @----------------------------------------------------------------------------
-_BF:@	CP A
-@----------------------------------------------------------------------------
-	opCPA
-@----------------------------------------------------------------------------
 _C0:@	RET NZ
 @----------------------------------------------------------------------------
 	tst gb_flg,#PSR_Z
@@ -1316,8 +1239,8 @@ _FF:@	RST 0x38
 	ldr_ r0,lastbank
 	sub r0,gb_pc,r0
 	mov gb_pc,r1
-	push16
-	encodePC
+	push16_novram
+	encodePC_afterpush16
 	fetch 16
 @----------------------------------------------------------------------------
 _C8:@	RET Z
@@ -1356,8 +1279,8 @@ _CD:@	CALL $nnnn
 	ldr_ r0,lastbank
 	sub r0,gb_pc,r0
 	orr gb_pc,r1,r2,lsl#8
-	push16
-	encodePC
+	push16_novram
+	encodePC_afterpush16
 	fetch 24
 @----------------------------------------------------------------------------
 _CE:@	ADC #nn
@@ -1429,13 +1352,11 @@ _DE:@	SBC #nn
 @----------------------------------------------------------------------------
 	ldrb r0,[gb_pc],#1
 	opSBCb
+
 @----------------------------------------------------------------------------
-_E0:@	LD ($FF00+nn),A
+@_E0;	LD ($FF00+nn),A
 @----------------------------------------------------------------------------
-	ldrb r2,[gb_pc],#1
-	mov r0,gb_a,lsr#24
-	bl IO_High_W
-	fetch 12
+
 @----------------------------------------------------------------------------
 _E1:@	POP HL
 @----------------------------------------------------------------------------
@@ -1443,13 +1364,9 @@ _E1:@	POP HL
 	mov gb_hl,gb_hl,lsl#16
 	fetch 12
 @----------------------------------------------------------------------------
-_E2:@	LD ($FF00+C),A
+@_E2;	LD ($FF00+C),A
 @----------------------------------------------------------------------------
-	mov r2,gb_bc,lsr#16
-	and r2,r2,#0xFF
-	mov r0,gb_a,lsr#24
-	bl IO_High_W
-	fetch 8
+
 @----------------------------------------------------------------------------
 _E5:@	PUSH HL
 @----------------------------------------------------------------------------
@@ -1492,12 +1409,9 @@ _EE:@	XOR #nn
 	ldrb r0,[gb_pc],#1
 	opXORb
 @----------------------------------------------------------------------------
-_F0:@	LD A,($FF00+nn)
+@_F0;	LD A,($FF00+nn)
 @----------------------------------------------------------------------------
-	ldrb r2,[gb_pc],#1
-	bl IO_High_R
-	mov gb_a,r0,lsl#24
-	fetch 12
+
 @----------------------------------------------------------------------------
 _F1:@	POP AF
 @----------------------------------------------------------------------------
@@ -1505,13 +1419,9 @@ _F1:@	POP AF
 	decodeFLG
 	fetch 12
 @----------------------------------------------------------------------------
-_F2:@	LD A,($FF00+C)
+@_F2;	LD A,($FF00+C)
 @----------------------------------------------------------------------------
-	mov r2,gb_bc,lsr#16
-	and r2,r2,#0xFF
-	bl IO_High_R
-	mov gb_a,r0,lsl#24
-	fetch 8
+
 @----------------------------------------------------------------------------
 _F3:@	DI, disable interrupt
 @----------------------------------------------------------------------------
@@ -1741,15 +1651,24 @@ line0x:
 
 @	ldrb r1,lcdctrl		;not liked by SML.
 @	tst r1,#0x80
-	ldrb_ r0,lcdstat		@
-	and r0,r0,#0x78		@reset lcd mode flags (vblank/hblank/oam/lcd)
-	strb_ r0,lcdstat		@
+	adrl r1,lcdstat
+	ldrb r0,[r1]		@
+	and r2,r0,#0x7C		@reset lcd mode flags (vblank/hblank/oam/lcd)
+	cmp r0,r2
+	strneb r2,[r1]		@
+	strneb r2,[r1,#-12] @FIXME
 
 	ldr_ r0,cyclesperscanline
 	add cycles,cycles,r0
 
 	adr r0,line1_to_71
 	str_ r0,nexttimeout
+
+	adrl_ r1,FF41_R_function
+	ldr r0,[r1]
+@	ldr r0,=FF41_R
+	ldr r1,=FF41_R_ptr
+	str r0,[r1]
 
 	ldr_ pc,scanlinehook
 	
@@ -1828,10 +1747,19 @@ line144: @------------------------
 	tst r0,#0x80
 	beq novbirq
 
-	ldrb_ r0,lcdstat		@vbl flag
-	and r0,r0,#0x78
+	adrl_ r1,FF41_R_vblank_function
+	ldr r0,[r1]
+@	ldr r0,=FF41_R_vblank
+	ldr r1,=FF41_R_ptr
+	str r0,[r1]
+
+	adrl r1,lcdstat
+	ldrb r0,[r1]		@vbl flag
+	and r0,r0,#0x7C
 	orr r0,r0,#0x01
-	strb_ r0,lcdstat		@vbl flag
+	strb r0,[r1]		@vbl flag
+	strb r0,[r1,#-12] @FIXME
+
 
 	ldrb_ r0,gb_if
 	orr r0,r0,#0x01		@1=VBL
@@ -1871,22 +1799,68 @@ line145_to_end: @------------------------
 	str_ r0,frame
 	ldr_ pc,scanlinehook
 
+
+immediate_check_irq:
+	ldrb_ r0,gb_ie		@0xFFFF=Interrupt Enable.
+	ldrb_ r1,gb_if
+	ands r1,r1,r0
+	bxeq lr
+	ldrb_ r0,gb_ime
+	movs r0,r0
+	bxeq lr
+	@different ugly hack which doesn't mess up timing,
+	@this is necessary because goomba can't handle GB interrupts from within a memory write
+	sub cycles,cycles,#1024*CYCLE  @this just makes it go somewhere else instead of the next instruction
+	ldr_ r0,nexttimeout
+	str_ r0,nexttimeout_alt
+	ldr r0,=no_more_irq_hack
+	str_ r0,nexttimeout
+	bx lr
+
+no_more_irq_hack:
+	add cycles,cycles,#1024*CYCLE
+	ldr_ r0,nexttimeout_alt
+	str_ r0,nexttimeout
+	b_long checkIRQ
+	
+
+
 @----------------------------------------------------------
 default_scanlinehook:
 checkScanlineIRQ:
-	@screen turned on?  (not sure if this is correct)
-	ldrb_ r2,lcdctrl
-	tst r2,#0x80
-	beq noScanlineIRQ
-	
-	ldrb_ r2,lcdstat
-	and r0,r2,#0x09		@LCD stat HBlank IRQ/VBL.
-	cmp r0,#0x08		@LCD stat HBlank IRQ.
-	beq ScanlineIRQ
+	@do LCDYC test
 	ldrb_ r1,scanline
 	ldrb_ r0,lcdyc
 	cmp r0,r1
-	bne noScanlineIRQ
+	adrl r1,lcdstat
+	ldrb r0,[r1]
+	orreq r2,r0,#4
+	bicne r2,r0,#4
+	cmp r2,r0
+	strneb r2,[r1]
+	strneb r2,[r1,#-12] @FIXME
+	
+	@screen turned on?  (not sure if this is correct)
+	ldrb_ r1,lcdctrl
+	tst r1,#0x80
+	beq noScanlineIRQ
+	
+@	ldrb r2,lcdstat
+	and r0,r2,#0x09		@LCD stat HBlank IRQ/VBL.
+	cmp r0,#0x08		@LCD stat HBlank IRQ.
+	beq ScanlineIRQ
+	
+@	;hackhack
+@@	and r0,r2,#0x21
+@	cmp r0,#0x20
+@	beq ScanlineIRQ
+	
+	
+@	ldrb r1,scanline
+@	ldrb r0,lcdyc
+@	cmp r0,r1
+	tst r2,#4
+	beq noScanlineIRQ
 	tst r2,#0x40		@LCD stat LYC IRQ.
 	beq noScanlineIRQ
 ScanlineIRQ:
@@ -1983,16 +1957,145 @@ doIRQ:
 	sub r0,gb_pc,r0
 	mov gb_pc,r2			@get IRQ vector
 
-	push16					@save PC
-	encodePC
+	push16_novram					@save PC
+	encodePC_afterpush16
 
 	fetch 24
+
+@these got moved from rom because they were used frequently
+@----------------------------------------------------------------------------
+_CB12:@		RL D
+@----------------------------------------------------------------------------
+	opRLH gb_de
+@----------------------------------------------------------------------------
+_CB13:@		RL E
+@----------------------------------------------------------------------------
+	opRLL gb_de
+@----------------------------------------------------------------------------
+_CB14:@		RL H
+@----------------------------------------------------------------------------
+	opRLH gb_hl
+@----------------------------------------------------------------------------
+_CB23:@		SLA E
+@----------------------------------------------------------------------------
+	opSLAL gb_de
+@----------------------------------------------------------------------------
+_CB25:@		SLA L
+@----------------------------------------------------------------------------
+	opSLAL gb_hl
+@----------------------------------------------------------------------------
+_CB27:@		SLA A
+@----------------------------------------------------------------------------
+	opSLAA
+@----------------------------------------------------------------------------
+_CB37:@		SWAP A
+@----------------------------------------------------------------------------
+	opSWAPA
+@----------------------------------------------------------------------------
+_CB39:@		SRL C
+@----------------------------------------------------------------------------
+	opSRLL gb_bc
+@----------------------------------------------------------------------------
+_CB45:@		BIT x,L		, actually CB-45,4D,55,5D,65,6D,75 & 7D
+@----------------------------------------------------------------------------
+	opBITL gb_hl
+	fetch 8
+
+
+
 @----------------------------------------------------------------------------
  .align
  .pool
  .text
  .align
  .pool
+@----------------------------------------------------------------------------
+
+@----------------------------------------------------------------------------
+_10:@	STOP	stops the processor until an (joypad) interrupt.
+@----------------------------------------------------------------------------
+	ldrb_ r0,doublespeed
+	tst r0,#1
+	blne_long speedswitch
+	
+@	b _noStop
+@@	b _76 ;halt instead?
+@	ldrb r1,gb_ime
+@	tst r1,#1			;no Halt if IRQ disabled.
+@	beq _noStop
+@	ldrb r0,gb_ic		;interrupt confirm
+@	cmp r0,#0
+@	movne r0,#0
+@	strneb r0,gb_ic
+@	subeq gb_pc,gb_pc,#1
+@	moveq cycles,#0
+_noStop:
+@	add gb_pc,gb_pc,#1
+	fetch 4
+
+	.ltorg
+@----------------------------------------------------------------------------
+_27:@	DAA	decimal adjust ackumulator
+@----------------------------------------------------------------------------
+	mov r0,#0
+
+	and r1,gb_a,#0x0F000000
+	cmp r1,#0x0A000000
+	orrpl r0,r0,#0x06000000
+	cmppl gb_a,#0x90000000
+	cmpmi gb_a,#0xA0000000
+	orrhs gb_flg,gb_flg,#PSR_C			@C
+noextra:
+	tst gb_flg,#PSR_h					@half carry.
+	orrne r0,r0,#0x06000000
+
+	tst gb_flg,#PSR_C					@carry.
+	orrne r0,r0,#0x60000000
+
+	tst gb_flg,#PSR_n					@check if last instruction was add or sub.
+	bne doSUBconv
+
+doADDconv:
+	and gb_flg,gb_flg,#PSR_C+PSR_n	@keep C & n
+	adds gb_a,gb_a,r0
+	orreq gb_flg,gb_flg,#PSR_Z
+	cmp r1,#0x0A000000
+	orrpl gb_flg,gb_flg,#PSR_h
+	fetch 4
+
+doSUBconv:
+	and gb_flg,gb_flg,#PSR_C+PSR_n+PSR_h	@keep C & n & H
+	subs gb_a,gb_a,r0
+	orreq gb_flg,gb_flg,#PSR_Z
+	cmp r1,#0x06000000
+	bicpl gb_flg,gb_flg,#PSR_h
+	fetch 4
+@----------------------------------------------------------------------------
+_3B:@	DEC SP
+@----------------------------------------------------------------------------
+	opDEC16 gb_sp
+	fetch 8
+@----------------------------------------------------------------------------
+_74:@	LD (HL),H
+@----------------------------------------------------------------------------
+	mov r0,gb_hl,lsr#24
+	writememHL
+	fetch 8
+@----------------------------------------------------------------------------
+_75:@	LD (HL),L		special...
+@----------------------------------------------------------------------------
+	mov addy,gb_hl,lsr#16
+	and r0,addy,#0xFF
+	writemem
+	fetch 8
+@----------------------------------------------------------------------------
+_BF:@	CP A
+@----------------------------------------------------------------------------
+	opCPA
+
+
+
+
 
 @----------------------------------------------------------------------------
 _CB00:@		RLC B
@@ -2074,18 +2177,6 @@ _CB11:@		RL C
 @----------------------------------------------------------------------------
 	opRLL gb_bc
 @----------------------------------------------------------------------------
-_CB12:@		RL D
-@----------------------------------------------------------------------------
-	opRLH gb_de
-@----------------------------------------------------------------------------
-_CB13:@		RL E
-@----------------------------------------------------------------------------
-	opRLL gb_de
-@----------------------------------------------------------------------------
-_CB14:@		RL H
-@----------------------------------------------------------------------------
-	opRLH gb_hl
-@----------------------------------------------------------------------------
 _CB15:@		RL L
 @----------------------------------------------------------------------------
 	opRLL gb_hl
@@ -2150,17 +2241,9 @@ _CB22:@		SLA D
 @----------------------------------------------------------------------------
 	opSLAH gb_de
 @----------------------------------------------------------------------------
-_CB23:@		SLA E
-@----------------------------------------------------------------------------
-	opSLAL gb_de
-@----------------------------------------------------------------------------
 _CB24:@		SLA H
 @----------------------------------------------------------------------------
 	opSLAH gb_hl
-@----------------------------------------------------------------------------
-_CB25:@		SLA L
-@----------------------------------------------------------------------------
-	opSLAL gb_hl
 @----------------------------------------------------------------------------
 _CB26:@		SLA (HL)
 @----------------------------------------------------------------------------
@@ -2168,10 +2251,6 @@ _CB26:@		SLA (HL)
 	opSLAb
 	writemem
 	fetch 16
-@----------------------------------------------------------------------------
-_CB27:@		SLA A
-@----------------------------------------------------------------------------
-	opSLAA
 @----------------------------------------------------------------------------
 _CB28:@		SRA B
 @----------------------------------------------------------------------------
@@ -2239,17 +2318,9 @@ _CB36:@		SWAP (HL)
 	writemem
 	fetch 16
 @----------------------------------------------------------------------------
-_CB37:@		SWAP A
-@----------------------------------------------------------------------------
-	opSWAPA
-@----------------------------------------------------------------------------
 _CB38:@		SRL B
 @----------------------------------------------------------------------------
 	opSRLH gb_bc
-@----------------------------------------------------------------------------
-_CB39:@		SRL C
-@----------------------------------------------------------------------------
-	opSRLL gb_bc
 @----------------------------------------------------------------------------
 _CB3A:@		SRL D
 @----------------------------------------------------------------------------
@@ -2301,11 +2372,6 @@ _CB43:@		BIT x,E		, actually CB-43,4B,53,5B,63,6B,73 & 7B
 _CB44:@		BIT x,H		, actually CB-44,4C,54,5C,64,6C,74 & 7C
 @----------------------------------------------------------------------------
 	opBITH gb_hl
-	fetch 8
-@----------------------------------------------------------------------------
-_CB45:@		BIT x,L		, actually CB-45,4D,55,5D,65,6D,75 & 7D
-@----------------------------------------------------------------------------
-	opBITL gb_hl
 	fetch 8
 @----------------------------------------------------------------------------
 _CB80:@		RES x,B		, actually CB-80,88,90,98,A0,A8,B0 & B8
@@ -2399,6 +2465,50 @@ _CBC7:@		SET x,A		, actually CB-C7,CF,D7,DF,E7,EF,F7 & FF
 	fetch 8
 @----------------------------------------------------------------------------
 
+	.if SPEEDHACKS
+@----------------------------------------------------------------------------
+_20z:@	JR NZ,*	jump if not zero - speedhack version
+@----------------------------------------------------------------------------
+	ldr r1,=SPEEDHACK_FIND_JR_NZ_BUF
+	ldr r2,=_20
+	b _find_speedhack_thingy
+@----------------------------------------------------------------------------
+_28z:@	JR Z,*	jump if zero - speedhack version
+@----------------------------------------------------------------------------
+	ldr r1,=SPEEDHACK_FIND_JR_Z_BUF
+	ldr r2,=_28
+	b _find_speedhack_thingy
+@----------------------------------------------------------------------------
+_30z:@	JR NC,*	jump if no carry - speedhack version
+@----------------------------------------------------------------------------
+	ldr r1,=SPEEDHACK_FIND_JR_NC_BUF
+	ldr r2,=_30
+	b _find_speedhack_thingy
+@----------------------------------------------------------------------------
+_38z:@	JR C,*	jump if carry - speedhack version
+@----------------------------------------------------------------------------
+	ldr r1,=SPEEDHACK_FIND_JR_C_BUF
+	ldr r2,=_38
+	b _find_speedhack_thingy
+
+_find_speedhack_thingy:
+	ldrsb r0,[gb_pc]
+
+	@between -17 and -2
+	cmp r0,#-17
+	bxlt r2
+	cmp r0,#-2
+	bxgt r2
+	rsb r0,r0,#0
+	sub r0,r0,#2
+	mov r0,r0,lsl#2
+	add r0,r0,r1
+	ldr r1,[r0]
+	add r1,r1,#1
+	str r1,[r0]
+	bx r2
+	.endif
+
 
 update_doublespeed_ui: @called from UI
 	stmfd sp!,{globalptr,addy,lr}
@@ -2413,31 +2523,43 @@ speedswitch:
 	eors r0,r0,#0x80
 	strb_ r0,doublespeed
 updatespeed:
+	@set single speed
+	mov r0,#SINGLE_SPEED
+	str_ r0,timercyclesperscanline
+	str_ r0,cyclesperscanline
+	mov r0,#SINGLE_SPEED_SCANLINE_OAM_POSITION
+	str_ r0,scanline_oam_position
+	ldr r12,=FF41_modify1
+	ldr r0,FF41_modifydata
+	str r0,[r12]
+	ldr r0,FF41_modifydata+4
+	str r0,[r12,#12]
+	
 	ldrb_ r0,doublespeed
 	tst r0,#0x80
-@updatespeed2
-@(DMG=456*CYCLE, CGB=912*CYCLE)
-	mov r2,#SINGLE_SPEED_HBLANK
-	mov r1,#SINGLE_SPEED
-	mov r12,r1
-	beq requests_singlespeed
+	bxeq lr
 
-	mov r12,#DOUBLE_SPEED	@if game wants double speed, always give double speed timers
-
+	@set double speed timers
 	ldrb_ r0,doubletimer_
-	tst r0,#0x02
-	bne grant_doublespeed
-	ldrb_ r0,scanline
-	cmp r0,#144
-	blt requests_singlespeed
-grant_doublespeed:	
-	mov r2,#DOUBLE_SPEED_HBLANK
-	mov r1,#DOUBLE_SPEED
-requests_singlespeed:
-	str_ r2,hblankposition
-	str_ r1,cyclesperscanline
-	str_ r12,timercyclesperscanline
+	tst r0,#2
+	mov r0,#DOUBLE_SPEED
+	str_ r0,timercyclesperscanline
+	bxeq lr
+	@set double speed
+	str_ r0,cyclesperscanline
+	mov r0,#DOUBLE_SPEED_SCANLINE_OAM_POSITION
+	str_ r0,scanline_oam_position
+	ldr r0,FF41_modifydata+8
+	str r0,[r12]
+	ldr r0,FF41_modifydata+12
+	str r0,[r12,#12]
 	bx lr
+
+FF41_modifydata:
+	cmp cycles,#204*CYCLE
+	cmp cycles,#376*CYCLE
+	cmp cycles,#204*CYCLE*2
+	cmp cycles,#376*CYCLE*2
 
 
  .if PROFILE
@@ -2465,20 +2587,43 @@ pr_loop:
  .endif
 
 	.if SPEEDHACKS
+normalops:
+	.word _20,_28,_30,_38
+jmpops:
+	.word _20x,_28x,_30x,_38x
+finderops:
+	.word _20z,_28z,_30z,_38z
+opindex:
+	.word op_table+0x20*4,op_table+0x28*4,op_table+0x30*4,op_table+0x38*4
+
 cpuhack_reset:
-	stmfd sp!,{r0-r7}
-	ldr_ r0,hackflags
-	tst r0,#CPUHACK	@load opcode set
-	adr r1,normalops
-	adrne r1,jmpops
+	stmfd sp!,{r0-r4,r10}
+	ldr r10,=GLOBAL_PTR_BASE
+	ldrb_ r0,hackflags
+	cmp r0,#1
+	adreq r2,finderops
+	adrne r2,normalops
 	adr r3,opindex
 	mov r4,#3
-nr0:	ldr r5,[r1,r4,lsl#2]
-	ldr r6,[r3,r4,lsl#2]
-	str r5,[r6]
+0:
+	ldr r0,[r2,r4,lsl#2]
+	ldr r1,[r3,r4,lsl#2]
+	str r0,[r1]
 	subs r4,r4,#1
-	bpl nr0
-	ldmfd sp!,{r0-r7}
+	bpl 0b
+	
+	ldrb_ r4,hackflags
+	subs r4,r4,#2
+	bmi 1f
+	adr r2,jmpops
+	ldr r0,[r2,r4,lsl#2]
+	ldr r1,[r3,r4,lsl#2]
+	str r0,[r1]
+	
+	ldrb_ r1,hackflags2
+	strb r1,[r0,#5*4]
+1:
+	ldmfd sp!,{r0-r4,r10}
 	bx lr
 	.endif
 @----------------------------------------------------------------------------
@@ -2539,16 +2684,6 @@ cpu_reset:
 	stmia r0,{gb_flg-gb_pc,gb_sp}
 	ldr pc,[sp],#4
 
-	.if SPEEDHACKS
-normalops:
-	.word _20,_28,_30,_38
-jmpops:
-	.word _20x,_28x,_30x,_38x
-opindex:
-	.word op_table+0x20*4,op_table+0x28*4,op_table+0x30*4,op_table+0x38*4
-	.endif
-
-
 run:
 	b_long run_core
 
@@ -2564,8 +2699,8 @@ run:
 fiveminutes: .word 5*60*60 @fiveminutes_
 sleeptime: .word 5*60*60 @sleeptime_
 dontstop: .byte 0 @dontstop_
- .byte 0
- .byte 0
+g_hackflags: .byte 0 @hackflags
+g_hackflags2: .byte 0 @hackflags2
  .byte 0
 @----------------------------------------------------------------------------
 
@@ -2579,6 +2714,30 @@ dontstop: .byte 0 @dontstop_
  .align
  .pool
 @----------------------------------------------------------------------------
+
+  @readmem_tbl_begin
+g_readmem_tbl:
+@table is backwards for speed
+
+	.word IO_R	@$F000	IO
+	.word IO_R	@$E000	IO
+	.word mem_RC0_2	@$D000	WRAM
+	.word mem_RC0	@$C000	WRAM
+	.word mem_RA0	@$B000	ERAM/SRAM (in cartridge)
+	.word mem_RA0	@$A000	ERAM/SRAM (in cartridge)
+	.word mem_R80	@$9000	VRAM
+	.word mem_R80	@$8000	VRAM
+	.word mem_R60	@$7000	ROM/
+	.word mem_R60	@$6000	ROM/
+	.word mem_R40	@$5000	ROM-- Switchable (in cartridge)
+	.word mem_R40	@$4000	ROM-- Switchable (in cartridge)
+	.word mem_R20	@$3000	ROM/
+	.word mem_R20	@$2000	ROM/
+	.word mem_R00	@$1000	ROM-- Non switchable (in cartridge)
+	.word mem_R00	@$0000	ROM-- Non switchable (in cartridge)
+
+@readmem_tbl_ is 4 bytes behind this point
+
 GLOBAL_PTR_BASE:
 op_table:
 	.word _00,_01,_02,_03,_04,_05,_06,_07,_08,_09,_0A,_0B,_0C,_0D,_0E,_0F
@@ -2597,24 +2756,6 @@ op_table:
 	.word _D0,_D1,_D2,_xx,_D4,_D5,_D6,_D7,_D8,_D9,_DA,_xx,_DC,_xx,_DE,_DF
 	.word _E0,_E1,_E2,_xx,_xx,_E5,_E6,_E7,_E8,_E9,_EA,_xx,_xx,_ED,_EE,_EF
 	.word _F0,_F1,_F2,_F3,_xx,_F5,_F6,_F7,_F8,_F9,_FA,_FB,_xx,_xx,_FE,_FF
-  @readmem_tbl
-g_readmem_tbl:
-	.word mem_R00	@$0000	ROM-- Non switchable (in cartridge)
-	.word mem_R00	@$1000	ROM-- Non switchable (in cartridge)
-	.word mem_R20	@$2000	ROM/
-	.word mem_R20	@$3000	ROM/
-	.word mem_R40	@$4000	ROM-- Switchable (in cartridge)
-	.word mem_R40	@$5000	ROM-- Switchable (in cartridge)
-	.word mem_R60	@$6000	ROM/
-	.word mem_R60	@$7000	ROM/
-	.word mem_R80	@$8000	VRAM
-	.word mem_R80	@$9000	VRAM
-	.word mem_RA0	@$A000	ERAM/SRAM (in cartridge)
-	.word mem_RA0	@$B000	ERAM/SRAM (in cartridge)
-	.word mem_RC0	@$C000	WRAM
-	.word mem_RC0_2	@$D000	WRAM
-	.word IO_R	@$E000	IO
-	.word IO_R	@$F000	IO
   @writemem_tbl
 g_writemem_tbl:
 	.word void	@$0000  filled in by initmapper.
@@ -2650,37 +2791,36 @@ cpustate:
 	.byte 0 @gb_ime:	(interrupt master enable)
 	.byte 0 @gb_ie:	(interrupt enable, adr $FFFF)
 	.byte 0 @gb_if:	(interrupt flags, adr $FF0F)
-	.byte 0
-	.word 0 @lastbank: last memmap added to PC (used to calculate current PC)
+	.byte 0 @_
+
+	.byte 0 @rambank
+gbc_mode:
+	.byte 0 @gbcmode
+sgb_mode:
+	.byte 0 @sgbmode
+	.byte 0 @_
 
 	.word 0 @dividereg
 	.word 0 @timercounter
 	.byte 0 @timermodulo
 	.byte 0 @timerctrl
 	.byte 0 @stctrl
-	.byte 0 @debugstop
+	.byte 0 @_
+frametotal:		@let ui.c see frame count for savestates
+	.word 0 @frame
+@@end of cpustate
+
 	.word 0 @nexttimeout:  jump here when cycles runs out
 	.word 0 @nexttimeout_alt
 	.word 0 @scanlinehook
-frametotal:		@let ui.c see frame count for savestates
-	.word 0 @frame
+	.word 0 @lastbank: last memmap added to PC (used to calculate current PC)
+
 	.word 0 @cyclesperscanline (DMG=456*CYCLE, CGB=912*CYCLE)
+	.word 0 @scanline_oam_position (DMG=204*CYCLE, CGB=408*CYCLE)
 	.word 0 @timercyclesperscanline
- .if SPEEDHACKS
-num_speedhacks:
-	.word 0 @numspeedhacks
-	.word speedhacks @speedhacks_p
- .endif
  .if PROFILE
 	.word 0x02008000 @profiler
  .endif
-	.byte 0 @rambank
-gbc_mode:
-	.byte 0 @gbcmode
-sgb_mode:
-	.byte 0 @sgbmode
-g_hackflags:
-	.byte 0 @hackflags
 doubletimer:
 	.byte 2 @doubletimer_
 request_gba_mode:
@@ -2690,25 +2830,35 @@ request_gb_type:
 novblankwait:
 	.byte 0 @novblankwait_
 
-	.word 0 @hblankposition (DMG=204*CYCLE, CGB=408*CYCLE)
-
 
  .if RESIZABLE
-XGB_sram:
-	.word 0
-XGB_sramsize:
-	.word 0
-XGB_vram:
-	.word 0
-XGB_vramsize:
-	.word 0
-GBC_exram:
-	.word 0
-GBC_exramsize:
-	.word 0
-END_of_exram:
-	.word 0
+XGB_sram:	.word 0
+XGB_sramsize:	.word 0
+XGB_vram:	.word 0
+XGB_vramsize:	.word 0
+GBC_exram:	.word 0
+GBC_exramsize:	.word 0
+END_of_exram:	.word 0
+XGB_vram_1800:	.word 0
+XGB_vram_1C00:	.word 0
+SGB_pals:	.word 0
+SGB_atfs:	.word 0
+SGB_packet:	.word 0
+SGB_attributes:	.word 0
+	.skip 12	@padding
  .endif
 @----------------------------------------------------------------------------
+ .align
+ .pool
+ .section .iwram, "ax", %progbits
+ .subsection 106
+ .align
+ .pool
+XGB_RAM: .skip 0x2000
+XGB_HRAM: .skip 0x80
+CHR_DECODE: .skip 0x400
+
+
+
 	@.end
 

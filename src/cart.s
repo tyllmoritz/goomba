@@ -38,6 +38,7 @@
 	.global g_cartflags
 	.global g_banks
 	.global MULTIBOOT_LIMIT
+	.global END_OF_EXRAM
 	
 	.global INSTANT_PAGES
 	.global SramName
@@ -154,15 +155,15 @@ loadcart: @called from C:  r0=rom number, r1=emuflags
 	str_ r3,rombase		@set rom base
 				@r3=rombase til end of loadcart so DON'T FUCK IT UP
 
-@	mov r0,#0
-@	ldr r1,=AGB_VRAM+0x4000	;clear AGB Tiles
-@	mov r2,#0x8000/4
-@	bl filler_
+@	mov r1,#0
+@	ldr r0,=AGB_VRAM+0x4000	;clear AGB Tiles
+@	mov r2,#0x8000
+@	bl memset_
 
-@	ldr r0,=0x01000100
-@	ldr r1,=AGB_BG1		;clear AGB BG (GB Window sides)
-@	mov r2,#0x2000/4
-@	bl filler_
+@	ldr r1,=0x01000100
+@	ldr r0,=AGB_BG1		;clear AGB BG (GB Window sides)
+@	mov r2,#0x2000
+@	bl memset_
 
 	ldmfd sp!,{r0-r1}
 	str_ r0,romnumber
@@ -266,7 +267,31 @@ loadcart: @called from C:  r0=rom number, r1=emuflags
 	ldr_ r1,xgb_vramsize
 	sub r0,r0,r1
 	str_ r0,xgb_vram
+
+	add r2,r0,#0x1800
+	str_ r2,xgb_vram_1800
+	add r2,r0,#0x1C00
+	str_ r2,xgb_vram_1C00
+	
+	ldrb_ r2,sgbmode
+	movs r2,r2
+	moveq r2,#0
+	movne r2,r0
+
+	@if SGB mode, these grow down
+	@otherwise, set 0 for these
+	subne r2,r2,#4096
+	str_ r2,sgb_pals
+	subne r2,r2,#4096
+	str_ r2,sgb_atfs
+	subne r2,r2,#112
+	str_ r2,sgb_packet
+	subne r2,r2,#360
+	str_ r2,sgb_attributes
+	movne r0,r2
+
 	str_ r0,end_of_exram
+		
 	mov r0,#0
 	str_ r0,gbc_exram
 	str_ r0,gbc_exramsize
@@ -320,36 +345,34 @@ dont_use_true_sram:
 	ldr r0,=default_scanlinehook
 	str_ r0,scanlinehook	@no mapper irq
 
-	mov r0,#0xe0		@was 0xe0
-	mov r1,#AGB_OAM
-	mov r2,#0x100
-	bl filler_		@no stray sprites please
+	mov r1,#0xe0		@was 0xe0
+	mov r0,#AGB_OAM
+	mov r2,#0x400
+	bl memset_		@no stray sprites please
 
-	mov r0,#0		@clear gb ram+hram
-	ldr r1,=XGB_RAM
-	mov r2,#0x2080/4
-	bl filler_
+	mov r1,#0		@clear gb ram+hram
+	ldr r0,=XGB_RAM
+	mov r2,#0x2080
+	bl memset_
  .if RESIZABLE
-	mov r0,#0
+	mov r1,#0
 
-	ldr_ r1,xgb_vram
+	ldr_ r0,xgb_vram
 	ldr_ r2,xgb_vramsize
-	movs r2,r2,lsr#2
-	blne filler_		@clear GB VRAM
+	blne memset_		@clear GB VRAM
 
-	ldr_ r1,xgb_sram		@clear gb sram, it will be loaded later anyway
+	ldr_ r0,xgb_sram		@clear gb sram, it will be loaded later anyway
 	ldr_ r2,xgb_sramsize
-	movs r2,r2,lsr#2
-	blne filler_
+	blne memset_
  .else
-	ldr r1,=XGB_SRAM	@clear gb sram, it will be loaded later anyway
-	mov r2,#0x8000/4
-	bl filler_
+	ldr r0,=XGB_SRAM	@clear gb sram, it will be loaded later anyway
+	mov r2,#0x8000
+	bl memset_
  .endif
 
-	ldr r1,=mapperstate	@clear mapperdata so we don't have to do that in every MapperInit.
-	mov r2,#32/4
-	bl filler_
+	ldr r0,=mapperstate	@clear mapperdata so we don't have to do that in every MapperInit.
+	mov r2,#32
+	bl memset_
 
 	ldr r0,=joy0_W
 	ldr r1,=joypad_write_ptr
@@ -466,8 +489,8 @@ LSDJ_MAP2:
 	str_ r1,writemem_tbl+40
 	str_ r1,writemem_tbl+44
 	ldr r1,=mem_RA0
-	str_ r1,readmem_tbl+40
-	str_ r1,readmem_tbl+44
+	str_ r1,readmem_tbl_-40
+	str_ r1,readmem_tbl_-44
 	ldr r1,=M3_SRAM_BUFFER-0xA000
 	ldr r2,=0x1FFFF
 	and r0,r2,r0,lsl#13
@@ -491,10 +514,10 @@ little_sound_dj_init:
 	
 	mov addy,lr
 	@clear M3_SRAM_BUFFER
-	mov r0,#0
-	ldr r1,=M3_SRAM_BUFFER
-	mov r2,#32768
-	bl filler_
+	mov r1,#0
+	ldr r0,=M3_SRAM_BUFFER
+	mov r2,#128*1024
+	bl memset_
 	mov lr,addy
 	
 	bx lr

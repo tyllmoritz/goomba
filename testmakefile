@@ -1,38 +1,111 @@
-MAKEFILE	:=	makefile
+MAKEFILE	:=	testmakefile
 
 #---------------------------------------------------------------------------------
 # Clear the implicit built in rules
 #---------------------------------------------------------------------------------
 .SUFFIXES:
 #---------------------------------------------------------------------------------
-ifeq ($(strip $(DEVKITARM)),)
-$(error "Please set DEVKITARM in your environment. export DEVKITARM=<path to>devkitARM)
-endif
 
-
-include $(DEVKITARM)/gba_rules
 
 #--------
 # Overrides for default rules
 
 %.o: %.s
+	@echo ROM
 	@echo $(notdir $<)
 	$(CC) -MMD -MP -MF $(DEPSDIR)/$*.d -x assembler-with-cpp $(ASFLAGS) -c $< -o $@
 
 %.o: %.S
+	@echo ROM
 	@echo $(notdir $<)
 	$(CC) -MMD -MP -MF $(DEPSDIR)/$*.d -x assembler-with-cpp $(ASFLAGS) -c $< -o $@
 
+%_mb.o: %.s
+	@echo MB
+	@echo $(notdir $<)
+	$(CC) -MMD -MP -MF $(DEPSDIR)/$*.d -x assembler-with-cpp $(ASFLAGS_MB) -c $< -o $@
+
+%_mb.o: %.S
+	@echo MB
+	@echo $(notdir $<)
+	$(CC) -MMD -MP -MF $(DEPSDIR)/$*.d -x assembler-with-cpp $(ASFLAGS_MB) -c $< -o $@
+
+
 OBJCOPY		:=	$(OBJCOPY) -R.pad
 
-#%_mb.elf:
-#	@echo linking multiboot
-#	@$(LD) -specs=gba_mb.specs $(LDFLAGS) $(OFILES) $(LIBPATHS) $(LIBS) -o $@
+%_mb.elf:
+	@echo linking my multiboot
+	@$(LD) -specs=../src/my_mb.specs $(LDFLAGS) $(OFILES_MB) $(LIBPATHS) $(LIBS) -o $@
 %.elf:
-	@echo linking cartridge
+	@echo linking my cartridge
 	@$(LD) $(LDFLAGS) $(OFILES) $(LIBPATHS) $(LIBS) -specs=../src/my.specs -o $@
 
 #-------
+
+
+
+##### GBA_RULES
+
+ifeq ($(strip $(DEVKITARM)),)
+$(error "Please set DEVKITARM in your environment. export DEVKITARM=<path to>devkitARM)
+endif
+
+LIBGBA	:=	$(DEVKITPRO)/libgba
+
+
+##### BASE_RULES
+
+#---------------------------------------------------------------------------------
+# path to tools - this can be deleted if you set the path in windows
+#---------------------------------------------------------------------------------
+export PATH		:=	$(DEVKITARM)/bin:$(PATH)
+
+#---------------------------------------------------------------------------------
+# the prefix on the compiler executables
+#---------------------------------------------------------------------------------
+PREFIX		:=	arm-eabi-
+
+export CC	:=	$(PREFIX)gcc
+export CXX	:=	$(PREFIX)g++
+export AS	:=	$(PREFIX)as
+export OBJCOPY	:=	$(PREFIX)objcopy
+
+#---------------------------------------------------------------------------------
+%.o: %.cpp
+	@echo ROM
+	@echo $(notdir $<)
+	$(CXX) -MMD -MP -MF $(DEPSDIR)/$*.d $(CXXFLAGS) -c $< -o $@
+	
+#---------------------------------------------------------------------------------
+%.o: %.c
+	@echo ROM
+	@echo $(notdir $<)
+	$(CC) -MMD -MP -MF $(DEPSDIR)/$*.d $(CFLAGS) -c $< -o $@
+
+
+#---------------------------------------------------------------------------------
+%_mb.o: %.cpp
+	@echo MB
+	@echo $(notdir $<)
+	$(CXX) -MMD -MP -MF $(DEPSDIR)/$*_mb.d $(CXXFLAGS_MB) -c $< -o $@
+	
+#---------------------------------------------------------------------------------
+%_mb.o: %.c
+	@echo MB
+	@echo $(notdir $<)
+	$(CC) -MMD -MP -MF $(DEPSDIR)/$*_mb.d $(CFLAGS_MB) -c $< -o $@
+
+
+
+#---------------------------------------------------------------------------------
+# canned command sequence for binary data
+#---------------------------------------------------------------------------------
+define bin2o
+	bin2s $< | $(AS) $(ARCH) -o $(@)
+	echo "extern const u8" `(echo $(<F) | sed -e 's/^\([0-9]\)/_\1/' | tr . _)`"_end[];" > `(echo $(<F) | tr . _)`.h
+	echo "extern const u8" `(echo $(<F) | sed -e 's/^\([0-9]\)/_\1/' | tr . _)`"[];" >> `(echo $(<F) | tr . _)`.h
+	echo "extern const u32" `(echo $(<F) | sed -e 's/^\([0-9]\)/_\1/' | tr . _)`_size";" >> `(echo $(<F) | tr . _)`.h
+endef
 
 
 
@@ -43,7 +116,8 @@ OBJCOPY		:=	$(OBJCOPY) -R.pad
 # INCLUDES is a list of directories containing extra header files
 #---------------------------------------------------------------------------------
 TARGET		:=	goomba
-BUILD		:=	build
+TARGET_MB	:=	goomba_mb
+BUILD		:=	build2
 SOURCES		:=	src
 INCLUDES	:=
 
@@ -57,10 +131,14 @@ CFLAGS	:=	-g -Wall -Os\
  		-fomit-frame-pointer\
 		-ffast-math \
 		$(ARCH)
-
 CFLAGS	+=	$(INCLUDE)
 
+CFLAGS_MB :=	$(CFLAGS)\
+		-D _MB_VERSION
+
 ASFLAGS	:=	$(ARCH)
+ASFLAGS_MB	:=	$(ASFLAGS)
+
 LDFLAGS	=	-g $(ARCH) -Wl,-Map,$(notdir $@).map
 
 #---------------------------------------------------------------------------------
@@ -87,6 +165,7 @@ ifneq ($(BUILD),$(notdir $(CURDIR)))
 #---------------------------------------------------------------------------------
 
 export OUTPUT	:=	$(CURDIR)/$(TARGET)
+export OUTPUT_MB :=	$(CURDIR)/$(TARGET_MB)
 
 export VPATH	:=	$(foreach dir,$(SOURCES),$(CURDIR)/$(dir))
 export PATH	:=	$(DEVKITARM)/bin:$(PATH)
@@ -100,7 +179,7 @@ CPPFILES	:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
 SFILES		:=	all.s
 DATA1		:=	font.lz77
 DATA2		:=	fontpal.bin
-DATA3		:=	../goomba_mb.gba
+DATA3		:=	../$(TARGET_MB).gba
 
 #---------------------------------------------------------------------------------
 # use CXX for linking C++ projects, CC for standard C
@@ -116,7 +195,8 @@ else
 endif
 #---------------------------------------------------------------------------------
 
-export OFILES	:= $(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o) $(DATA1:.lz77=.o) $(DATA2:.bin=.o) $(DATA3:.gba=.o)
+export OFILES	:=	$(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o) $(DATA1:.lz77=.o) $(DATA2:.bin=.o) $(DATA3:.gba=.o)
+export OFILES_MB :=	$(CPPFILES:.cpp=_mb.o) $(CFILES:.c=_mb.o) $(SFILES:.s=_mb.o) $(DATA1:.lz77=.o) $(DATA2:.bin=.o)
 
 #---------------------------------------------------------------------------------
 # build a list of include paths
@@ -141,12 +221,13 @@ all	: $(BUILD)
 #---------------------------------------------------------------------------------
 clean:
 	@echo clean ...
-	@rm -fr $(BUILD) $(TARGET).elf $(TARGET).gba
+	@rm -fr $(BUILD) $(TARGET).elf $(TARGET).gba $(TARGET_MB).elf $(TARGET_MB).gba
 
 #---------------------------------------------------------------------------------
 else
 
-DEPENDS	:=	$(OFILES:.o=.d)
+# DEPENDS	:=	$(OFILES:.o=.d)
+DEPENDS_MB	:=	$(OFILES_MB:.o=.d)
 
 %.o	:	%.lz77
 	@echo $(notdir $<)
@@ -161,14 +242,31 @@ DEPENDS	:=	$(OFILES:.o=.d)
 	@$(bin2o)
 
 
+
+#---------------------------------------------------------------------------------
+%.gba: %.elf
+	@$(OBJCOPY) -O binary $< $@
+	@echo Fixed ... $(notdir $@)
+	@gbafix $@ -tGoomba\ Color -cGMBC
+
+%.gba: %_mb.elf
+	@$(OBJCOPY) -O binary $< $@
+	@echo Fixed ... $(notdir $@)
+	@gbafix $@ -tGoomba\ Color -cGMBC
+
+
 #---------------------------------------------------------------------------------
 # main targets
 #---------------------------------------------------------------------------------
 $(OUTPUT).gba	:	$(OUTPUT).elf
 
-$(OUTPUT).elf	:	$(OFILES)	gba_crt0_my.o
-
+$(OUTPUT).elf	:	$(OFILES) gba_crt0_my.o
 -include $(DEPENDS)
+
+$(OUTPUT_MB).gba :	$(OUTPUT_MB).elf
+
+$(OUTPUT_MB).elf :	$(OFILES_MB) gba_crt0_my.o
+-include $(DEPENDS_MB)
 
 #---------------------------------------------------------------------------------
 endif

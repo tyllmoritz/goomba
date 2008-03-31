@@ -214,8 +214,13 @@
 	.endm
 	
 	.macro adrl_ reg,label
-	add \reg,globalptr,#((\label) & 0xFF00)
-	add \reg,\reg,#((\label) & 0x00FF)
+	.if \label&0x80000000
+	sub \reg,globalptr,#((-(\label)) & 0xFF00FF00)
+	sub \reg,\reg,#((-(\label)) & 0x000000FF)
+	.else
+	add \reg,globalptr,#((\label) & 0xFF00FF00)
+	add \reg,\reg,#((\label) & 0x000000FF)
+	.endif
 	.endm
 
  .if VERSION_IN_ROM

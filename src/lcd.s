@@ -1,33 +1,18 @@
 @TODO:
+@Workaround for screen garbage on UI
+
 @check all reset code, and make sure it's resetting everything!!!
 
-@newerest todo:
-@fix timers in double speed hack mode
-
-@newest todo:
-@*Fix balloon kid's garbage graphics
-@Take lots of non-critical code out of IWRAM
-@*remove NONE from double speed menu
 @option to use color 0 as border color
 @Fix the damn UI shaking, fix the darkened UI when changing between SGB and non SGB
-@Finish the job, make the interrupt handler be in charge of adding the UI/Border
-@	Do this by comparing my_ui_border with _ui_border_visible
-@	Also make my_ui_border work
-@*TIMERS doublespeed mode should be full double speed during vblank period
-@Incorporate UI and Border into scanline filler, also ensure 4 layers always visible
+@Still a couple bugs involving applying the ui/border
 
 @newer todo:
-@fix flickering
+@fix flickering???
 
-@new todo:
-@fix sprite priority in window split mode
-@sync BG tiles
-@
 @SGB STUFF:
 @do SGB colors correctly
 @do sgb attributes
-@*update SGB border palette for real
-@*Proper darkness when UI and Border visible
 
 @other border stuff:
 @custom borders
@@ -37,16 +22,9 @@
 @TODO:
 @* = written, + = tested
 @fake bios, init sound like the real bios
-@*verify that turning off screen is working correctly
-@*verify that interrupts are working correctly
 @fix STOP instruction
-@*"ugly hack" from io.s?
-@Border Support
-@	border generation ui, border loading...
-@*set default double speed mode to Full
 @Save options per game, like palette, double speed mode
 @Custom palettes
-@SGB Support
 @Palette changes per line using vcount, may up to 4 palettes per frame total
 @Savestates
 @Real HDMA
@@ -54,29 +32,6 @@
 @Possibly separate gbz80 core from gb system stuff?
 @Port to NDS
 @ROM Compression
-
-@test new code
-@*buffer filler (vblank and others)
-@*newframe_vblank
-
-@finished TODO:
-@*fix recent_tiles again, there's graphics corruption
-@*correct graphics in fast mode
-@*gamma correct GBC palette
-@*init window values
-@*newframe applys at start of vblank
-@*look again at those buffer fillers, check the code for problems
-@*fill in values for bgxcntbuff
-@*incorporate UI visibility
-@*change windowx code to store into a buffer
-@*new code for DMAing the buffers (using vcount interrupts to start and stop)
-@*write vcount interrupt
-@*write code to generate GBA tilemaps, including HP tiles
-@*new vram arrangement
-@*integrate dirty tiles
-@*integrate delayed dirty tiles
-@*add sprite generator
-
 
 @dma: scrolling, dispcnt, bgXcnt, windowx
 @border GFX takes up 1E00 bytes [240 tiles] per border
@@ -89,7 +44,7 @@
 @1b
 @2b
 @font, (2 maps) bg0,bg00
-@(4 maps) bg0H,bg1,bg101bg1H
+@(4 maps) bg0H,bg1,bg10,bg1H
 @
 @26, 27, 28, 29, 30, 31
 
@@ -112,22 +67,34 @@
 @	#include "sgb.h"
 
 	VRAM_BASE = 0x06000000
-	VRAM_OBJ_BASE = 0x06010000
+	OBJ_BASE	= 0x14000
+	VRAM_OBJ_BASE	= VRAM_BASE+OBJ_BASE
 	SCREEN_X_START = 40
 	SCREEN_Y_START = 8
 	OAM_BASE = 0x07000000
 	PALETTE_BASE = AGB_PALETTE
 
-@ AGB_BG			= AGB_VRAM+0xA000
-@ AGB_BG_GBMODE		= AGB_VRAM+0x4000
-@
-	DEBUGSCREEN = VRAM_BASE+0x7800
+	TILEMAP1	= 10 @formerly 26
+	TILEMAP2	= 13 @formerly 29
+	UI_TILEMAP	= 30 @formerly 15
+	BORDER_TILEMAP = 29 @formerly 13
+	COLORZERO_CHARBASE = 2 @formerly 0
+	BORDER_CHARBASE = 3 @formerly 1
+	UI_CHARBASE = 1 @formerly 3
+	DEBUGSCREEN = VRAM_BASE+(UI_TILEMAP+1)*2048
 
  .if RUMBLE
 	@IMPORT RumbleInterrupt
 	@IMPORT StartRumbleComs
  .endif
  	.global update_ui_border_masks
+ 	
+ 	.global lcdstat
+ 	.global FF41_modify1
+ 	.global FF41_R_vblank
+ 	
+ 	.global g_lcdhack
+ 	.global update_lcdhack
  	
 	.global ui_border_visible
 	.global ui_y
@@ -139,6 +106,8 @@
 	
 	.global newframe_vblank
 	.global gbc_chr_update
+	
+	.global g_scanline
 	
 	.global GFX_init
 	.global GFX_init_irq
@@ -368,18 +337,18 @@ ppi0:	mov r0,#0
 	adds r1,r1,#1
 	bne ppi0
 
-	mov r0,#0
-	ldr r1,=PALETTE_BASE			@clear some of the AGB Palette
-	mov r2,#0x80/4
-	bl filler_
+	mov r1,#0
+	ldr r0,=PALETTE_BASE			@clear some of the AGB Palette
+	mov r2,#0x80
+	bl memset_
 
-	ldr r0,=0x5F405F40
-	ldr r1,=DISPCNTBUFF			@clear DISPCNT+DMA1BUFF
-	mov r2,#144/4
-	bl filler_
-	ldr r1,=DISPCNTBUFF2			@clear DISPCNT+DMA1BUFF
-	mov r2,#144/4
-	bl filler_
+	ldr r1,=0x5F405F40
+	ldr r0,=DISPCNTBUFF			@clear DISPCNT+DMA1BUFF
+	mov r2,#288
+	bl memset_
+	ldr r0,=DISPCNTBUFF2			@clear DISPCNT+DMA1BUFF
+	mov r2,#288
+	bl memset_
 
 @	mov r1,#REG_BASE
 @	mov r0,#8
@@ -407,58 +376,64 @@ GFX_reset:	@called with CPU reset
 @----------------------------------------------------------------------------
 	stmfd sp!,{addy,lr}
 
-	mov r0,#0
+	mov r1,#0
 
-@	ldr r1,=AGB_BG		;clear most of the GB VRAM
-@	mov r2,#0x2000/4
-@	bl filler_
+@	ldr r0,=AGB_BG		;clear most of the GB VRAM
+@	mov r2,#0x2000
+@	bl memset_
 
 @@--------
 	@clear dirtytiles and dirtyrows
-	ldr r1,=DIRTY_TILES
-	mov r2,#(768+48+4)/4
-	bl filler_
+	ldr r0,=DIRTY_TILES
+	mov r2,#(768+48+4)
+	bl memset_
 	
 	@clear RECENT_TILENUM
-	mvn r0,#0
-	ldr r1,=RECENT_TILENUM
-	mov r2,#(MAX_RECENT_TILES/2)+1
-	bl filler_
+	mvn r1,#0
+	ldr r0,=RECENT_TILENUM
+	mov r2,#(MAX_RECENT_TILES*2)+4
+	bl memset_
 	
 	@clear RECENT_TILES for no reason
-	mov r0,#0
-	ldr r1,=RECENT_TILES
-	mov r2,#(MAX_RECENT_TILES*16)/4
-	bl filler_
+	mov r1,#0
+	ldr r0,=RECENT_TILES
+	mov r2,#MAX_RECENT_TILES*16
+	bl memset_
 	
+	.if RESIZABLE
+	ldr_ r0,xgb_vram
+	ldr_ r2,xgb_vramsize
+	bl memset_
+	.else
 	@clear XGB_VRAM
-	ldr r1,=XGB_VRAM
-	mov r2,#0x4000/4   @maybe this needs to change for 'resizable'
-	bl filler_
+	ldr r0,=XGB_VRAM
+	mov r2,#0x4000   @maybe this needs to change for 'resizable'
+	bl memset_
+	.endif
 	
 	@clear GBA vram corresponding to XGB_VRAM
-	ldr r1,=VRAM_BASE
-	mov r2,#0x4000/4
-	bl filler_
-	ldr r1,=VRAM_BASE+0x8000
-	mov r2,#0x4000/4
-	bl filler_
-	ldr r1,=VRAM_OBJ_BASE
-	mov r2,#0x4000/4
-	bl filler_
+	ldr r0,=VRAM_BASE
+	mov r2,#0x4000
+	bl memset_
+	ldr r0,=VRAM_BASE+0x8000
+	mov r2,#0x4000
+	bl memset_
+	ldr r0,=VRAM_OBJ_BASE
+	mov r2,#0x4000
+	bl memset_
 	@clear GBA tilemaps corresponding to XGB_VRAM
-	ldr r1,=VRAM_BASE+0xD000
-	mov r2,#0x3000/4
-	bl filler_
+	ldr r0,=VRAM_BASE+TILEMAP1*2048
+	mov r2,#0x3000
+	bl memset_
 	
 	@clear GB OAM
-	mov r0,#200
-	ldr r1,=GBOAMBUFF1
-	mov r2,#160/4
-	bl filler_
-	ldr r1,=GBOAMBUFF2
-	mov r2,#160/4
-	bl filler_
+	mov r1,#200
+	ldr r0,=GBOAMBUFF1
+	mov r2,#160
+	bl memset_
+	ldr r0,=GBOAMBUFF2
+	mov r2,#160
+	bl memset_
 
 @@--------
 
@@ -475,7 +450,9 @@ GFX_reset:	@called with CPU reset
 
 	
 	mov r0,#0
-	strb_ r0,lcdstat		@flags off
+	ldr r1,=lcdstat
+	strb r0,[r1]@lcdstat		;flags off
+	strb r0,[r1,#-12] @fixme
 	strb_ r0,scrollX
 	strb_ r0,scrollY
 	strb_ r0,windowX
@@ -512,10 +489,34 @@ GFX_reset:	@called with CPU reset
 	bl_long newframeinit
 
 	bl_long update_ui_border_masks
+	
+	bl selfmodify_reset
+	
 	ldmfd sp!,{addy,lr}
 
 
-	mov pc,lr
+	bx lr
+
+selfmodify_reset:
+	ldrb_ r1,gbcmode
+	adr r2,0f
+	add r2,r2,r1,lsl#3
+	ldr r0,[r2],#4
+	ldr r1,=bgcache_modify1
+	str r0,[r1]
+	ldr r0,[r2],#4
+	ldr r1,=bgcache_modify2
+	str r0,[r1]
+	bx lr
+
+
+
+0:
+	mov r1,#0
+	mov r4,#0
+	ldrh r1,[r2]
+	ldr r4,[addy,r7,lsr#3]
+
 
 @@----------------------------------------------------------------------------
 @move_ui
@@ -564,7 +565,8 @@ resetlcdregs:
 
 @	ldrb r0,lcdctrl
 @	bl_long FF40_W
-	ldrb_ r0,lcdstat
+	ldr r1,=lcdstat
+	ldrb r0,[r1]@lcdstat
 	bl_long FF41_W
 @	ldrb r0,scrollY
 @	bl_long FF42_W
@@ -584,11 +586,11 @@ PaletteTxAll:@		also called from UI.c
 @----------------------------------------------------------------------------
 	str lr,[sp,#-4]!
 	ldrb_ r0,bgpalette
-	bl_long FF47_W
+	bl_long FF47_W_
 	ldrb_ r0,ob0palette
-	bl_long FF48_W
+	bl_long FF48_W_
 	ldrb_ r0,ob1palette
-	bl_long FF49_W
+	bl_long FF49_W_
 	bl copy_gbc_palette
 	ldr lr,[sp],#4
 	bx lr
@@ -641,199 +643,9 @@ nomap:					@map rrrrrrrrggggggggbbbbbbbb  ->  0bbbbbgggggrrrrr
 	ldmfd sp!,{r4-r7,globalptr,lr}
 	bx lr
 
-@----------------------------------------------------------------------------
 transfer_palette:
-@----------------------------------------------------------------------------
-	stmfd sp!,{r0-r9,globalptr,lr}
-	ldr globalptr,=GLOBAL_PTR_BASE
-	
-	ldrb_ r0,update_border_palette
-	movs r0,r0
-	movne r0,#0
-	strneb_ r0,update_border_palette
-	blne update_the_border_palette
+	b_long transfer_palette_
 
-	ldr r4,=PALETTE_BASE+256
-
-	ldrb_ r2,sgb_mask
-	cmp r2,#2
-	bge sgb_mask_palette
-
-	ldrb_ r2,lcdctrl0frame
-	tst r2,#0x80 @screen off?
-	beq white_palette
-	
-	ldr r5,=gbc_palette2
-	
-	mov r8,#16 @16 palettes
-
-	ldrb_ r1,_gammavalue
-	movs r1,r1   
-	beq nogamma1
-	
-pal_loop1:
-	mov r9,#4
-pal_loop11:
-	bl gamma_convert_one
-	
-	subs r9,r9,#1
-	bne pal_loop11
-	add r4,r4,#24
-	subs r8,r8,#1
-	bne pal_loop1
-	b aftergamma
-nogamma1:
-pal_loop2:
-	ldmia r5!,{r0,r1}
-	stmia r4,{r0,r1}
-	add r4,r4,#32
-	subs r8,r8,#1
-	bne pal_loop2
-aftergamma:	
-	
-	@Copy SGB palette to first entry based on UI selection, this will be removed when proper coloizing is supported
-	ldrb_ r0,sgbmode
-	movs r0,r0
-	beq 9f
-	ldrb_ r0,_sgb_palette_number
-	movs r0,r0
-	beq 9f
-	ldr r2,=PALETTE_BASE+0x100
-	ldr r1,[r2,r0,lsl#5]
-	str r1,[r2]
-	add r2,r2,#4
-	ldr r1,[r2,r0,lsl#5]
-	str r1,[r2]
-	ldr r2,=PALETTE_BASE+0x200
-	ldr r1,[r2,r0,lsl#6]
-	str r1,[r2]
-	add r2,r2,#4
-	ldr r1,[r2,r0,lsl#6]
-	str r1,[r2]
-	add r2,r2,#0x1C
-	ldr r1,[r2,r0,lsl#6]
-	str r1,[r2]
-	add r2,r2,#4
-	ldr r1,[r2,r0,lsl#6]
-	str r1,[r2]
-9:	
-	@for the hell of it, copy first transparent color to color zero
-	@DELETEME?
-	@only do it if SGB border is visible
-	ldrb_ r0,_ui_border_screen
-	tst r0,#2
-	
-	@otherwise pick black border?
-	ldr r0,=PALETTE_BASE
-	ldr r1,=PALETTE_BASE+0x100
-	ldrneh r3,[r1]
-	moveq r3,#0
-	strh r3,[r0]
-	
-	@now copy first 8 transparent colors to solid blocks
-	ldr r0,=PALETTE_BASE+0xF0
-	ldr r1,=PALETTE_BASE+0x100
-	mov r2,#8
-pal_loop3:
-	ldrh r3,[r1],#32
-	strh r3,[r0],#2
-	
-	subs r2,r2,#1
-	bne pal_loop3
-	
-	ldmfd sp!,{r0-r9,globalptr,lr}
-	bx lr
-
-
-white_palette:
-	ldrb_ r0,gbcmode
-	movs r0,r0
-	mvn r0,#0
-	bne 3f
-	mov r2,#4
-sgb_mask_palette:
-	mov r0,#0
-	cmp r2,#4
-	ldreq r0,=SGB_PALETTE @if 3, use black, if 4, use SGB color #0
-	ldreqh r0,[r0]
-	orreq r0,r0,r0,lsl#16
-3:
-	mov r1,r0
-	mov r2,#16
-whitepal_loop:
-	stmia r4,{r0,r1}
-	add r4,r4,#32
-	subs r2,r2,#1
-	bne whitepal_loop
-	b aftergamma
-
-update_the_border_palette:
-	stmfd sp!,{lr}
-	
-	ldr r4,=PALETTE_BASE+32
-	ldr r5,=BORDER_PALETTE
-	
-	mov r9,#64 @64 colors
-
-	ldrb_ r1,_gammavalue
-	movs r1,r1
-	beq 1f
-	
-0:
-	bl gamma_convert_one
-	subs r9,r9,#1
-	bne 0b
-	ldmfd sp!,{pc}
-	
-1:
-	ldr r0,[r5],#4
-	str r0,[r4],#4
-	subs r9,r9,#2
-	bne 1b
-	ldmfd sp!,{pc}
-
-
-gamma_convert_one:
-	@r5 = src, r4 = dest
-	stmfd sp!,{lr}
-
-	ldrh r6,[r5],#2 @read color
-	ands r0,r6,#0x1F  @red gamma
-	addne r0,r0,#1
-	mov r0,r0,lsl#3
-	subne r0,r0,#1
-	bl gammaconvert
-	mov r7,r0
-	ands r0,r6,#0x3E0 @green gamma
-	addne r0,r0,#0x20
-	mov r0,r0,lsr#2
-	subne r0,r0,#1
-	bl gammaconvert
-	orr r7,r7,r0,lsl#5
-	ands r0,r6,#0x7C00 @blue gamma
-	addne r0,r0,#400
-	mov r0,r0,lsr#7
-	subne r0,r0,#1
-	bl gammaconvert
-	orr r7,r7,r0,lsl#10 @all combined
-	strh r7,[r4],#2
-	
-	ldmfd sp!,{pc}
-
-
-
-@----------------------------------------------------------------------------
-gammaconvert:@	takes value in r0(0-0xFF), gamma in r1(0-4),returns new value in r0=0x1F
-@----------------------------------------------------------------------------
-	rsb r2,r0,#0x100
-	mul r3,r2,r2
-	rsbs r2,r3,#0x10000
-	rsb r3,r1,#4
-	orr r0,r0,r0,lsl#8
-	mul r2,r1,r2
-	mla r0,r3,r0,r2
-	mov r0,r0,lsr#13
-	bx lr
 @----------------------------------------------------------------------------
 showfps_:		@fps output, r0-r3=used.
 @----------------------------------------------------------------------------
@@ -1125,11 +937,11 @@ get_agb_vram_address:
 	addne agbptr_1,agbptr_1,#0x8000
 	bxne lr
 	tst r0,#0x080
-	addeq agbptr_3,agbptr_1,#0x10000 @0-127: sprite 0000, bg 0000
+	addeq agbptr_3,agbptr_1,#OBJ_BASE @0-127: sprite 0000, bg 0000
 	addeq agbptr_2,agbptr_1,#0x0000
 	addeq agbptr_1,agbptr_1,#0x0000
 
-	addne agbptr_3,agbptr_1,#0x11000 @128-255: sprite 1000, bg 1000, bg 9000
+	addne agbptr_3,agbptr_1,#OBJ_BASE+0x1000 @128-255: sprite 1000, bg 1000, bg 9000
 	addne agbptr_2,agbptr_1,#0x9000
 	addne agbptr_1,agbptr_1,#0x1000
 
@@ -1137,7 +949,11 @@ get_agb_vram_address:
 
 render_dirty_tile:
 	bl get_agb_vram_address
+	.if RESIZABLE
+	ldr_ gbcptr,xgb_vram
+	.else
 	ldr gbcptr,=XGB_VRAM
+	.endif
 	add gbcptr,gbcptr,r0,lsl#4
 	cmp tilenum,#384
 	addge gbcptr,gbcptr,#0x2000
@@ -1167,7 +983,11 @@ render_dirty_tile_loop:
 	b render_dirty_tile
 
 store_recent_tile:
+	.if RESIZABLE
+	ldr_ gbcptr,xgb_vram
+	.else
 	ldr gbcptr,=XGB_VRAM
+	.endif
 	subs r0,tilenum,#384
 	movlt r0,tilenum
 	add gbcptr,gbcptr,r0,lsl#4
@@ -1370,42 +1190,44 @@ vblankinterrupt:@
 	
 	bl_long showfps_
 	
-	mov r2,#REG_BASE
+	@force first 8 scnalines to contain UI
+	@part 1 - save old, find out NEW
+	adr_ r4,ui_border_cnt_bic
+	ldmia r4,{r0-r3}
+	stmfd sp!,{r0-r4}
+	ldr_ r1,_ui_border_screen
+	orr r1,r1,#1
+	bl update_ui_border_masks_2
 	
+	mov r2,#REG_BASE
 	@write buffer values for scanline 0
 	ldr_ r1,bigbufferbase2
 	ldmia r1,{r3-r8}
 	
-@	;force first 8 scanlines to contain UI?
-@	;for this to work, you need to enable it at reg_winout, then suppress it afterwards
-@	ldrb r1,_ui_border_visible
-@	tst r1,#1
-@	bne %f0
-@	tst r1,#2
-@	ldr r0,_ui_x
-@	bic r0,r0,#0xFF000000
-@	bic r0,r0,#0x00FF0000
-@	ldr r1,_ui_y
-@	orr r0,r0,r1,lsl#16
-@	biceq r4,r4,#0xFF000000
-@	biceq r4,r4,#0x00FF0000
-@	orreq r4,r4,#0x4E000000
-@	orreq r4,r4,#0x000C0000
-@	moveq r8,r0
-@	bicne r4,r4,#0xFF00
-@	bicne r4,r4,#0x00FF
-@	orrne r4,r4,#0x4E00
-@	orrne r4,r4,#0x000C
-@	movne r7,r0
-@0
+	@force UI visible in first 8 scanlines
+	@part 2: Apply changes
+	ldr_ r1,ui_border_cnt_bic
+	bic r4,r4,r1
+	ldr_ r1,ui_border_cnt_orr
+	orr r4,r4,r1
+	ldr_ r1,_ui_border_screen
+	ands r1,r1,#2
+	ldr_ r0,_ui_y
+	ldr_ r8,_ui_x
+	orr r8,r8,r0,lsl#16
+	movne r7,r8
+	ldrne_ r8,ui_border_scroll3
 	
-	
+	orr r1,r1,#1
+	@update WININ register
+	cmp r1,#2
+	ldrle r0,=0xFFE8FFFA @one layer
+	cmp r1,#3
+	ldreq r0,=0xFFECFFFE @two layers
+	str r0,[r2,#REG_WININ]
 	
 	add r1,r2,#REG_BG0CNT
 	stmia r1,{r3-r8}
-	
-	
-	
 	
 	mov r0,#0
 	strh r0,[r2,#REG_WIN0H]
@@ -1422,7 +1244,12 @@ vblankinterrupt:@
 	ldr r0,=0x28  + 256*(SCREEN_Y_START-1) @scanline 7, enable vblank+vcount interrupts
 	strh r0,[r2,#REG_DISPSTAT]
 
-	bl_long transfer_palette
+	@Force UI visible in first 8 scanlines
+	@part 3: Restore old values
+	ldmfd sp!,{r0-r4}
+	stmia r4,{r0-r3}
+
+	bl transfer_palette_
 
 	ldmfd sp!,{r4-addy,pc}
 
@@ -1433,6 +1260,7 @@ vblankinterrupt:@
 @@@
 @@
 @
+	.ltorg
 
 newframeinit:
 	mov r0,#0
@@ -1455,8 +1283,7 @@ newmode:
 	ldrb_ r0,lcdctrl
 	tst r0,#0x20
 	beq entermode0
-	
-	ldr_ r0,hblankposition  @if cycles >=hblankposition, inside hblank
+	ldr_ r0,scanline_oam_position  @if cycles >=scanline_oam_position, inside hblank
 	cmp cycles,r0
 	ldrb_ r0,scanline
 	addmi r0,r0,#1
@@ -1501,8 +1328,8 @@ entermode2_:
 	orr r1,r1,r1,lsl#16
 	str_ r1,dispcntdata
 	
-	@default bgXcnt: 000mmmmm000cccpp
-	ldr r1,=0x1A02
+	@default bgXcnt: 000mmmmm0000ccpp
+	ldr r1,= TILEMAP1*0x100 + 0x02	@formerly 1A02
 	tst r0,#0x10 @Tile Select
 	orreq r1,r1,#0x0008
 
@@ -1520,13 +1347,22 @@ entermode2_:
 	cmp r0,#1
 	orreq r1,r1,#0x0003	@For GBC, low priority for all layers
 	addne r1,r1,#0x0100	@For non-gbc, make all tiles color zero
+	.if COLORZERO_CHARBASE == 2
+	orrne r1,r1,#0x0008
+	.else
 	bicne r1,r1,#0x000C
+	.endif
 0:
 	str_ r1,bg01cnt
 	add r1,r1,#0x00000100 @for color 0 tiles (BG)
 	add r1,r1,#0x01000000
+	.if COLORZERO_CHARBASE == 2
+	orr r1,r1,#0x00000008
+	orr r1,r1,#0x00080000
+	.else
 	bic r1,r1,#0x0000000C
 	bic r1,r1,#0x000C0000
+	.endif
 	str_ r1,bg23cnt
 
 mode2_update_scroll:
@@ -1582,7 +1418,7 @@ entermode0_:
 	str_ r1,dispcntdata
 	
 	@default bgXcnt: 000mmmmm000cccpp
-	ldr r1,=0x1A02
+	ldr r1,= TILEMAP1*0x100 + 0x02	@formerly 1A02
 	tst r0,#0x10 @Tile Select
 	orreq r1,r1,#0x0008
 	tst r0,#0x08 @BG Tilemap
@@ -1590,15 +1426,24 @@ entermode0_:
 	orr r1,r1,r1,lsl#16
 	add r1,r1,#0x01000000 @for color 0 tiles
 	orr r1,r1,#0x00010000
+	.if COLORZERO_CHARBASE == 2
+	orr r1,r1,#0x00080000
+	.else
 	bic r1,r1,#0x000C0000
+	.endif
 	tst r0,#0x01 @BG enable
 	bne 0f
 	ldrb_ r0,gbcmode
 	cmp r0,#1
 	addne r1,r1,#0x0100
 @	orrne r1,r1,#0x0001  ;because there's the unconditional right below this
+	.if COLORZERO_CHARBASE == 2
+	orrne r1,r1,#0x0008
+	.else
 	bicne r1,r1,#0x000C
+	.endif
 	orr r1,r1,#0x0001
+	movs r0,#0
 0:	
 	str_ r1,bg01cnt
 	addne r1,r1,#0x0200
@@ -1638,7 +1483,7 @@ entermode1_:
 	str_ r1,dispcntdata
 	
 	@default bgXcnt: 000mmmmm000cccpp
-	ldr r1,=0x1A02
+	ldr r1,= TILEMAP1*0x100 + 0x02	@formerly 1A02
 	tst r0,#0x10 @Tile Select
 	orreq r1,r1,#0x0008
 	tst r0,#0x40 @Window Tilemap
@@ -1646,7 +1491,11 @@ entermode1_:
 	orr r1,r1,r1,lsl#16
 	add r1,r1,#0x01000000 @for color 0 tiles
 	orr r1,r1,#0x00010000
+	.if COLORZERO_CHARBASE == 2
+	orr r1,r1,#0x00080000
+	.else
 	bic r1,r1,#0x000C0000
+	.endif
 	tst r0,#0x01 @BG enable
 	bne 0f
 	ldrb_ r0,gbcmode
@@ -1675,7 +1524,7 @@ bufferfinish:
 	mov r2,#144
 	b 0f
 tobuffer:
-	ldr_ r2,hblankposition  @if cycles >=hblankposition, inside hblank
+	ldr_ r2,scanline_oam_position  @if cycles >=scanline_oam_position, inside hblank
 	cmp cycles,r2
 	ldrb_ r2,scanline
 	addmi r2,r2,#1
@@ -1745,7 +1594,7 @@ tobuffer:
 	
 	stmfd sp!,{r3-r8,lr}
 	@now we need intervention of UI and Border here
-	adrl_ addy,bigbuffer
+	adr_ addy,bigbuffer
 	ldmia addy,{r1-r4}
 	mov r5,r4
 	mov r6,r4
@@ -1768,7 +1617,17 @@ tobuffer:
 1:
 	stmia r1!,{r2,r3,r4,r5,r6,r7}
 	subs r0,r0,#1
+	beq 2f
+	stmia r1!,{r2,r3,r4,r5,r6,r7}
+	subs r0,r0,#1
+	beq 2f
+	stmia r1!,{r2,r3,r4,r5,r6,r7}
+	subs r0,r0,#1
+	beq 2f
+	stmia r1!,{r2,r3,r4,r5,r6,r7}
+	subs r0,r0,#1
 	bne 1b
+2:
 	str_ r1,bigbuffer
 	
 	ldr_ addy,dispcntdata
@@ -1782,7 +1641,7 @@ tobuffer:
 
 tobuffer_split:
 	stmfd sp!,{r3-r8,lr}
-	adrl_ addy,bigbuffer
+	adr_ addy,bigbuffer
 	ldmia addy,{r1-r5}
 	mov r6,r4
 	mov r7,r5
@@ -1802,7 +1661,17 @@ tobuffer_split:
 1:
 	stmia r1!,{r2,r3,r4,r5,r6,r7}
 	subs r0,r0,#1
+	beq 2f
+	stmia r1!,{r2,r3,r4,r5,r6,r7}
+	subs r0,r0,#1
+	beq 2f
+	stmia r1!,{r2,r3,r4,r5,r6,r7}
+	subs r0,r0,#1
+	beq 2f
+	stmia r1!,{r2,r3,r4,r5,r6,r7}
+	subs r0,r0,#1
 	bne 1b
+2:
 	str_ r1,bigbuffer
 
 	ldr_ addy,dispcntdata
@@ -1855,6 +1724,8 @@ apply16:
 	strh addy,[r2],#2
 	bx lr
 
+	.ltorg
+	
 @
 @@
 @@@
@@ -1864,7 +1735,7 @@ apply16:
 @@@@@@@
 
 move_ui_2:
-	adrl_ r2,ui_border_cnt_bic
+	adr_ r2,ui_border_cnt_bic
 	ldmia r2,{r4-r7}
 @	ldr r4,ui_border_cnt_bic
 @	ldr r5,ui_border_cnt_orr
@@ -1937,7 +1808,7 @@ add_ui_border:
 	bxeq lr
 	
 	@now apply the settings to the active (to be displayed) scanline buffers
-	adrl_ r12,ui_border_cnt_bic
+	adr_ r12,ui_border_cnt_bic
 	ldmia r12,{r0-r3}
 	stmfd sp!,{r0-r3,lr}		@push old
 	ldr_ r1,_ui_border_screen
@@ -1966,7 +1837,7 @@ update_ui_border_masks_2:
 1: @UI visible
 	ldr r0,=0xFFFF0000
 	str_ r0,ui_border_cnt_bic
-	ldr r0,=0x4E0C0000
+	ldr r0,=0x40000000 + UI_TILEMAP*0x1000000 + UI_CHARBASE*0x40000
 	str_ r0,ui_border_cnt_orr
 
 	mov r0,r1,lsr#8    @ui_x
@@ -1979,7 +1850,7 @@ update_ui_border_masks_2:
 2: @Border visible
 	ldr r0,=0xFFFF0000
 	str_ r0,ui_border_cnt_bic
-	ldr r0,=0x0D040000
+	ldr r0,= BORDER_TILEMAP*0x1000000 + BORDER_CHARBASE*0x40000
 	str_ r0,ui_border_cnt_orr
 @snes_screen_y = (224-144)/2 = 40
 @gba_screen_y = (160-144)/2 = 8
@@ -1991,7 +1862,7 @@ update_ui_border_masks_2:
 3: @UI and Border visible
 	mvn r0,#0
 	str_ r0,ui_border_cnt_bic
-	ldr r0,=0x0D044E0C
+	ldr r0,=0x00004000 + BORDER_TILEMAP*0x1000000 + BORDER_CHARBASE*0x40000 + UI_TILEMAP*0x100 + UI_CHARBASE*0x04
 	str_ r0,ui_border_cnt_orr
 	ldr r0,= (40-SCREEN_Y_START)*65536 + (48-SCREEN_X_START)
 	str_ r0,ui_border_scroll3
@@ -2022,9 +1893,166 @@ display_frame:	@called at vblank
 	
 	ldmfd sp!,{globalptr,pc}
 
-
 display_bg:
+	ldrb_ r0,bg_cache_updateok
+	movs r0,r0
+	bxeq lr
+	mov r0,#0
+	strb_ r0,bg_cache_updateok
+	
+	
+	
+	ldrb_ r0,bg_cache_full
+	movs r0,r0
+	bne display_whole_map
+consume_bg_cache:
+	ldr_ r3,bg_cache_limit
+	ldr_ r4,bg_cache_base
+	cmp r3,r4
+	bxeq lr
+	stmfd sp!,{r10,lr}
+	@bg_cache_base = end
+	@bg_cache_limit = start
+	bl update_tile_init
+	@don't touch r5-r9
+	@r0,r1,r2 get destroyed
+	@r3,r4,r10,r12,lr free
+	@r11 = dest addr
+	
+	@r3 = cursor, r4 = limit
+	ldr r10,=BG_CACHE
+	mov r12,#-1
+1:
+	ldrh r0,[r10,r3]
+	add r3,r3,#2
+	bic r3,r3,#BG_CACHE_SIZE
+	@r0 = value 9800-9FFF
+	bic r0,r0,#0xF800
+	bic r0,r0,#1
+	cmp r0,r12
+	mov r12,r0
+	beq 2f
+	
+	tst r0,#0x400
+	bic r1,r0,#0xFC00
+	
+	.if RESIZABLE
+	ldr r2,=XGB_vram_1800
+	ldr r2,[r2]
+	.else
+	ldr r2,=XGB_VRAM+0x1800
+	.endif
+	
+	add r2,r2,r0
+	ldreq r11,=VRAM_BASE+TILEMAP1*2048
+	ldrne r11,=VRAM_BASE+TILEMAP2*2048
+	add r11,r11,r1,lsl#1
+	ldrh r0,[r2]
+	add r2,r2,#0x2000
+bgcache_modify1:
+	ldrh r1,[r2]
+	orr r0,r0,r0,lsl#8
+	orr r1,r1,r1,lsl#8
+	bic r0,r0,#0xFF00
+	bl update_two_tiles
+2:	
+	cmp r3,r4
+	bne 1b
+	ldmfd sp!,{r10,lr}
+	str_ r3,bg_cache_limit
 	bx lr
+
+display_whole_map:
+	mov r0,#0
+	str_ r0,bg_cache_cursor
+	str_ r0,bg_cache_base
+	str_ r0,bg_cache_limit
+	strb_ r0,bg_cache_full
+	mov r0,#0x5A000000  @BPL
+	orr r0,r0,#(VRAM_name0-vram_W_modify)/4-2
+	str r0,vram_W_modify
+	
+	stmfd sp!,{lr}
+	.if RESIZABLE
+	ldr addy,=XGB_vram_1800
+	ldr addy,[addy]
+	.else
+	ldr addy,=XGB_VRAM+0x1800
+	.endif
+	ldr r11,=VRAM_BASE+TILEMAP1*2048 @D000
+	bl update_whole_map
+	.if RESIZABLE
+	ldr addy,=XGB_vram_1C00
+	ldr addy,[addy]
+	.else
+	ldr addy,=XGB_VRAM+0x1800+0x400
+	.endif
+	ldr r11,=VRAM_BASE+TILEMAP2*2048 @D000
+	bl update_whole_map
+	ldmfd sp!,{pc}
+
+
+
+update_tile_init:
+	ldr r5,=0x00680068
+	ldr r6,=0x00070007
+	ldr r7,=0x00010001
+	ldr r8,=0x72007200
+	ldr r9,=0xFDFF
+	bx lr
+
+update_two_tiles:
+	and r2,r1,r5 @#0x00680068 ;vflip, hflip, +100
+	orr r0,r0,r2,lsl#5
+	and r2,r1,r6 @#0x00070007 ;palette
+	add r2,r2,r7,lsl#3 @#0x00080008 ;+8
+	orr r0,r0,r2,lsl#12
+	
+	add r2,r2,r8 @#0x72007200 ;color 0 tile
+	
+	str r0,[r11],#4
+	str r2,[r11,#0x800-4]
+	
+	tst r1,#0x80	@high priority tile
+	biceq r0,r0,r9	@0xFDFF ;set to tile 512
+	orreq r0,r0,#0x200
+	tst r1,#0x800000
+	biceq r0,r0,r9,lsl#16
+	orreq r0,r0,#0x2000000
+	str r0,[r11,#0x1000-4]
+	bx lr
+	
+update_whole_map:
+@9800h-9BFFh and 9C00h-9FFFh
+@	stmfd sp!,{r3-r11,lr}
+	stmfd sp!,{lr}
+	bl update_tile_init
+	mov r10,#1024
+2:
+	@read two tiles
+bgcache_modify2:
+	ldr r4,[addy,r7,lsr#3] @0x2000
+	ldr r3,[addy],#4
+1:
+	and r2,r3,#0xFF00
+	and r0,r3,#0xFF
+	orr r0,r0,r2,lsl#8
+	and r2,r4,#0xFF00
+	and r1,r4,#0xFF
+	orr r1,r1,r2,lsl#8
+
+	bl update_two_tiles
+	
+	tst r11,#4
+	movne r3,r3,lsr#16
+	movne r4,r4,lsr#16
+	bne 1b
+	subs r10,r10,#4
+	bne 2b
+@	ldmfd sp!,{r3-r11,pc}
+	ldmfd sp!,{pc}
+
+@	bx lr
 @
 @	;destroys r0-r12
 @	ldr r9,=0x00070007
@@ -2110,26 +2138,211 @@ display_bg:
 
 
 @----------------------------------------------------------------------------
+transfer_palette_:
+@----------------------------------------------------------------------------
+	stmfd sp!,{r0-r9,globalptr,lr}
+	ldr globalptr,=GLOBAL_PTR_BASE
+	
+	ldrb_ r0,update_border_palette
+	movs r0,r0
+	movne r0,#0
+	strneb_ r0,update_border_palette
+	blne update_the_border_palette
+
+	ldr r4,=PALETTE_BASE+256
+
+	ldrb_ r2,sgb_mask
+	cmp r2,#2
+	bge sgb_mask_palette
+
+	ldrb_ r2,lcdctrl0frame
+	tst r2,#0x80 @screen off?
+	beq white_palette
+	
+	ldr r5,=gbc_palette2
+	
+	mov r8,#16 @16 palettes
+
+	ldrb_ r1,_gammavalue
+	movs r1,r1   
+	beq nogamma1
+	
+pal_loop1:
+	mov r9,#4
+pal_loop11:
+	bl gamma_convert_one
+	
+	subs r9,r9,#1
+	bne pal_loop11
+	add r4,r4,#24
+	subs r8,r8,#1
+	bne pal_loop1
+	b aftergamma
+nogamma1:
+pal_loop2:
+	ldmia r5!,{r0,r1}
+	stmia r4,{r0,r1}
+	add r4,r4,#32
+	subs r8,r8,#1
+	bne pal_loop2
+aftergamma:	
+	
+	@Copy SGB palette to first entry based on UI selection, this will be removed when proper colorizing is supported
+	ldrb_ r0,sgbmode
+	movs r0,r0
+	beq 9f
+	ldrb_ r0,_sgb_palette_number
+	movs r0,r0
+	beq 9f
+	ldr r2,=PALETTE_BASE+0x100
+	ldr r1,[r2,r0,lsl#5]
+	str r1,[r2]
+	add r2,r2,#4
+	ldr r1,[r2,r0,lsl#5]
+	str r1,[r2]
+	ldr r2,=PALETTE_BASE+0x200
+	ldr r1,[r2,r0,lsl#6]
+	str r1,[r2]
+	add r2,r2,#4
+	ldr r1,[r2,r0,lsl#6]
+	str r1,[r2]
+	add r2,r2,#0x1C
+	ldr r1,[r2,r0,lsl#6]
+	str r1,[r2]
+	add r2,r2,#4
+	ldr r1,[r2,r0,lsl#6]
+	str r1,[r2]
+9:	
+	@for the hell of it, copy first transparent color to color zero
+	@DELETEME?
+	@only do it if SGB border is visible
+	ldrb_ r0,_ui_border_screen
+	tst r0,#2
+	
+	@otherwise pick black border?
+	ldr r0,=PALETTE_BASE
+	ldr r1,=PALETTE_BASE+0x100
+	ldrneh r3,[r1]
+	moveq r3,#0
+	strh r3,[r0]
+	
+	@now copy first 8 transparent colors to solid blocks
+	ldr r0,=PALETTE_BASE+0xF0
+	ldr r1,=PALETTE_BASE+0x100
+	mov r2,#8
+pal_loop3:
+	ldrh r3,[r1],#32
+	strh r3,[r0],#2
+	
+	subs r2,r2,#1
+	bne pal_loop3
+	
+	ldmfd sp!,{r0-r9,globalptr,lr}
+	bx lr
+
+
+white_palette:
+	ldrb_ r0,gbcmode
+	movs r0,r0
+	mvn r0,#0
+	bne 3f
+	mov r2,#4
+sgb_mask_palette:
+	mov r0,#0
+	cmp r2,#4
+	ldreq r0,=SGB_PALETTE @if 3, use black, if 4, use SGB color #0
+	ldreqh r0,[r0]
+	orreq r0,r0,r0,lsl#16
+3:
+	mov r1,r0
+	mov r2,#16
+whitepal_loop:
+	stmia r4,{r0,r1}
+	add r4,r4,#32
+	subs r2,r2,#1
+	bne whitepal_loop
+	b aftergamma
+
+update_the_border_palette:
+	stmfd sp!,{lr}
+	
+	ldr r4,=PALETTE_BASE+32
+	ldr r5,=BORDER_PALETTE
+	
+	mov r9,#64 @64 colors
+
+	ldrb_ r1,_gammavalue
+	movs r1,r1
+	beq 1f
+	
+0:
+	bl gamma_convert_one
+	subs r9,r9,#1
+	bne 0b
+	ldmfd sp!,{pc}
+	
+1:
+	ldr r0,[r5],#4
+	str r0,[r4],#4
+	subs r9,r9,#2
+	bne 1b
+	ldmfd sp!,{pc}
+
+
+gamma_convert_one:
+	@r5 = src, r4 = dest
+	stmfd sp!,{lr}
+
+	ldrh r6,[r5],#2 @read color
+	ands r0,r6,#0x1F  @red gamma
+	addne r0,r0,#1
+	mov r0,r0,lsl#3
+	subne r0,r0,#1
+	bl gammaconvert
+	mov r7,r0
+	ands r0,r6,#0x3E0 @green gamma
+	addne r0,r0,#0x20
+	mov r0,r0,lsr#2
+	subne r0,r0,#1
+	bl gammaconvert
+	orr r7,r7,r0,lsl#5
+	ands r0,r6,#0x7C00 @blue gamma
+	addne r0,r0,#400
+	mov r0,r0,lsr#7
+	subne r0,r0,#1
+	bl gammaconvert
+	orr r7,r7,r0,lsl#10 @all combined
+	strh r7,[r4],#2
+	
+	ldmfd sp!,{pc}
+@----------------------------------------------------------------------------
+gammaconvert:@	takes value in r0(0-0xFF), gamma in r1(0-4),returns new value in r0=0x1F
+@----------------------------------------------------------------------------
+	rsb r2,r0,#0x100
+	mul r3,r2,r2
+	rsbs r2,r3,#0x10000
+	rsb r3,r1,#4
+	orr r0,r0,r0,lsl#8
+	mul r2,r1,r2
+	mla r0,r3,r0,r2
+	mov r0,r0,lsr#13
+	bx lr
+
+@----------------------------------------------------------------------------
 FF46_W:@		sprite DMA transfer
 @----------------------------------------------------------------------------
 @	and r0,r0,#0xff		;not needed?
 	and r1,r0,#0xF0
 	adr_ r2,memmap_tbl
 	ldr r1,[r2,r1,lsr#2]	@in: addy,r1=addy&0xE000 (for rom_R)
-	add addy,r1,r0,lsl#8	@addy=DMA source
-	ldr_ r2,gboambuff
-
-	mov r1,#40		@number of sprites on the GB
-OAMLoop:
-	ldr r0,[addy],#4
-	str r0,[r2],#4
-	subs r1,r1,#1
-	bne OAMLoop
+	add r1,r1,r0,lsl#8	@r1=DMA source
 	
 	mov r0,#1
 	strb_ r0,gboamdirty
 
-	mov pc,lr
+	ldr_ r0,gboambuff
+	mov r2,#160		@number of sprites on the GB
+	b memcpy__
 
 display_sprites:
 @----------------------------------------------------------------------------
@@ -2195,7 +2408,9 @@ dm11:
 	@tile
 	and r0,r3,#0x00FF0000
 	orr r1,r1,r0,lsr#16
-	
+	.if OBJ_BASE == 0x14000	
+	add r1,r1,#512
+	.endif
 	strh r1,[r2],#4		@store OBJ Atr 2
 dm9:
 	cmp addy,r9
@@ -2244,6 +2459,9 @@ dm12:
 	and r0,r3,#0x00FF0000
 	orr r1,r1,r0,lsr#16
 	bic r1,r1,#0x0001
+	.if OBJ_BASE == 0x14000	
+	add r1,r1,#512
+	.endif
 
 	strh r1,[r2],#4		@store OBJ Atr 2
 dm14:
@@ -2288,6 +2506,20 @@ do_gba_hdma:
 	mov r2,#REG_BASE
 	ldr r0,=0x28 + 256*(SCREEN_Y_START+144-1) @scanline 144+8-1, enable vblank+vcount interrupts
 	strh r0,[r2,#REG_DISPSTAT]
+
+	ldr_ r0,_ui_border_screen
+	and r0,r0,#3
+	@update WININ and WINOUT registers
+	cmp r0,#2
+	ldrle r1,=0xFFE8FFFA @one layer
+	cmp r0,#3
+	ldreq r1,=0xFFECFFFE @two layers
+	cmp r0,#0
+	ldreq r1,=0xFFE0FFFA @no extra layers
+	str r1,[r2,#REG_WININ]
+
+
+
 	mov globalptr,r12
 	bx lr
 	
@@ -2499,7 +2731,11 @@ newframe_vblank:	@called at line 144	(??? safe to use)
 	bl update_ui_border_masks
 
 	@copy lcdctrl0's mid-frame status
-	ldrb_ r0,lcdctrl0midframe
+	ldrb_ r0,lcdctrl
+	@screen on?
+	tst r0,#0x80
+	streqb_ r0,lcdctrl0midframe
+	ldrneb_ r0,lcdctrl0midframe	
 	strb_ r0,lcdctrl0frame
 	
 	@swap "big" buffer
@@ -2514,6 +2750,12 @@ newframe_vblank:	@called at line 144	(??? safe to use)
 	str_ r1,dispcntbase
 	str_ r0,dispcntbase2
 
+	@advance 
+	ldr_ r0,bg_cache_cursor
+	str_ r0,bg_cache_base
+	mov r0,#1
+	strb_ r0,bg_cache_updateok
+	
 	
 
 @	;swap xscroll buffer
@@ -2588,7 +2830,7 @@ gbaoamclean:
 	mov r0,#0
 	strb_ r0,vblank_happened
 	
-reenable_vblank:
+@reenable_vblank:
 	@reenable GBA vblank interrupt
 	ldr addy,=REG_IE+REG_BASE
 	ldrh r2,[addy]
@@ -2599,6 +2841,7 @@ reenable_vblank:
 dirty_ok_and_wait:
 	mov r0,#1
 	strb_ r0,consume_dirty
+reenable_vblank:
 
 	@reenable GBA vblank interrupt
 	ldr addy,=REG_IE+REG_BASE
@@ -2726,43 +2969,47 @@ FF40_W:@		LCD Control
 @	bxeq r1
 	ldmfd sp!,{r0,pc}
 
-@----------------------------------------------------------------------------
-FF41_R:@		LCD Status
-@----------------------------------------------------------------------------
-	ldrb_ r0,lcdstat
-	ldrb_ r1,scanline
-	ldrb_ r2,lcdyc
-	cmp r1,r2
-	orreq r0,r0,#4		@scanline=LYC
-	tst r0,#0x01		@in VBlank.
-	movne pc,lr
-	
-	ldr_ r2,cyclesperscanline
-	cmp r2,#DOUBLE_SPEED
-	movne r1,cycles
-	moveq r1,cycles,lsr#1
-	
-	cmp r1,#376*CYCLE
-	orrpl r0,r0,#2		@in OAM access
-	movpl pc,lr
 
-	cmp r1,#204*CYCLE
-	orrpl r0,r0,#3		@in VRAM access
-	mov pc,lr
 @----------------------------------------------------------------------------
 FF41_W:@		LCD Status
 @----------------------------------------------------------------------------
-	ldrb_ r1,lcdstat
-	and r1,r1,#0x01		@Save VBlank bit.
+	ldrb r1,lcdstat
+	and r2,r1,#0x05		@Save VBlank bit and LCDYC bit.
 	and r0,r0,#0x78
-	orr r0,r0,r1
-	strb_ r0,lcdstat
-	mov pc,lr
+	orr r0,r0,r2
+	cmp r0,r1
+	strneb r0,lcdstat
+	strneb r0,lcdstat2
+	ldrb_ r0,lcdyc
+	b_long lcdyc_check
+@	mov pc,lr
+
+
+FF41_R_vblank_hack:
+	sub cycles,cycles,#21*CYCLE
+FF41_R_vblank:
+lcdstat2:
+	mov r0,#1
+	bx lr
+FF41_R_hack:
+	sub cycles,cycles,#21*CYCLE
 @----------------------------------------------------------------------------
-FF42_R:@		SCY - Scroll Y
+FF41_R:@		LCD Status
 @----------------------------------------------------------------------------
-	ldrb_ r0,scrollY
-	mov pc,lr
+lcdstat:
+	mov r0,#1
+FF41_modify1:	cmp cycles,#204*CYCLE
+	bxlt lr				@return if after VRAM access
+	orr r0,r0,#2
+FF41_modify2:	cmp cycles,#376*CYCLE
+@	bxlt lr				;return if after OAM access
+@	orr r0,r0,#3
+	orrge r0,r0,#3
+	bx lr
+
+
+
+
 @----------------------------------------------------------------------------
 FF42_W:@		SCY - Scroll Y
 @----------------------------------------------------------------------------
@@ -2776,12 +3023,6 @@ FF42_W:@		SCY - Scroll Y
 	strb_ r0,scrollY
 	ldmfd sp!,{r0,lr}
 	b scrollx_entry
-
-@----------------------------------------------------------------------------
-FF43_R:@		SCX - Scroll X
-@----------------------------------------------------------------------------
-	ldrb_ r0,scrollX
-	mov pc,lr
 @----------------------------------------------------------------------------
 FF43_W:@		SCX - Scroll X
 @----------------------------------------------------------------------------
@@ -2808,24 +3049,35 @@ FF44_R:@      LCD Scanline
    ldrb_ r0,lcdctrl
    ands r0,r0,#0x80
    ldrneb_ r0,scanline
-@   ldr r0,scanline
+	@ldr r0,scanline
    mov pc,lr
-@@----------------------------------------------------------------------------
-@FF44_R;		LCD Scanline
-@@----------------------------------------------------------------------------
-@
-@
-@	ldr r0,scanline
-@@	cmp r0,#153
-@@	moveq r0,#0
-@	
-@	
-@@	sub cycles,cycles,#23*CYCLE	;LCD hack?
-@	mov pc,lr
 @----------------------------------------------------------------------------
-FF44_W:@		LCD Scanline
+FF44_R_hack:@		LCD Scanline
 @----------------------------------------------------------------------------
-	mov pc,lr
+	ldrb_ r0,lcdctrl
+	ands r0,r0,#0x80
+	ldrneb_ r0,scanline
+	ldrb r1,[gb_pc]
+	cmp r1,#0xFE		@CP instruction
+	bne 0f
+	ldrb r1,[gb_pc,#1]
+	cmp r0,r1
+	beq 0f
+number_of_times:
+	mov r1,#1
+	add r1,r1,#1
+	strb r1,number_of_times
+	cmp r1,#2
+	bxne lr
+	and cycles,cycles,#CYC_MASK  @LCD HACK
+0:
+	mov r1,#0
+	strb r1,number_of_times
+ 	bx lr
+ 
+ 
+   
+   
 
 @----------------------------------------------------------------------------
 FF45_R:@		LCD Y Compare
@@ -2836,15 +3088,29 @@ FF45_R:@		LCD Y Compare
 FF45_W:@		LCD Y Compare
 @----------------------------------------------------------------------------
 	strb_ r0,lcdyc
-	mov pc,lr
-@----------------------------------------------------------------------------
-FF47_R:@		BGP - BG Palette Data
-@----------------------------------------------------------------------------
-	ldrb_ r0,bgpalette
-	mov pc,lr
+lcdyc_check:
+	ldrb_ r1,scanline
+	cmp r0,r1
+	ldrb r0,lcdstat
+	orreq r0,r0,#4
+	bicne r0,r0,#4
+	strb r0,lcdstat
+	strb r0,lcdstat2
+	bxne lr
+	tst r0,#0x40
+	bxeq lr
+
+	ldrb_ r0,gb_if
+	orr r0,r0,#0x02		@2=LCD STAT
+	strb_ r0,gb_if
+	b immediate_check_irq
 @----------------------------------------------------------------------------
 FF47_W:@		BGP - BG Palette Data  (GB MODE ONLY)
 @----------------------------------------------------------------------------
+	ldrb_ r1,bgpalette
+	cmp r0,r1
+	bxeq lr
+FF47_W_:
 	strb_ r0,bgpalette
 	
 	ldrb_ r1,gbcmode
@@ -2882,39 +3148,39 @@ dopalette:
 
 	bx lr	
 
-dopalette_invert:
-	and r1,r0,#0x03
-	eor r1,r1,#0x03
-	add r1,addy,r1,lsl#1
-	ldrh r1,[r1]
-	strh r1,[r2]		@store in agb palette
-	and r1,r0,#0x0C
-	eor r1,r1,#0x0C
-	add r1,addy,r1,lsr#1
-	ldrh r1,[r1]
-	strh r1,[r2,#2]		@store in agb palette
-	and r1,r0,#0x30
-	eor r1,r1,#0x30
-	add r1,addy,r1,lsr#3
-	ldrh r1,[r1]
-	strh r1,[r2,#4]		@store in agb palette
-	and r1,r0,#0xC0
-	eor r1,r1,#0xC0
-	add r1,addy,r1,lsr#5
-	ldrh r1,[r1]
-	strh r1,[r2,#6]		@store in agb palette
+@dopalette_invert
+@	and r1,r0,#0x03
+@	eor r1,r1,#0x03
+@	add r1,addy,r1,lsl#1
+@	ldrh r1,[r1]
+@	strh r1,[r2]		;store in agb palette
+@	and r1,r0,#0x0C
+@	eor r1,r1,#0x0C
+@	add r1,addy,r1,lsr#1
+@	ldrh r1,[r1]
+@	strh r1,[r2,#2]		;store in agb palette
+@	and r1,r0,#0x30
+@	eor r1,r1,#0x30
+@	add r1,addy,r1,lsr#3
+@	ldrh r1,[r1]
+@	strh r1,[r2,#4]		;store in agb palette
+@	and r1,r0,#0xC0
+@	eor r1,r1,#0xC0
+@	add r1,addy,r1,lsr#5
+@	ldrh r1,[r1]
+@	strh r1,[r2,#6]		;store in agb palette
+@
+@	bx lr	
 
-	bx lr	
-
-@----------------------------------------------------------------------------
-FF48_R:@		OBP0 - OBJ 0 Palette Data
-@----------------------------------------------------------------------------
-	ldrb_ r0,ob0palette
-	mov pc,lr
 @----------------------------------------------------------------------------
 FF48_W:@		OBP0 - OBJ 0 Palette Data
 @----------------------------------------------------------------------------
+	ldrb_ r1,ob0palette
+	cmp r1,r0
+	bxeq lr
+FF48_W_:
 	strb_ r0,ob0palette
+	
 	ldrb_ r1,gbcmode
 	cmp r1,#0
 	bxne lr
@@ -2926,13 +3192,12 @@ FF48_W:@		OBP0 - OBJ 0 Palette Data
 	ldr addy,=SGB_PALETTE+16
 	b dopalette
 @----------------------------------------------------------------------------
-FF49_R:@		OBP1 - OBJ 1 Palette Data
-@----------------------------------------------------------------------------
-	ldrb_ r0,ob1palette
-	mov pc,lr
-@----------------------------------------------------------------------------
 FF49_W:@		OBP1 - OBJ 1 Palette Data
 @----------------------------------------------------------------------------
+	ldrb_ r1,ob1palette
+	cmp r1,r0
+	bxeq lr
+FF49_W_:
 	strb_ r0,ob1palette
 
 	ldrb_ r1,gbcmode
@@ -2945,11 +3210,6 @@ FF49_W:@		OBP1 - OBJ 1 Palette Data
 	ldr r2,=gbc_palette+64+8
 	ldr addy,=SGB_PALETTE+24
 	b dopalette
-@----------------------------------------------------------------------------
-FF4A_R:@		WINY - Window Y
-@----------------------------------------------------------------------------
-	ldrb_ r0,windowY
-	mov pc,lr
 @----------------------------------------------------------------------------
 FF4A_W:@		WINY - Window Y
 @----------------------------------------------------------------------------
@@ -3002,11 +3262,6 @@ FF4F_R:@		VBK - VRAM Bank - CGB Mode Only
 	mov pc,lr
 
 @----------------------------------------------------------------------------
-FF4B_R:@		WINX - Window X
-@----------------------------------------------------------------------------
-	ldrb_ r0,windowX
-	mov pc,lr
-@----------------------------------------------------------------------------
 FF4B_W:@		WINX - Window X
 @----------------------------------------------------------------------------
 	ldrb_ r1,windowX
@@ -3021,20 +3276,16 @@ FF4B_W:@		WINX - Window X
 	ldmfd sp!,{r0,pc}
 
 @----------------------------------------------------------------------------
-vram_W2:
-@----------------------------------------------------------------------------
-	mov addy,addy,lsr#16
-	cmp addy,#0x9800
-	bpl VRAM_nameD
-@----------------------------------------------------------------------------
 vram_W:
 @----------------------------------------------------------------------------
 	ldr_ r2,memmap_tbl+32
 	strb r0,[r2,addy]
 	cmp addy,#0x9800
+@	ldrpl pc,VRAM_name0_ptr
+vram_W_modify:
 	bpl VRAM_name0
 @----------------------------------------------------------------------------
-@VRAM_chr;	8000-97FF
+VRAM_chr:@	8000-97FF
 @----------------------------------------------------------------------------
 	sub r1,addy,#0x8000
 	ldr_ r2,dirty_rows
@@ -3076,15 +3327,36 @@ vram_W:
 @
 @	mov pc,lr
 
-
-
 @----------------------------------------------------------------------------
 VRAM_name0:	@(9800-9FFF)
 @----------------------------------------------------------------------------
-@	bx lr
-
-@3,1,3,1,3,1,3,1, 1,3,1,1,1, 1,1,1,1,1, 3, 1,1,1,3 1,1,3 
+@	ldrb r2,bg_cache_full
+@	movs r2,r2
+@	bxne lr
+	@store
+	ldr_ r2,bg_cache_cursor
+	ldr r1,=BG_CACHE
+	strh addy,[r1,r2]
+	add r2,r2,#2
+	bic r2,r2,#BG_CACHE_SIZE
+	str_ r2,bg_cache_cursor
+	@compare
+	ldr_ r1,bg_cache_limit
+	cmp r1,r2
+	bxne lr
+	@set full
+	mov r1,#1
+	strb_ r1,bg_cache_full
+	ldr r1,set_full_instruction
+	str r1,vram_W_modify
 	
+	bx lr
+set_full_instruction:
+	bxpl lr
+set_empty_instruction:
+
+	
+ .if 0	
 	ldrb_ r2,gbcmode
 	cmp r2,#0
  .if RESIZABLE
@@ -3104,10 +3376,10 @@ VRAM_name0:	@(9800-9FFF)
 	bic addy,addy,#0xFC00
 	add addy,r2,addy,lsl#1
 
-	and r2,r1,#0x68
+	and r2,r1,#0x68		@1101000, vflip, hflip, tile +0x100
 	orr r0,r0,r2,lsl#5
-	and r2,r1,#0x7
-	add r2,r2,#0x8
+	and r2,r1,#0x7		@palette
+	add r2,r2,#0x8		@+8
 	orr r0,r0,r2,lsl#12
 	
 	@store tile
@@ -3126,7 +3398,18 @@ VRAM_name0:	@(9800-9FFF)
 	@store high priority tile
 	strh r0,[addy,r1]
 	bx lr
+ .endif
 
+@----------------------------------------------------------------------------
+vram_W2:
+@----------------------------------------------------------------------------
+	@may enter with (addy<<16) in 0000 or 8000-9FFF
+	@most likely not writing to nametables
+	movs addy,addy,lsr#16
+	bxeq lr @null pointer test
+	cmp addy,#0x9800
+	bmi VRAM_chr
+@	b VRAM_nameD
 @----------------------------------------------------------------------------
 VRAM_nameD:	@(9800-9FFF)    Bloody Hack for Push16.
 @----------------------------------------------------------------------------
@@ -3167,28 +3450,6 @@ VRAM_nameD:	@(9800-9FFF)    Bloody Hack for Push16.
 
 @----------------------------------------------------------------------------
 
-FF68_R:	@BCPS - BG Color Palette Specification
-	ldrb_ r0,BCPS_index
-	bx lr
-FF69_R:	@BCPD - BG Color Palette Data
-	ldrb_ r1,BCPS_index
-	and r1,r1,#0x3F
-	ldr r0,=gbc_palette
-	ldrb r0,[r0,r1]
-	bx lr
-FF6A_R:	@OCPS - OBJ Color Palette Specification
-	ldrb_ r0,OCPS_index
-	bx lr
-FF6B_R:	@OCPD - OBJ Color Palette Data
-	ldrb_ r1,OCPS_index
-	and r1,r1,#0x3F
-	ldr r0,=gbc_palette+64
-	ldrb r0,[r0,r1]
-	bx lr
-
-FF68_W:	@BCPS - BG Color Palette Specification
-	strb_ r0,BCPS_index
-	bx lr
 FF69_W:	@BCPD - BG Color Palette Data
 	ldrb_ r1,BCPS_index
 	and r2,r1,#0x3F
@@ -3236,9 +3497,6 @@ FF69_W:	@BCPD - BG Color Palette Data
 @	orr r2,r2,r0,lsl#8
 @	strh r2,[r1]
 @	bx lr
-FF6A_W:	@OCPS - OBJ Color Palette Specification
-	strb_ r0,OCPS_index
-	bx lr
 FF6B_W:	@OCPD - OBJ Color Palette Data
 	ldrb_ r1,OCPS_index
 	and r2,r1,#0x3F
@@ -3273,8 +3531,8 @@ copyoam:
 	stmfd sp!,{r0,r1,r2,addy,lr}
 	ldr_ r1,gboambuff
 	ldr_ r0,active_gboambuff
-	mov r2,#160/4
-	bl_long copy_
+	mov r2,#160
+	bl memcpy__
 	ldmfd sp!,{r0,r1,r2,addy,pc}
 
 OAM_R:
@@ -3307,6 +3565,115 @@ gbc_palette:	.skip 128	@CGB $FF68-$FF6D???
 gbc_palette2:	.skip 128
 
 @----------------------------------------------------------------------------
+
+ .align
+ .pool
+ .text
+ .align
+ .pool
+@----------------------------------------------------------------------------
+FF42_R:@		SCY - Scroll Y
+@----------------------------------------------------------------------------
+	ldrb_ r0,scrollY
+	mov pc,lr
+@----------------------------------------------------------------------------
+FF43_R:@		SCX - Scroll X
+@----------------------------------------------------------------------------
+	ldrb_ r0,scrollX
+	mov pc,lr
+@----------------------------------------------------------------------------
+FF44_W:@		LCD Scanline
+@----------------------------------------------------------------------------
+	mov pc,lr
+@----------------------------------------------------------------------------
+FF47_R:@		BGP - BG Palette Data
+@----------------------------------------------------------------------------
+	ldrb_ r0,bgpalette
+	mov pc,lr
+@----------------------------------------------------------------------------
+FF48_R:@		OBP0 - OBJ 0 Palette Data
+@----------------------------------------------------------------------------
+	ldrb_ r0,ob0palette
+	mov pc,lr
+@----------------------------------------------------------------------------
+FF49_R:@		OBP1 - OBJ 1 Palette Data
+@----------------------------------------------------------------------------
+	ldrb_ r0,ob1palette
+	mov pc,lr
+@----------------------------------------------------------------------------
+FF4A_R:@		WINY - Window Y
+@----------------------------------------------------------------------------
+	ldrb_ r0,windowY
+	mov pc,lr
+@----------------------------------------------------------------------------
+FF4B_R:@		WINX - Window X
+@----------------------------------------------------------------------------
+	ldrb_ r0,windowX
+	mov pc,lr
+FF68_R:	@BCPS - BG Color Palette Specification
+	ldrb_ r0,BCPS_index
+	bx lr
+FF69_R:	@BCPD - BG Color Palette Data
+	ldrb_ r1,BCPS_index
+	and r1,r1,#0x3F
+	ldr r0,=gbc_palette
+	ldrb r0,[r0,r1]
+	bx lr
+FF6A_R:	@OCPS - OBJ Color Palette Specification
+	ldrb_ r0,OCPS_index
+	bx lr
+FF6B_R:	@OCPD - OBJ Color Palette Data
+	ldrb_ r1,OCPS_index
+	and r1,r1,#0x3F
+	ldr r0,=gbc_palette+64
+	ldrb r0,[r0,r1]
+	bx lr
+FF68_W:	@BCPS - BG Color Palette Specification
+	strb_ r0,BCPS_index
+	bx lr
+FF6A_W:	@OCPS - OBJ Color Palette Specification
+	strb_ r0,OCPS_index
+	bx lr
+
+update_lcdhack:
+	stmfd sp!,{r3,r4,r10,lr}
+	ldr r10,=GLOBAL_PTR_BASE
+	
+	ldrb_ r0,lcdhack
+	movs r0,r0
+	adrne r1,hack_cycle_subtractions-4
+	ldrne r4,[r1,r0,lsl#2]
+	movne r0,#1
+	
+	
+	adr r3,lcdhacks
+	ldr r2,[r3,r0,lsl#2]!
+	ldr r1,=FF44_R_ptr
+	str r2,[r1]
+	
+	adrl_ r1,FF41_R_function
+	ldr r2,[r3,#8]!
+	str r2,[r1]
+	strne r4,[r2]
+	ldr r2,[r3,#8]!
+	str r2,[r1,#4]
+	strne r4,[r2]
+	
+	ldmfd sp!,{r3,r4,r10,lr}
+	bx lr
+hack_cycle_subtractions:
+	sub cycles,cycles,#21*CYCLE
+	sub cycles,cycles,#84*CYCLE
+	sub cycles,cycles,#255*CYCLE
+lcdhacks:
+	.word FF44_R,FF44_R_hack
+FF41_R_functions:
+	.word FF41_R,FF41_R_hack
+	.word FF41_R_vblank,FF41_R_vblank_hack
+
+
+
+
  .align
  .pool
  .section .iwram, "ax", %progbits
@@ -3318,15 +3685,15 @@ FPSValue:
 	.word 0
 AGBinput:		@this label here for main.c to use
 	.word 0 @AGBjoypad (why is this in lcd.s again?  um.. i forgot)
-EMUinput:	.word 0 @EMUjoypad (this is what GB sees)
+EMUinput:	.word 0 @XGBjoypad (this is what GB sees)
 
 lcdstate:
 	.byte 0 @lcdctrl  ff40
-	.byte 0 @lcdstat
+	.byte 0 @lcdstat_save
 	.byte 0 @scrollX
 	.byte 0 @scrollY
 	
-	.byte 0 @scanline
+g_scanline:	.byte 0 @scanline
 	.byte 0 @lcdyc
 	.byte 0 @[unused] dma start address
 	.byte 0 @bgpalette
@@ -3342,6 +3709,10 @@ lcdstate:
 	.byte 0 @vrambank
 
 	.word 0 @dma_src, dma_dest
+@@end of lcdstate
+
+	.word DIRTY_TILES		@dirty_tiles
+	.word DIRTY_ROWS		@dirty_rows
 
 	.word 0 @bigbuffer
 	.word 0 @bg01cnt
@@ -3359,6 +3730,12 @@ lcdctrl0frame_:
 	.byte 0 @lcdctrl0frame
 	.byte 0 @rendermode
 ui_border_visible:	.byte 0 @_ui_border_visible
+
+sgb_palette_number: .byte 0 @_sgb_palette_number
+gammavalue:	.byte 0 @_gammavalue
+darkness:	.byte 0 @_darkness
+	.byte 0
+
 	.word 0 @ui_border_cnt_bic
 	.word 0 @ui_border_cnt_orr
 	.word 0 @ui_border_scroll2
@@ -3368,15 +3745,6 @@ ui_y:	.word 0 @_ui_y
 ui_border_request:	.word 0 @_ui_border_request # 4
 ui_border_screen:	.word 0 @_ui_border_screen # 4
 ui_border_buffer:	.word 0 @_ui_border_buffer # 4
-sgb_palette_number: .byte 0 @_sgb_palette_number
-gammavalue:	.byte 0 @_gammavalue
-darkness:	.byte 0 @_darkness
-	.byte 0
-
-@ .section .iwram, "ax", %progbits
-@ .subsection 115
-@ .align
-@ .pool
 
 	.word DISPCNTBUFF		@dispcntbase
 	.word DISPCNTBUFF2		@dispcntbase2
@@ -3388,13 +3756,28 @@ darkness:	.byte 0 @_darkness
 	.byte 0				@consume_buffer
 	.byte 0				@vblank_happened
 
-
 	.word GBOAMBUFF1		@gboambuff
 	.word GBOAMBUFF2		@active_gboambuff
-	.word DIRTY_TILES		@dirty_tiles
-	.word DIRTY_ROWS		@dirty_rows
 
-palettebank:	.word 0				@_palettebank
+palettebank:	.word 1			@_palettebank
+	.word 0 @bg_cache_cursor
+	.word 0 @bg_cache_base
+	.word 0 @bg_cache_limit
+
+	.byte 0 @bg_cache_full
+	.byte 0 @bg_cache_updateok
+g_lcdhack:	.byte 0
+	.byte 0
+
+ .align
+ .pool
+ .section .iwram, "ax", %progbits
+ .subsection 107
+ .align
+ .pool
+	.word FF41_R 	@FF41_R_function
+	.word FF41_R_vblank @FF41_R_vblank_function
+
 
 
 @...update load/savestate if you move things around in here

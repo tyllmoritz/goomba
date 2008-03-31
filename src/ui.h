@@ -8,17 +8,22 @@ extern int selected;//selected menuitem.  used by all menus.
 extern int mainmenuitems;//? or CARTMENUITEMS, depending on whether saving is allowed
 extern u32 oldkey;//init this before using getmenuinput
 
+extern char str[32];
+
+
 u32 getmenuinput(int menuitems);
 void ui(void);
 void subui(int menunr);
 void ui2(void);
 void ui3(void);
+void ui4(void);
 int text(int row,char *str);
 int text2(int row,char *str);
 void strmerge(char *dst,char *src1,char *src2);
 void drawui1(void);
 void drawui2(void);
 void drawui3(void);
+void drawui4(void);
 void drawclock(void);
 void autoAset(void);
 void autoBset(void);
@@ -43,5 +48,11 @@ void sgbpalnum(void);
 void timermode(void);
 void go_multiboot(void);
 void changeautoborder(void);
+void changelcdhack(void);
+
+#if SPEEDHACK2
+void find_best_speedhack(void);
+void autodetect_speedhack(void);
+#endif
 
 #endif
