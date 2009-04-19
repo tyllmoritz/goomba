@@ -12,6 +12,8 @@
 	IMPORT ui	;ui.c
 	IMPORT quickload	;sram.c
 	IMPORT quicksave	;sram.c
+	IMPORT incpalette	;ui.c	// Lord Asaki: palette swap hotkey
+	IMPORT decpalette	;ui.c	// Lord Asaki: palette swap hotkey
 
 	EXPORT emu_reset
 	EXPORT run
@@ -1552,7 +1554,7 @@ waitformulti
 
 	ands r3,r0,#0x300		;if either L or R is pressed (not both)
 	eornes r3,r3,#0x300
-	bicne r0,r0,#0x0c		;	hide sel,start from NES
+	bicne r0,r0,#0x3C		;	hide sel,start,left,right from NES	// Lord Asaki
 	str r0,XGBjoypad
 	beq line0x		;skip ahead if neither or both are pressed
 
@@ -1561,6 +1563,16 @@ waitformulti
 ;	ldrne r2,adjustblend
 ;	addne r2,r2,#1
 ;	strne r2,adjustblend
+
+	tst r0,#0x200		; // Lord Asaki: enjoy the slashes
+	tstne r1,#16		;L+RIGHT for palette increase
+	ldrne r1,=incpalette
+	bxne r1
+
+	tst r0,#0x200		; // Lord Asaki: more slashes
+	tstne r1,#32		;L+LEFT for palette decrease
+	ldrne r1,=decpalette
+	bxne r1
 
 	tst r0,#0x200		;L?
 	tstne r1,#8		;START?

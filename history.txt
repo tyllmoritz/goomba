@@ -1,6 +1,13 @@
 Goomba revision history
 -=-=-=-=-=-=-=-=-=-=-=-
 
+v2.33 - 2009-04-18/2009-04-19 (Kuwanger)
+	Incorporate Asaki's Super Gameboy Palettes and hotkey
+	Add Dwedit's "Pea Soup" palette
+	Expanded names of most palettes similar to Dwedit
+	Added 2.5s flash of current palette name
+	Fix my overlay compression so it shouldn't corrupt
+
 v2.32 - 2006-03-19 (Kuwanger)
 	Fixed a nasty bug involving the improper updating of totalstatesize--
       probably my fault

@@ -5,6 +5,9 @@
 
 #define STATEID 0x57a731d8
 
+#define STATESIZE 0xc24c //from equates.h
+#define STATEPTR ((u8*)(0x2040000-STATESIZE)) // from equates.h
+
 #define STATESAVE 0
 #define SRAMSAVE 1
 #define CONFIGSAVE 2
@@ -43,8 +46,8 @@ extern int roms;		//main.c
 extern int selected;	//ui.c
 extern char pogoshell_romname[32];	//main.c
 //----asm stuff------
-int savestate(void*);		//cart.s
-void loadstate(int,void*);		//cart.s
+int savestate(void);		//cart.s
+void loadstate(int);		//cart.s
 void paletteinit(void);		//lcd.s
 void PaletteTxAll(void);	//lcd.s
 
@@ -68,7 +71,6 @@ typedef struct {		//(modified stateheader)
 //we have a big chunk of memory starting at Image$$RO$$Limit free to use
 u8 *buffer1;
 u8 *buffer2;
-u8 *buffer3;
 
 void bytecopy(u8 *dst,u8 *src,int count) {
 	int i=0;
@@ -138,7 +140,6 @@ int updatestates(int index,int erase,int type) {
 	int total=totalstatesize;
 	u8 *src=buffer1;
 	u8 *dst;
-	u8 *newdst;
 	stateheader *newdata=(stateheader*)buffer2;
 
 	src+=4;//skip STATEID
@@ -355,8 +356,8 @@ void savestatemenu() {
 	int menuitems;
 	int offset=0;
 
-	i=savestate(buffer3);
-	compressstate(i,STATESAVE,buffer3,buffer1);
+	i=savestate();
+	compressstate(i,STATESAVE,STATEPTR,buffer1);
 
 	getsram();
 
@@ -409,8 +410,8 @@ int findstate(u32 checksum,int type,stateheader **stateptr) {
 
 void uncompressstate(int rom,stateheader *sh) {
 	lzo_uint statesize=sh->compressedsize;
-	lzo1x_decompress((u8*)(sh+1),statesize,buffer3,&statesize,NULL);
-	loadstate(rom,buffer3);
+	lzo1x_decompress((u8*)(sh+1),statesize,STATEPTR,&statesize,NULL);
+	loadstate(rom);
 	frametotal=sh->framecount;		//restore global frame counter
 	setup_sram_after_loadstate();		//handle sram packing
 }
@@ -441,8 +442,8 @@ void quicksave() {
 	setdarknessgs(7);	//darken
 	drawtext(32+9,"           Saving.",0);
 
-	i=savestate(buffer3);
-	compressstate(i,STATESAVE,buffer3,buffer1);
+	i=savestate();
+	compressstate(i,STATESAVE,STATEPTR,buffer1);
 	i=findstate(checksum((u8*)romstart),STATESAVE,&sh);
 	if(i<0) i=65536;	//make new save if one doesn't exist
 	if(!updatestates(i,0,STATESAVE))

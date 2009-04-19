@@ -15,7 +15,7 @@ typedef void (*fptr)(void);
 #define MEM_VRAM (u16*)0x6000000
 #define MEM_OAM (u32*)0x7000000
 #define MEM_SRAM (u8*)0xE000000
-#define XGB_SRAM (u8*)0x2038000	//from equates.h
+#define XGB_SRAM (u8*)0x2037e38	//from equates.h
 #define INTR_VECT *(u32*)0x3007FFC
 #define SCREENBASE (u16*)0x6003000
 

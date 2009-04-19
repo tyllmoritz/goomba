@@ -973,6 +973,7 @@ stage1		;other GBA wants to reset
 	ldrb r3,received0	;slaves uses master's timing flags
 	bic r1,r1,#USEPPUHACK+NOCPUHACK
 	orr r1,r1,r3
+	mov r2,#1				;clear gb vram/sram
 sg1	bl loadcart		;game reset
 
 	mov r1,#0

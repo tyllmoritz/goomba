@@ -4,9 +4,11 @@
 #include "minilzo.107/minilzo.h"
 #include "stateheader.h"
 
+#define DONOTCLEARVRAM 0
+#define CLEARVRAM 1
+
 extern u8 *buffer1;	// from sram.c
 extern u8 *buffer2;
-extern u8 *buffer3;
 extern u8 Image$$RO$$Base;
 extern u8 Image$$RW$$Base;
 extern u8 Image$$RO$$Limit;
@@ -28,7 +30,7 @@ extern u32 SerialIn;			//from rumble.c
 extern u32 bcolor;			//from lcd.s ,border color, black, grey, blue
 
 //asm calls
-void loadcart(int,int);			//from cart.s
+void loadcart(int,int,int);			//from cart.s
 void run(int);
 void GFX_init(void);			//lcd.s
 void resetSIO(u32);				//io.s
@@ -70,10 +72,10 @@ char gbaversion;
 
 extern struct stateheader;
 
-/* 50K is an upper bound on the save state size
+/* ~49K is an upper bound on the save state size
  * The formula is an upper bound LZO estimate on worst case compression
  */
-#define STATESIZE (50*1024)
+#define STATESIZE 0xc24c // from equates.h
 #define OVERHEAD ((STATESIZE/64+16+4+sizeof(stateheader)+3)&~3)
 #define WORSTCASE (STATESIZE+OVERHEAD)
 
@@ -94,7 +96,6 @@ void C_entry() {
 	// The maximal space
 	buffer1=(&Image$$RO$$Limit);
 	buffer2=(&Image$$RO$$Limit+0x10000);
-	buffer3=(&Image$$RO$$Limit+0x10000+OVERHEAD);
 
 	add_borders((u8 *)(&standard_borders+1));
 
@@ -116,10 +117,16 @@ void C_entry() {
 				buffer1=(&Image$$RO$$Limit);
 			} else if (borders > baseborders) {
 				buffer2 = buffer1 + 0x10000;
-				buffer3 = buffer1 + 0x10000 + OVERHEAD;
 				bcolor = baseborders;
 				baseborders = borders;
 			}
+		}
+		
+		if(*(u32*)textstart==border_id) {
+			textstart = add_borders(textstart+4);
+			// Set to first custom
+			if (borders > baseborders)
+				bcolor = baseborders;
 		}
 		
 		roms=1;
@@ -235,7 +242,7 @@ void rommenu(void) {
 
 	if(pogoshell)
 	{
-		loadcart(0,g_emuflags&0x300);
+		loadcart(0,g_emuflags&0x300,CLEARVRAM);
 		get_saved_sram();
 	}
 	else
@@ -250,7 +257,7 @@ void rommenu(void) {
 
 		if(romz>1){
 			i=drawmenu(sel);
-			loadcart(sel,i|(g_emuflags&0x300));  //(keep old gfxmode)
+			loadcart(sel,i|(g_emuflags&0x300),CLEARVRAM);  //(keep old gfxmode)
 			get_saved_sram();
 			lastselected=sel;
 			for(i=0;i<8;i++)
@@ -277,7 +284,7 @@ void rommenu(void) {
 			selectedrom=sel%=romz;
 			if(lastselected!=sel) {
 				i=drawmenu(sel);
-				loadcart(sel,i|(g_emuflags&0x300));  //(keep old gfxmode)
+				loadcart(sel,i|(g_emuflags&0x300),CLEARVRAM);  //(keep old gfxmode)
 				get_saved_sram();
 				lastselected=sel;
 			}

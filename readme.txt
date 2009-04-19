@@ -1,4 +1,4 @@
-Goomba v2.32
+Goomba v2.33
 -=-=-=-=-=-=-
 
 It's a Gameboy emulator for the GameBoy Advance. 
@@ -33,6 +33,9 @@ Quick load:  R+START loads the last savestate of the current rom.
 
 Quick save:  R+SELECT saves to the last savestate of the current rom (or makes
 a new one if none exist).
+
+Quick pallete Change: L+LEFT moves left in the palette list
+                      L+RIGHT moves right in the palette list
 
 Sleep:  START+SELECT wakes up from sleep mode (activated from menu or 5/10/30
 minutes of inactivity)

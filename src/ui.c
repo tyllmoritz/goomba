@@ -3,6 +3,9 @@
 
 #include "gba.h"
 
+#define DONOTCLEARVRAM 0
+#define CLEARVRAM 1
+
 //header files?  who needs 'em :P
 
 void cls(int);		//from main.c
@@ -14,7 +17,7 @@ void setbrightnessall(int light);
 extern char *textstart;
 
 int SendMBImageToClient(void);	//mbclient.c
-void loadcart(int,int);			//from cart.s
+void loadcart(int,int,int);			//from cart.s
 
 void palettesave(void); //from sram.c
 void paletteclear(void); //from sram.c
@@ -37,6 +40,7 @@ extern char gbadetect;		//from gb-z80.s
 extern u32 sleeptime;		//from gb-z80.s
 extern u32 FPSValue;		//from lcd.s
 extern char fpsenabled;		//from lcd.s
+extern unsigned char palettenameshow;		//from lcd.s
 extern char gammavalue;		//from lcd.s
 extern u32 palettebank;		//from lcd.s palette bank
 extern u32 bcolor;			//from lcd.s ,border color, black, grey, blue
@@ -398,9 +402,59 @@ char *const memtxt[]={"Normal","Turbo"};
 char *const hostname[]={"Crap","Prot","GBA","GBP","NDS"};
 char *const ctrltxt[]={"1P","2P","Link2P","Link3P","Link4P"};
 char *const bordtxt[]={"Black","Grey","Blue","None"};
-char *const paltxt[17]={"Yellow","Grey","Multi1","Multi2","Zelda","Metroid",
-				"AdvIsland","AdvIsland2","BaloonKid","Batman","BatmanROTJ",
-				"BionicCom","CV Adv","Dr.Mario","Kirby","DK Land","Custom"};
+char *const paltxt[50]={
+				"Pea Soup",
+				"Grayscale",
+				"Multi 1",
+				"Multi 2",
+				"Zelda",
+				"Metroid",
+				"Adventure Island",
+				"Adventure Island 2",
+				"Balloon Kid",
+				"Batman",
+				"Batman - ROTJ",
+				"Bionic Commando",
+				"Castlevania Adv",
+				"Dr. Mario",
+				"Kirby",
+				"Donkey Kong Land",
+				"Yellow",
+				// Lord Asaki: new palettes!
+				"Super Gameboy 1A",
+				"Super Gameboy 1B",
+				"Super Gameboy 1C",
+				"Super Gameboy 1D",
+				"Super Gameboy 1E",
+				"Super Gameboy 1F",
+				"Super Gameboy 1G",
+				"Super Gameboy 1H",
+				"Super Gameboy 2A",
+				"Super Gameboy 2B",
+				"Super Gameboy 2C",
+				"Super Gameboy 2D",
+				"Super Gameboy 2E",
+				"Super Gameboy 2F",
+				"Super Gameboy 2G",
+				"Super Gameboy 2H",
+				"Super Gameboy 3A",
+				"Super Gameboy 3B",
+				"Super Gameboy 3C",
+				"Super Gameboy 3D",
+				"Super Gameboy 3E",
+				"Super Gameboy 3F",
+				"Super Gameboy 3G",
+				"Super Gameboy 3H",
+				"Super Gameboy 4A",
+				"Super Gameboy 4B",
+				"Super Gameboy 4C",
+				"Super Gameboy 4D",
+				"Super Gameboy 4E",
+				"Super Gameboy 4F",
+				"Super Gameboy 4G",
+				"Super Gameboy 4H",
+				//Custom palette
+				"Custom"};
 char *const gbtxt[]={"DMG","MGB","SGB","CGB","AGB","Auto"};
 char *const emuname[]={"         Goomba ","       Pogoomba "};
 void drawui1() {
@@ -409,9 +463,9 @@ void drawui1() {
 
 	cls(1);
 	
-	drawtext(18,"Powered by Sugar",0);
+	drawtext(18,"Powered by Excelsior",0);
 	if(pogoshell) i=1;
-	strmerge(str,emuname[i],"v2.32 on ");
+	strmerge(str,emuname[i],"v2.33 on ");
 	strmerge(str,str,hostname[gbaversion]);
 	drawtext(19,str,0);
 
@@ -711,16 +765,18 @@ void autostateset() {
 
 void incpalette() {
 	palettebank++;
-	palettebank%=17;
+	palettebank%=50;	// Lord Asaki: 49(plus custom) palettes now instead of 16
 	paletteinit();
 	PaletteTxAll();
+	palettenameshow=150;
 }
 
 void decpalette() {
-	palettebank += 16;
-	palettebank%=17;
+	palettebank+=49;	// Lord Asaki: same deal here
+	palettebank%=50;
 	paletteinit();
 	PaletteTxAll();
+	palettenameshow=150;
 }
 
 void decborder() {
@@ -741,7 +797,7 @@ void gbtype() {
 
 void copypalette(void)
 {
-  if (palettebank != 16)
+  if (palettebank != 49)	// Lord Asaki: Hmm...?
   {
      memcpy(&custompal,(&GBPalettes)+palettebank*48,48);
      palettesave();
@@ -824,6 +880,6 @@ void go_multiboot()
 	/*memcpy(&custompal,&((&GBPalettes)[48]),48);
 	paletteinit();
 	PaletteTxAll();*/
-	loadcart(selectedrom,g_emuflags&0x300);
+	loadcart(selectedrom,g_emuflags&0x300,CLEARVRAM);
 }
 

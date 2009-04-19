@@ -96,10 +96,11 @@ mbcflagstbl
 	DCB MBC_RAM|MBC_SAV
 	DCB 0
 ;----------------------------------------------------------------------------
-loadcart ;called from C:  r0=rom number, r1=emuflags
+loadcart ;called from C:  r0=rom number, r1=emuflags, r2=clearvram
 ;----------------------------------------------------------------------------
 	stmfd sp!,{r0-r1,r4-r11,lr}
 
+	mov r4,r2
 	ldr r1,=findrom
 	bl thumbcall_r1
 
@@ -110,10 +111,15 @@ loadcart ;called from C:  r0=rom number, r1=emuflags
 	str r3,rombase		;set rom base
 				;r3=rombase til end of loadcart so DON'T FUCK IT UP
 
+	;clear vram/sram?
+	tst r4,#0xff
+	beq lc2
+
 	mov r0,#0
 	ldr r1,=XGB_VRAM
 	mov r2,#0xA000/4
 	bl filler_		;clear GB SRAM+VRAM
+lc2
 
 	ldr r1,=AGB_VRAM+0x4000	;clear AGB Tiles
 	mov r2,#0x8000/4
@@ -244,7 +250,7 @@ biosloop
 	bx lr
 ;----------------------------------------------------------------------------
 savestate	;called from ui.c.
-;int savestate(void *here): copy state to <here>, return size
+;int savestate(void): return size
 ;----------------------------------------------------------------------------
 	stmfd sp!,{r4-r6,globalptr,lr}
 
@@ -254,7 +260,7 @@ savestate	;called from ui.c.
 	rsb r2,r2,#0			;adjust rom maps,etc so they aren't based on rombase
 	bl fixromptrs			;(so savestates are valid after moving roms around)
 
-	mov r6,r0			;r6=where to copy state
+	ldr r6,=STATEPTR			;r6=where to copy state (part 1)
 	mov r0,#0			;r0 holds total size (return value)
 
 	adr r4,savelst			;r4=list of stuff to copy
@@ -269,16 +275,41 @@ ss0	ldr r5,[r2],#4
 	subs r3,r3,#1
 	bne ss1
 
+	ldr r6,=STATEPTR2			;r6=where to copy state (part 2)
+
+	adr r4,savelst2			;r4=list of stuff to copy
+	mov r3,#(lstend2-savelst2)/8	;r3=items in list
+ss12	ldr r2,[r4],#4				;r2=what to copy
+	ldr r1,[r4],#4				;r1=how much to copy
+	add r0,r0,r1
+ss02	ldr r5,[r2],#4
+	str r5,[r6],#4
+	subs r1,r1,#4
+	bne ss02
+	subs r3,r3,#1
+	bne ss12
+
 	ldr r2,rombase
 	bl fixromptrs
+
+	ldr r1,=0xa000
+	add r0,r0,r1
 
 	ldmfd sp!,{r4-r6,globalptr,lr}
 	bx lr
 
-savelst	DCD rominfo,4,XGB_RAM,0x2080,XGB_VRAM,0x2000,XGB_SRAM,0x8000,GBOAM_BUFFER,0xA0,agb_pal,96
+savelst
+	DCD rominfo,4,XGB_RAM,0x2080
+lstend
+
+;already there
+;DCD XGB_VRAM,0x2000,XGB_SRAM,0x8000
+
+savelst2
+	DCD GBOAM_BUFFER,0xA0,agb_pal,96
 	DCD vram_map,64,agb_nt_map,16,mapperstate,32,rommap,16,cpustate,52,lcdstate,16
 	DCD soundstate,4
-lstend
+lstend2
 
 fixromptrs	;add r2 to some things
 	adr r1,memmap_tbl
@@ -300,18 +331,19 @@ fixromptrs	;add r2 to some things
 	mov pc,lr
 ;----------------------------------------------------------------------------
 loadstate	;called from ui.c
-;void loadstate(int rom#,u32 *stateptr)	 (stateptr must be word aligned)
+;void loadstate(int rom#)	 (stateptr must be word aligned)
 ;----------------------------------------------------------------------------
 	stmfd sp!,{r4-r7,globalptr,gb_zpage,lr}
 
-	mov r6,r1		;r6=where state is at
+	ldr r6,=STATEPTR		;r6=where state is at
 	ldr globalptr,=|wram_globals0$$Base|
 	ldr gb_zpage,=XGB_RAM
 
-	ldr r1,[r6]             ;emuflags
+	ldr r1,[r6]		;emuflags
+	mov r2,#0			;don't clear gb vram/sram
 	bl loadcart		;cart init
 
-	mov r0,#(lstend-savelst)/8	;read entire state
+	mov r0,#(lstend-savelst)/8	;read entire state (part 1)
 	adr r4,savelst
 ls1	ldr r2,[r4],#4
 	ldr r1,[r4],#4
@@ -321,6 +353,19 @@ ls0	ldr r5,[r6],#4
 	bne ls0
 	subs r0,r0,#1
 	bne ls1
+
+	ldr r6,=STATEPTR2			;r6=where to copy state (part 2)
+
+	mov r0,#(lstend2-savelst2)/8	;read entire state (part 2)
+	adr r4,savelst2
+ls12	ldr r2,[r4],#4
+	ldr r1,[r4],#4
+ls02	ldr r5,[r6],#4
+	str r5,[r2],#4
+	subs r1,r1,#4
+	bne ls02
+	subs r0,r0,#1
+	bne ls12
 
 	ldr r2,rombase		;adjust ptr shit (see savestate above)
 	bl fixromptrs

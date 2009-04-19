@@ -15,9 +15,11 @@ GBOAM_BUFFER	EQU OAM_BUFFER2+0x140	;must be on a 0x00 boundary.
 ;?				EQU GBOAM_BUFFER+0xA0
 
 				;This area can probably be overwritten when making a savestate.
-XGB_SRAM		EQU 0x2040000-0x8000	;IMPORTANT!! XGB_SRAM in GBA.H points here.  keep it current if you fuck with this
+STATEPTR2	EQU 0x2040000-0x1c8
+XGB_SRAM		EQU STATEPTR2-0x8000	;IMPORTANT!! XGB_SRAM in GBA.H points here.  keep it current if you fuck with this
 XGB_VRAM		EQU XGB_SRAM-0x2000
-MAPPED_RGB		EQU XGB_VRAM-16*4	;mapped GB palette.
+STATEPTR		EQU XGB_VRAM-0x2084
+MAPPED_RGB		EQU STATEPTR-16*4	;mapped GB palette.
 DISPCNTBUFF		EQU MAPPED_RGB-164*2
 DMA1BUFF		EQU DISPCNTBUFF-164*2
 BG0CNTBUFF		EQU DMA1BUFF-164*4
