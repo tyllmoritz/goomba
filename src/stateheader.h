@@ -1,5 +1,6 @@
 
 #define BORDERTAG 0x789b4987
+#define PALETTETAG 0x987b4789
 
 typedef struct {
 	u16 size;	//header+data

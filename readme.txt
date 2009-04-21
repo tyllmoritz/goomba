@@ -37,8 +37,25 @@ a new one if none exist).
 Quick pallete Change: L+LEFT moves left in the palette list
                       L+RIGHT moves right in the palette list
 
+Quick border Change: L+UP moves up in the palette list
+                     L+DOWN moves down in the palette list
+
 Sleep:  START+SELECT wakes up from sleep mode (activated from menu or 5/10/30
 minutes of inactivity)
+
+Appendable Palette
+-=-=-=-=-=-=-=-=-=-
+
+Create a text file containing four lines.  Each lines should contain 12 comma
+seperated values.  Each group of three values, left to right, represents an
+RGB value.  Lines top to bottom are for the background, window, object 1, and
+object 2.  Semicolons are for comments and blank lines are allowed.  Use
+txt2pal.py to convert a text file into a palette file.  Palette titles and
+palette filenames are derived from the text file's name.  Displayed titles
+will be only 20 characters long, so name your text file accordingly.  One can
+add one or more palettes to goomba.gba as follows:
+
+copy /b goomba.gba+new_palette.pal goomba_new.gba
 
 Custom Palette
 -=-=-=-=-=-=-=-
@@ -46,11 +63,10 @@ Custom Palette
 Copying [from the current palette, only if the current palette isn't the
 custom palette,] to or modifying an element of the custom palette will store
 it to your flashcard's SRAM (if you're using one).  Clearing the custom
-palette will restore the grey palette and remove the game's custom palette
-from the flashcard's SRAM (if you're using a flash card and if the game
-actually has a custom palette saved).  Each palette entry is in #RRGGBB form,
-just like in html.  Editing occurs on each color channel separately (ie, RR,
-GG, and BB).
+palette will blank the palette and remove the game's custom palette from the
+flashcard's SRAM (if you're using a flash card and if the game actually has
+a custom palette saved).  Each palette entry is in #RRGGBB form, just like in
+html.  Editing occurs on each color channel separately (ie, RR, GG, and BB).
 
 Other Stuff
 -=-=-=-=-=-=-

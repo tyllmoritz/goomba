@@ -1,6 +1,12 @@
 Goomba revision history
 -=-=-=-=-=-=-=-=-=-=-=-
 
+v2.34 - 2009-04-20/2009-04-21 (Kuwanger)
+	Add hotkey to switch border
+	Instant palette switching in menu
+	Appendable palettes
+	Fixed a small double counting of borders/palettes bug under Pogoshell
+
 v2.33 - 2009-04-18/2009-04-19 (Kuwanger)
 	Incorporate Asaki's Super Gameboy Palettes and hotkey
 	Add Dwedit's "Pea Soup" palette

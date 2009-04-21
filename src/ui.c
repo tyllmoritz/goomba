@@ -30,6 +30,7 @@ int gettime(void);			//io.s
 void debug_(int,int);		//lcd.s
 void paletteinit(void);		//lcd.s
 void palettepreview(void);	//lcd.s
+void palettereload(void);	//lcd.s
 void PaletteTxAll(void);	//lcd.s
 void makeborder(void);		//lcd.s
 //-------------------
@@ -40,12 +41,12 @@ extern char gbadetect;		//from gb-z80.s
 extern u32 sleeptime;		//from gb-z80.s
 extern u32 FPSValue;		//from lcd.s
 extern char fpsenabled;		//from lcd.s
-extern unsigned char palettenameshow;		//from lcd.s
+extern unsigned char messageshow;		//from lcd.s
+extern char messagetxt;		//from lcd.s
 extern char gammavalue;		//from lcd.s
 extern u32 palettebank;		//from lcd.s palette bank
 extern u32 bcolor;			//from lcd.s ,border color, black, grey, blue
 // custom palette components
-extern u8 GBPalettes; 
 extern u8 custompal; 
 
 extern u8 Image$$RO$$Limit;
@@ -58,9 +59,12 @@ extern char rtc;
 extern char pogoshell;
 extern char gameboyplayer;
 extern char gbaversion;
+extern u32 palettes;
 extern u32 borders;
 extern u32 bborders;
 extern char *border_titles[388];
+extern char *paltxt[388];
+extern u8 *gbpalettes[388];
 
 u8 autoA,autoB;				//0=off, 1=on, 2=R
 u8 stime=0;
@@ -98,7 +102,7 @@ void autostateset(void);
 void incpalette(void);
 void decpalette(void);
 void decborder(void);
-void border(void);
+void incborder(void);
 void gbtype(void);
 void detect(void);
 void copypalette(void);
@@ -120,7 +124,7 @@ const char MENUXITEMS[]={CARTMENUITEMS,MULTIBOOTMENUITEMS,MENU2ITEMS,MENU3ITEMS}
 const fptr multifnlist[]={autoBset,autoAset,controller,ui3,ui2,multiboot,sleep,restart,exit};
 const fptr fnlist1[]={autoBset,autoAset,controller,ui3,ui2,multiboot,savestatemenu,loadstatemenu,managesram,sleep,go_multiboot,restart,exit};
 const fptr fnlist2[]={vblset,fpsset,sleepset,ewramset,swapAB,autostateset,detect,gbtype};
-const fptr fnlist3[]={incpalette,copypalette,ui4,brightset,border};
+const fptr fnlist3[]={incpalette,copypalette,ui4,brightset,incborder};
 
 const fptr* fnlistX[]={fnlist1,multifnlist,fnlist2,fnlist3};
 const fptr drawuiX[]={drawui1,drawui1,drawui2,drawui3};
@@ -271,10 +275,10 @@ void ui4() {
 				inputhex(selected,20,(&custompal)+selected*3+2,2);
 			}
 			modified = 1;
-			if (palettebank == 16)
-			{
+			if (gbpalettes[palettebank] == &custompal) {
 				paletteinit();
 				PaletteTxAll();
+				palettereload();
 			}
 			selected=oldsel;
 		}
@@ -401,8 +405,8 @@ char *const brightxt[]={"I","II","III","IIII","IIIII"};
 char *const memtxt[]={"Normal","Turbo"};
 char *const hostname[]={"Crap","Prot","GBA","GBP","NDS"};
 char *const ctrltxt[]={"1P","2P","Link2P","Link3P","Link4P"};
-char *const bordtxt[]={"Black","Grey","Blue","None"};
-char *const paltxt[50]={
+/*char *const bordtxt[]={"Black","Grey","Blue","None"};*/
+/*char *const paltxt[50]={
 				"Pea Soup",
 				"Grayscale",
 				"Multi 1",
@@ -455,6 +459,7 @@ char *const paltxt[50]={
 				"Super Gameboy 4H",
 				//Custom palette
 				"Custom"};
+*/
 char *const gbtxt[]={"DMG","MGB","SGB","CGB","AGB","Auto"};
 char *const emuname[]={"         Goomba ","       Pogoomba "};
 void drawui1() {
@@ -465,7 +470,7 @@ void drawui1() {
 	
 	drawtext(18,"Powered by Excelsior",0);
 	if(pogoshell) i=1;
-	strmerge(str,emuname[i],"v2.33 on ");
+	strmerge(str,emuname[i],"v2.34 on ");
 	strmerge(str,str,hostname[gbaversion]);
 	drawtext(19,str,0);
 
@@ -672,6 +677,7 @@ void brightset() {
 	if (gammavalue>4) gammavalue=0;
 	paletteinit();
 	PaletteTxAll();					//make new palette visible
+	palettereload();
 }
 
 void multiboot() {
@@ -765,28 +771,36 @@ void autostateset() {
 
 void incpalette() {
 	palettebank++;
-	palettebank%=50;	// Lord Asaki: 49(plus custom) palettes now instead of 16
+	palettebank%=palettes;
 	paletteinit();
 	PaletteTxAll();
-	palettenameshow=150;
+	palettereload();
+	strmerge(&messagetxt, "Palette: ", paltxt[palettebank]);
+	messageshow=150;
 }
 
 void decpalette() {
-	palettebank+=49;	// Lord Asaki: same deal here
-	palettebank%=50;
+	palettebank+=(palettes-1);
+	palettebank%=palettes;
 	paletteinit();
 	PaletteTxAll();
-	palettenameshow=150;
+	palettereload();
+	strmerge(&messagetxt, "Palette: ", paltxt[palettebank]);
+	messageshow=150;
 }
 
 void decborder() {
 	bcolor = (bcolor+borders-1)%(borders);
 	makeborder();
+	strmerge(&messagetxt,"Border: ",border_titles[bcolor]);
+	messageshow=150;
 }
 
-void border() {
+void incborder() {
 	bcolor = (bcolor+1)%(borders);
 	makeborder();
+	strmerge(&messagetxt,"Border: ",border_titles[bcolor]);
+	messageshow=150;
 }
 
 void detect(void) {
@@ -797,9 +811,9 @@ void gbtype() {
 
 void copypalette(void)
 {
-  if (palettebank != 49)	// Lord Asaki: Hmm...?
+  if (gbpalettes[palettebank] != &custompal)
   {
-     memcpy(&custompal,(&GBPalettes)+palettebank*48,48);
+     memcpy(&custompal,gbpalettes[palettebank],48);
      palettesave();
   }
 }
@@ -876,10 +890,6 @@ void go_multiboot()
 		bcolor = 0;
 		//makeborder(); // loadcart calls GFX_reset which reloads the border
 	}
-	// Blanking the custom palette seems silly
-	/*memcpy(&custompal,&((&GBPalettes)[48]),48);
-	paletteinit();
-	PaletteTxAll();*/
 	loadcart(selectedrom,g_emuflags&0x300,CLEARVRAM);
 }
 

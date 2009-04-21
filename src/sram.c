@@ -18,15 +18,17 @@ extern u8 Image$$RO$$Limit;
 extern u8 g_cartflags;	//(from GB header)
 extern int bcolor;		//Border Color
 extern int palettebank;	//Palette for DMG games
+extern u8 *gbpalettes[388];
 extern u8 gammavalue;	//from lcd.s
 extern u8 custompal;	//from lcd.s
-extern u8 GBPalettes;	//from lcd.s 
 extern u8 gbadetect;	//from gb-z80.s
 extern u8 stime;		//from ui.c
 extern u8 autostate;	//from ui.c
 extern u8 *textstart;	//from main.c
 
 extern char pogoshell;	//main.c
+extern u32 borders;
+extern u32 palettes;
 
 int totalstatesize;		//how much SRAM is used
 
@@ -456,7 +458,7 @@ void paletteload() {
 	int i;
 
 	if(!using_flashcart()) {
-		memcpy(&custompal,&((&GBPalettes)[48]),48);
+		memcpy(&custompal,gbpalettes[1],48);
 		paletteinit();
 		PaletteTxAll();
 		return;
@@ -466,8 +468,8 @@ void paletteload() {
 	if (i>=0) {
 		memcpy(&custompal,(u8*)(sh+1),48);
 	} else {
-		//Clean palette.
-		memcpy(&custompal,&((&GBPalettes)[48]),48);
+		//Clean grey palette.
+		memcpy(&custompal,gbpalettes[1],48);
 	}
 	paletteinit();
 	PaletteTxAll();
@@ -501,7 +503,7 @@ void paletteclear() {
 	i=findstate(checksum((u8*)romstart),PALETTE,&sh);
 	if (i>=0)
 		updatestates(i,1,PALETTE);
-	memcpy(&custompal,&((&GBPalettes)[48]),48);
+	memset(&custompal,0,48);
 }
 
 void backup_gb_sram() {
@@ -674,7 +676,11 @@ void readconfig() {
 	i=findstate(0,CONFIGSAVE,(stateheader**)&cfg);
 	if(i>=0) {
 		bcolor=cfg->bordercolor;
+		if (bcolor > borders)
+			bcolor = 0;
 		palettebank=cfg->palettebank;
+		if (palettebank > palettes)
+			palettebank = 0;
 		i = cfg->misc;
 		stime = i & 0x3;						//restore current autosleep time
 		gbadetect = (i & 0x08)>>3;				//restore current gbadetect setting
