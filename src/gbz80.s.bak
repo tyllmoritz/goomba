@@ -1760,11 +1760,19 @@ line144 ;------------------------
 	orr r0,r0,#0x01
 	strb r0,[r1]		;vbl flag
 	strb r0,[r1,#-12] ;FIXME
-
-
-	ldrb r0,gb_if
-	orr r0,r0,#0x01		;1=VBL
-	strb r0,gb_if
+	
+	tst r0,#0x10
+	ldrb r0,gb_interrupt_lines
+	orr r1,r0,#1		;1=VBL
+	;check for VBLANK lcd stat interrupt
+	orrne r1,r1,#2		;2=LCDSTAT if vblank LCDSTAT irq is requested
+	strb r1,gb_interrupt_lines
+	eor r0,r0,r1
+	and r0,r0,r1
+	
+	ldrb r1,gb_if
+	orr r1,r1,r0
+	strb r1,gb_if
 novbirq
 	mov r0,#24*CYCLE
 	add cycles,cycles,r0
@@ -1792,7 +1800,13 @@ line145_to_end ;------------------------
 	strb r1,scanline
 	cmp r1,#153				;last scanline
 	ldrmi pc,scanlinehook
-
+	
+	sub cycles,cycles,r0
+	ldrb r0,doublespeed
+	tst r0,#0x80
+	addeq cycles,cycles,#4*CYCLE
+	addne cycles,cycles,#8*CYCLE
+	
 	adr addy,line0
 	str addy,nexttimeout
 	ldr r0,frame
@@ -1827,8 +1841,7 @@ no_more_irq_hack
 
 
 ;----------------------------------------------------------
-default_scanlinehook
-checkScanlineIRQ
+
 default_scanlinehook_nohblank
 	;do LCDYC test
 	ldrb r1,scanline
@@ -1845,6 +1858,46 @@ default_scanlinehook_nohblank
 	;screen turned on?  (not sure if this is correct)
 	ldrb r1,lcdctrl
 	tst r1,#0x80
+	beq noTimer
+	
+	tst r2,#4
+	beq noTimer
+	tst r2,#0x40		;LCD stat LYC IRQ.
+	beq noTimer
+
+	ldrb r0,gb_if
+	orr r0,r0,#0x02		;2=LCD STAT
+	strb r0,gb_if
+
+	b noTimer
+
+
+default_scanlinehook
+checkScanlineIRQ
+	;do LCDYC test
+	ldrb r1,scanline
+	ldrb r0,lcdyc
+	cmp r0,r1
+	adrl r1,lcdstat
+	ldrb r0,[r1]
+	orreq r2,r0,#4
+	bicne r2,r0,#4
+	eors r0,r2,r0
+	and r0,r0,r2
+	
+	strneb r2,[r1]
+	strneb r2,[r1,#-12] ;FIXME
+	
+	tst r2,#0x40
+	tstne r0,#4
+	bne ScanlineIRQ
+;	ldrneb r1,gb_if
+;	orrne r1,r1,#2
+;	strneb r1,gb_if
+	
+	;screen turned on?  (not sure if this is correct)
+	ldrb r0,lcdctrl
+	tst r0,#0x80
 	beq noScanlineIRQ
 	
 ;	ldrb r2,lcdstat
@@ -1861,10 +1914,11 @@ default_scanlinehook_nohblank
 ;	ldrb r1,scanline
 ;	ldrb r0,lcdyc
 ;	cmp r0,r1
-	tst r2,#4
-	beq noScanlineIRQ
-	tst r2,#0x40		;LCD stat LYC IRQ.
-	beq noScanlineIRQ
+;	tst r2,#4
+;	beq noScanlineIRQ
+;	tst r2,#0x40		;LCD stat LYC IRQ.
+;	beq noScanlineIRQ
+	b noScanlineIRQ
 ScanlineIRQ
 	ldrb r0,gb_if
 	orr r0,r0,#0x02		;2=LCD STAT
@@ -2538,6 +2592,8 @@ updatespeed
 	str r0,cyclesperscanline
 	mov r0,#DOUBLE_SPEED_SCANLINE_OAM_POSITION
 	str r0,scanline_oam_position
+	ldr r1,=scanline_oam_position2
+	str r0,[r1]
 	ldr r0,FF41_modifydata+8
 	str r0,[r12]
 	ldr r0,FF41_modifydata+12
@@ -2768,7 +2824,7 @@ cpustate
 	DCB 0 ;gb_ime:	(interrupt master enable)
 	DCB 0 ;gb_ie:	(interrupt enable, adr $FFFF)
 	DCB 0 ;gb_if:	(interrupt flags, adr $FF0F)
-	DCB 0 ;_
+	DCB 0 ;gb_interrupt_lines (used to trigger IRQs only on setting high)
 
 	DCB 0 ;rambank
 gbc_mode

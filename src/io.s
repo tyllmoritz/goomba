@@ -86,7 +86,18 @@ jump_r0
 	
 
 ;----------------------------------------------------------------------------
+	[ VISOLY
 	INCLUDE visoly.s
+	|
+	EXPORT doReset
+	EXPORT doReset2
+doReset
+	mov pc,#0x08000000
+doReset2
+	ldr pc,=0x08260000+8
+
+
+	]
 ;----------------------------------------------------------------------------
 suspend	;called from ui.c and 6502.s
 ;----------------------------------------------------------------------------
@@ -664,11 +675,15 @@ select_gbc_ram
 add_exram_
 	stmfd sp!,{r0-addy,lr}
 	ldr r1,=add_exram
-	bl thumbcall_r1
+	mov lr,pc
+	bx r1
+;	bl thumbcall_r1
 	ldmfd sp!,{r0-addy,lr}
 	ldr r1,lastbank
 	sub gb_pc,gb_pc,r1
+	stmfd sp!,{r0}
 	encodePC
+	ldmfd sp!,{r0}
 	b select_gbc_ram
  ]
 

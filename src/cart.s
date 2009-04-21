@@ -38,14 +38,17 @@
 	EXPORT g_cartflags
 	EXPORT g_banks
 	EXPORT MULTIBOOT_LIMIT
+	EXPORT END_OF_EXRAM
 	
 	EXPORT INSTANT_PAGES
+	[ MOVIEPLAYER
 	EXPORT SramName
 	EXPORT fatBuffer
 	EXPORT fatWriteBuffer
 	EXPORT globalBuffer
 	EXPORT openFiles
 	EXPORT lfnName
+	]
 	
 ;----------------------------------------------------------------------------
  AREA rom_code, CODE, READONLY
@@ -262,7 +265,31 @@ loadcart ;called from C:  r0=rom number, r1=emuflags
 	ldr r1,xgb_vramsize
 	sub r0,r0,r1
 	str r0,xgb_vram
+
+	add r2,r0,#0x1800
+	str r2,xgb_vram_1800
+	add r2,r0,#0x1C00
+	str r2,xgb_vram_1C00
+	
+	ldrb r2,sgbmode
+	movs r2,r2
+	moveq r2,#0
+	movne r2,r0
+
+	;if SGB mode, these grow down
+	;otherwise, set 0 for these
+	subne r2,r2,#4096
+	str r2,sgb_pals
+	subne r2,r2,#4096
+	str r2,sgb_atfs
+	subne r2,r2,#112
+	str r2,sgb_packet
+	subne r2,r2,#360
+	str r2,sgb_attributes
+	movne r0,r2
+
 	str r0,end_of_exram
+		
 	mov r0,#0
 	str r0,gbc_exram
 	str r0,gbc_exramsize

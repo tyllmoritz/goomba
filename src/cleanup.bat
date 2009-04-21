@@ -15,3 +15,4 @@ del speedhack.s
 del gbabin\*.o
 del gbabin_save32\*.o
 del gbabin_multiboot\*.o
+del gbabin_gbamp\*.o

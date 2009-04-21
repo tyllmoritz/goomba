@@ -273,9 +273,7 @@ void ui2()
 }
 void ui3()
 {
-	setdarkness(0);
 	subui(3);
-	setdarkness(8);
 }
 void ui4()
 {
@@ -308,9 +306,58 @@ char *const brightxt[]={"I","II","III","IIII","IIIII"};
 char *const hostname[]={"Crap","Prot","GBA","GBP","NDS"};
 char *const ctrltxt[]={"1P","2P","Link2P","Link3P","Link4P"};
 char *const bordtxt[]={"Black","Grey","Blue","None"};
-char *const paltxt[16]={"Yellow","Grey","Multi1","Multi2","Zelda","Metroid",
-				"AdvIsland","AdvIsland2","BaloonKid","Batman","BatmanROTJ",
-				"BionicCom","CV Adv","Dr.Mario","Kirby","DK Land"};
+char *const paltxt[]=
+{
+"Pea Soup",
+"Grayscale",
+"Multi 1",
+"Multi 2",
+"Zelda.",
+"Metroid",
+"Adventure Island",
+"Adventure Island 2",
+"Balloon Kid",
+"Batman",
+"Batman - Return of the Joker",
+"Bionic Commando",
+"Castlevania Adventure",
+"Dr. Mario",
+"Kirby",
+"Donkey Kong Land",
+"Yellow",
+"SGB 1A",
+"SGB 1B",
+"SGB 1C",
+"SGB 1D",
+"SGB 1E",
+"SGB 1F",
+"SGB 1G",
+"SGB 1H",
+"SGB 2A",
+"SGB 2B",
+"SGB 2C",
+"SGB 2D",
+"SGB 2E",
+"SGB 2F",
+"SGB 2G",
+"SGB 2H",
+"SGB 3A",
+"SGB 3B",
+"SGB 3C",
+"SGB 3D",
+"SGB 3E",
+"SGB 3F",
+"SGB 3G",
+"SGB 3H",
+"SGB 4A",
+"SGB 4B",
+"SGB 4C",
+"SGB 4D",
+"SGB 4E",
+"SGB 4F",
+"SGB 4G",
+"SGB 4H"	
+};
 char *const gbtxt[]={"GB","Prefer SGB over GBC","Prefer GBC over SGB","GBC+SGB"};
 char *const clocktxt[]={"Full","Half speed"};
 char *const lcdhacktxt[]={"OFF","Low","Medium","High"};
@@ -404,10 +451,11 @@ void drawui4()
 
 void drawclock()
 {
+#if RTCSUPPORT
     char *s=str+20;
     int timer,mod;
 
-    if(rtc)
+	if(rtc)
     {
 	strcpy(str,"                    00:00:00");
 	timer=gettime();
@@ -428,6 +476,7 @@ void drawclock()
 
 	drawtext(0,str,0);
     }
+#endif
 }
 
 void autoAset()
@@ -510,6 +559,11 @@ void multiboot()
 
 void restart()
 {
+#if MOVIEPLAYER
+	restart_rommenu();
+	return;
+#endif
+
 #if CARTSRAM
 	writeconfig();					//save any changes
 #endif
@@ -591,13 +645,54 @@ void autostateset()
 	autostate = (autostate^1)&1;
 }
 
-void chpalette()
+void draw_palette_list()
 {
-	palettebank++;
-	palettebank&=15;
+	int scroll_top,scroll_bottom,row,item,num_pals;
+	
+	
+	palettebank=selected;
 	paletteinit();
 	PaletteTxAll();
 	transfer_palette();
+	
+	cls(2);
+	
+	num_pals=ARRSIZE(paltxt);
+
+	scroll_top=selected-10;
+	scroll_bottom=num_pals-20;
+	if (scroll_top<0) scroll_top=0;
+	if (scroll_top > scroll_bottom) scroll_top=scroll_bottom;
+	
+	for (item=scroll_top; item<scroll_top+20; item++)
+	{
+		row=item-scroll_top;
+		drawtext(32+row,paltxt[item],selected==item);
+	}
+}
+
+
+void chpalette()
+{
+	int key,oldsel;
+
+	setdarkness(0);
+
+	selected=palettebank;
+	draw_palette_list();
+	oldkey=~REG_P1;			//reset key input
+	do {
+		key=getmenuinput(ARRSIZE(paltxt));
+		if(key&(UP+DOWN+LEFT+RIGHT)) {
+			draw_palette_list();
+		}
+	} while(!(key&(A_BTN+B_BTN+R_BTN+L_BTN)));
+	while(key&(B_BTN+L_BTN+R_BTN)) {
+		waitframe();		//(polling REG_P1 too fast seems to cause problems)
+		key=~REG_P1;
+	}
+
+	setdarkness(8);
 }
 
 /*void border() {
