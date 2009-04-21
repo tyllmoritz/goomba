@@ -9,7 +9,7 @@
 #if MOVIEPLAYER
 int usinggbamp;
 int usingcache;
-File rom_file=NO_FILE;
+//File rom_file=NO_FILE;
 char save_slot;
 #endif
 
@@ -23,7 +23,9 @@ int selectedrom=0;
 char pogoshell_romname[32];	//keep track of rom name (for state saving, etc)
 char pogoshell=0;
 #endif
+#if RTCSUPPORT
 char rtc=0;
+#endif
 char gameboyplayer=0;
 char gbaversion;
 u32 max_multiboot_size;		//largest possible multiboot transfer (init'd by boot.s)
@@ -156,10 +158,25 @@ int enable_ram()
 void C_entry()
 {
 	int i,j;
+#if RTCSUPPORT
 	vu16 *timeregs=(u16*)0x080000c8;
+#endif
 #if POGOSHELL
 	u32 temp=(u32)(*(u8**)0x0203FBFC);
 	pogoshell=((temp & 0xFE000000) == 0x08000000)?1:0;
+
+	if(pogoshell)
+	{
+		char *d=(char*)0x203fc08;
+		do d++; while(*d);
+		do d++; while(*d);
+		do d--; while(*d!='/');
+		d++;			//d=GB rom name
+
+		roms=1;
+		textstart=(*(u8**)0x0203FBFC);
+		memcpy(pogoshell_romname,d,32);
+	}
 #endif
 
 #if !GCC
@@ -170,17 +187,17 @@ void C_entry()
 	}
 #endif
 
-
-
 #if LITTLESOUNDDJ
 	enable_ram();
 #endif
 
-
+#if RTCSUPPORT
 	*timeregs=1;
 	if(*timeregs & 1) rtc=1;
+#endif
 	gbaversion=CheckGBAVersion();
 	vblankfptr=&vbldummy;
+	
 	GFX_init_irq();
 //	vcountfptr=&vbldummy;
 #if RUMBLE
@@ -197,18 +214,7 @@ void C_entry()
 #endif
 
 #if POGOSHELL
-	if(pogoshell){
-		char *d=(char*)0x203fc08;
-		do d++; while(*d);
-		do d++; while(*d);
-		do d--; while(*d!='/');
-		d++;			//d=GB rom name
-
-		roms=1;
-		textstart=(*(u8**)0x0203FBFC);
-		memcpy(pogoshell_romname,d,32);
-	}
-	else
+	if(!pogoshell)
 #endif
 	{
 		int gbx_id=0x6666edce;
@@ -349,6 +355,9 @@ int get_saved_sram_CF(char* sramname)
 		file=FAT_fopen(sramname,"r");
 		if (file!=NO_FILE)
 		{
+#if !RESIZABLE
+#define XGB_sram XGB_SRAM
+#endif
 			FAT_fread(XGB_sram,1,g_rammask+1,file);
 			FAT_fclose(file);
 			return 1;
@@ -495,18 +504,30 @@ void rommenu(void)
 #if CARTSRAM
 	if(autostate)quickload();
 #endif
+	setdarkness(0);
 	make_ui_invisible();
 	run(1);
 }
+
+#if MOVIEPLAYER
+u8 *findrom(int n)
+{
+	return cache_location[0];
+}
+
+u8 *findrom2(int n)
+{
+	return cache_location[0];
+}
+#else
 
 u8 *findrom2(int n)
 {
 	u8 *p=textstart;
 #if POGOSHELL
-	while(!pogoshell && n--)
-#else
-	while(n--)
+	if (pogoshell) return p;
 #endif
+	while(n--)
 	{
 #if USETRIM
 		if (*((u32*)p)==TRIM) //trimmed
@@ -534,6 +555,7 @@ u8 *findrom(int n)
 #endif
 	return p;
 }
+#endif
 
 char *getcartname(u8 *rom_base)
 {
@@ -716,8 +738,8 @@ void make_ui_invisible()
 	ui_border_visible&=~1;
 //	REG_WININ=0x353A;  //settings back to normal
 //	REG_WINOUT=0x3F20; 
-#if MOVIEPLAYER
-	reload_vram_page1();
-#endif
+//#if MOVIEPLAYER
+//	reload_vram_page1();
+//#endif
 	move_ui();
 }

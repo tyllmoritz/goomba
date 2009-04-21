@@ -5,9 +5,14 @@
 //#include "cache.h"
 
 #if ROMVERSION
-extern u8 goomba_mb_gba[];
-extern u32 goomba_mb_gba_size[];
-#define GOOMBA_MB_GBA_SIZE ((u32)(&goomba_mb_gba_size))
+	extern u8 goomba_mb_gba[];
+	#if !GCC
+		extern u32 goomba_mb_gba_size[];
+		#define GOOMBA_MB_GBA_SIZE ((u32)(&goomba_mb_gba_size))
+	#else
+		extern u32 goomba_mb_gba_size;
+		#define GOOMBA_MB_GBA_SIZE goomba_mb_gba_size
+	#endif
 #endif
 
 void jump_r0(u32);
@@ -78,13 +83,16 @@ extern u8 dontstop;
 
 extern u8 XGB_RAM[0x2000];
 extern u8 XGB_HRAM[128];
+#if !RESIZABLE
 extern u8 XGB_SRAM[0x8000];
+#endif
 extern u8 XGB_VRAM[0x4000];
 extern u8 GBC_EXRAM[0x6000];
 
 #if RESIZABLE
 extern u8 *XGB_sram, *XGB_vram, *GBC_exram, *END_of_exram;
 extern u32 XGB_sramsize,XGB_vramsize,GBC_exramsize;
+extern u8 *XGB_vram_1800, *XGB_vram_1C00;
 #endif
 
 //apack.s
@@ -99,7 +107,7 @@ extern u8 fontpal_bin[];				//from boot.s
 extern u8* INSTANT_PAGES[256];
 
 extern u32 g_rammask;
-extern u8 g_banks[2];
+extern u32 g_banks[2];
 
 void loadcart(int rom_number,int emu_flags);			//from cart.s
 void map0123_(int page);

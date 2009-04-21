@@ -12,9 +12,11 @@ int get_saved_sram(void)
 #if SRAM_SIZE==32
 	//for 32k SRAM
 	#define GBC_SRAM_POS 0x6000
+	#define GBA_SRAM_SIZE 0x8000
 #else
 	//for 64k SRAM
 	#define GBC_SRAM_POS 0xE000
+	#define GBA_SRAM_SIZE 0x10000
 #endif
 
 
@@ -124,7 +126,7 @@ void flush_end_sram()
 {
 	u8* sram=MEM_SRAM;
 	int i;
-	for (i=GBC_SRAM_POS;i<0x10000;i++)
+	for (i=GBC_SRAM_POS;i<GBA_SRAM_SIZE;i++)
 	{
 		sram[i]=0;
 	}

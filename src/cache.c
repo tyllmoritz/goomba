@@ -5,9 +5,7 @@
 
 #define CRAP_AMOUNT 512
 
-u8 *const bank_0=(u8*)0x0600C000;
 u8 *const bank_1=(u8*)0x06010000-CRAP_AMOUNT;
-u8 *const bank_2=(u8*)0x06008000;
 
 #if MOVIEPLAYER
 int cache_queue_cursor;
@@ -93,15 +91,12 @@ void init_cache()
 	//set up cache locations, first few are sequential
 	for (i=0;i<cachepages;i++)
 	{
-		cache_location[i]=cachebase+page_size_2*i;
+		cache_location[i+1]=cachebase+page_size_2*i;
 	}
-	//two extra pages, then one more for GB mode
-	if (gb_mode==0)
-	{
-		cache_location[cachepages++]=bank_2;
-	}
-	cache_location[cachepages++]=bank_0;
-	cache_location[cachepages++]=bank_1;
+	//extra page in VRAM to accelerate games
+	cache_location[0]=bank_1;
+	cachepages++;
+	
 	clear_instant_prg();
 	flushcache();
 //	usingcompcache=0;
@@ -169,7 +164,7 @@ void getbank(int kilobyte)
 	u32 i,j;
 	int slotcontent;
 //	u8 *src, *dest;
-	u8 *banks=g_banks;
+	u32 *banks=g_banks;
 	bank=kilobyte/page_size;
 	
 	//page is in cache?
@@ -222,7 +217,7 @@ slot_is_locked:
 
 void get_rom_map()
 {
-	u8 *banks=g_banks;
+	u32 *banks=g_banks;
 	u8**memmap = g_memmap_tbl;
 	u8**instant_prg = INSTANT_PAGES;
 	int i;
@@ -241,7 +236,7 @@ void update_cache()
 {
 	//updates the cache's state, and all the lookup tables
 	//also fixes the memory map and vram map
-	u8 *banks=g_banks;
+	u32 *banks=g_banks;
 	int i;
 
 	clear_instant_prg();
@@ -265,6 +260,7 @@ void add_exram()
 }
 #endif
 
+/*
 void reload_vram_page1()
 {
 	int i=cachepages-2;
@@ -274,6 +270,6 @@ void reload_vram_page1()
 		loadcachepage(i,bank);
 	}
 }
-
+*/
 
 #endif

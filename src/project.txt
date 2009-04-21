@@ -6,3 +6,4 @@ mappers.s
 memory.s
 sgb.s
 sound.s
+gbpalettes.s

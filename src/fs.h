@@ -1,7 +1,7 @@
 #ifndef __FS_H__
 #define __FS_H__
 
-#define using_new_driver 0
+#define using_new_driver 1
 
 #if !using_new_driver
 
@@ -39,8 +39,5 @@ typedef FAT_FILE *File;
 #define NO_FILE NULL
 
 #endif
-
-#define CARD_TIMEOUT	10000000		// Updated due to suggestion from SaTa, otherwise card will timeout sometimes on a write
-#define BYTE_PER_READ 512
 
 #endif

@@ -13,6 +13,7 @@
 //Little Sound DJ Hack requires M3/G6/Supercard
 
 #ifdef _MB_VERSION
+	#define RTCSUPPORT 0
 	#define ROMVERSION 0
 	#define SPLASH 0
 	#define MULTIBOOT 1
@@ -24,9 +25,10 @@
 	#define MOVIEPLAYERDEBUG 0
 	#define RUMBLE 1
 	#define RESIZABLE 0
-	#define POGOSHELL 0
+	#define POGOSHELL 1
 #else
 #ifdef _GBAMP_VERSION
+	#define RTCSUPPORT 0
 	#define ROMVERSION 1
 	#define SPLASH 0
 	#define MULTIBOOT 0
@@ -40,6 +42,7 @@
 	#define GOMULTIBOOT 0
 	#define POGOSHELL 0
 #else
+	#define RTCSUPPORT 1
 	#define ROMVERSION 1
 	#define SPLASH 1
 	#define MULTIBOOT 1

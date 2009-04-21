@@ -6,6 +6,7 @@
 extern u8 *const bank_0;
 extern u8 *const bank_1;
 
+extern u8* cache_location[MAX_CACHE_SIZE];
 extern int cache_queue_cursor;
 extern u16 prgcache[MAX_CACHE_SIZE];
 extern u8* cachebase;

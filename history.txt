@@ -1,5 +1,7 @@
 Goomba revision history
 -=-=-=-=-=-=-=-=-=-=-=-
+version 2009-04-21
+   Added Asaki's extra palettes
 
 version 2008-03-31
    Amazing new speedhacks to make some games run faster
