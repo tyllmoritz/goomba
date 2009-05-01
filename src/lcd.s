@@ -292,14 +292,14 @@ bcolor
 paletteinit;	r0-r3 modified.
 ;called by ui.c:  void paletteinit(void)
 ;----------------------------------------------------------------------------
-	stmfd sp!,{r5-r7,lr}
+	stmfd sp!,{r6-r7,lr}
 	ldr r0,=gbpalettes
 	ldr r1,palettebank
 	add r0,r0,r1,lsl#2
 	ldr r7,[r0]
 	ldr r6,=MAPPED_RGB
 	bl palettecalculate
-	ldmfd sp!,{r5-r7,lr}
+	ldmfd sp!,{r6-r7,lr}
 	bx lr
 
 ;----------------------------------------------------------------------------
@@ -325,7 +325,7 @@ nomap					;map rrrrrrrrggggggggbbbbbbbb  ->  0bbbbbgggggrrrrr
 
 	str r5,[r6],#4
 	subs r4,r4,#1
-	bne nomap
+	bpl nomap
 
 	ldmfd sp!,{r4-r7,lr}
 	bx lr

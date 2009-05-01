@@ -1,6 +1,10 @@
 Goomba revision history
 -=-=-=-=-=-=-=-=-=-=-=-
 
+v2.35 - 2009-05-01 (Kuwanger)
+	Fix custom palette loading (should fix SML)
+	Fix typo with Multi1/Multi2
+
 v2.34 - 2009-04-20/2009-04-21 (Kuwanger)
 	Add hotkey to switch border
 	Instant palette switching in menu

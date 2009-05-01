@@ -61,7 +61,6 @@ void readconfig(void);			//sram.c
 void quickload(void);
 void backup_gb_sram(void);
 void get_saved_sram(void);		//sram.c
-void paletteload(void); //from sram.c
 
 const unsigned __fp_status_arm=0x40070000;
 u8 *textstart;//points to first GB rom (initialized by boot.s)
@@ -115,8 +114,8 @@ void C_entry() {
 	palettes=0;
 	add_palette_named(&peasoup, "Pea Soup");
 	add_palette_named(&grey, "Grayscale");
-	add_palette_named(&multi1, "Multi 2");
-	add_palette_named(&multi2, "Multi 1");
+	add_palette_named(&multi1, "Multi 1");
+	add_palette_named(&multi2, "Multi 2");
 
 	bborders = baseborders = borders;
 	
@@ -183,8 +182,6 @@ void C_entry() {
 				textstart = add_palette(textstart+4);
 		}
 
-		add_palette_named(&custompal, "Custom");
-		
 		memcpy(pogoshell_romname,d,32);
 	}
 	else
@@ -202,8 +199,6 @@ void C_entry() {
 				textstart = add_palette(textstart+4);
 		}
 
-		add_palette_named(&custompal, "Custom");
-		
 		//splash screen present?
 		if(*(u32*)(textstart+0x104)!=gbx_id) {
 			splash();
@@ -219,6 +214,8 @@ void C_entry() {
 		if(!i)i=1;					//Stop Goomba from crashing if there are no ROMs
 		roms=i;
 	}
+	add_palette_named(&custompal, "Custom");
+		
 	if(REG_DISPCNT==FORCE_BLANK)	//is screen OFF?
 		REG_DISPCNT=0;				//screen ON
 	*MEM_PALETTE=0x7FFF;			//white background
@@ -374,7 +371,6 @@ void rommenu(void) {
 			run(0);
 		}
 	}
-	paletteload();
 	if(autostate)quickload();
 	run(1);
 }

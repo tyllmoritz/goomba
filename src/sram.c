@@ -459,8 +459,9 @@ void paletteload() {
 
 	if(!using_flashcart()) {
 		memcpy(&custompal,gbpalettes[1],48);
-		paletteinit();
-		PaletteTxAll();
+		//paletteinit();
+		//PaletteTxAll();
+		//palettereload();
 		return;
 	}
 
@@ -471,8 +472,9 @@ void paletteload() {
 		//Clean grey palette.
 		memcpy(&custompal,gbpalettes[1],48);
 	}
-	paletteinit();
-	PaletteTxAll();
+	//paletteinit();
+	//PaletteTxAll();
+	//palettereload();
 }
 
 void palettesave() {
@@ -679,7 +681,7 @@ void readconfig() {
 		if (bcolor > borders)
 			bcolor = 0;
 		palettebank=cfg->palettebank;
-		if (palettebank > palettes)
+		if (palettebank >= palettes)
 			palettebank = 0;
 		i = cfg->misc;
 		stime = i & 0x3;						//restore current autosleep time

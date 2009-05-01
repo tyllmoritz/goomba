@@ -7,6 +7,7 @@
 	INCLUDE io.h
 
 	IMPORT findrom ;from main.c
+	IMPORT paletteload ;from sram.c
 
 	EXPORT loadcart
 ;	EXPORT mapBIOS_
@@ -107,8 +108,13 @@ loadcart ;called from C:  r0=rom number, r1=emuflags, r2=clearvram
 	ldr globalptr,=|wram_globals0$$Base|	;need ptr regs init'd
 	ldr gb_zpage,=XGB_RAM
 
-	mov r3,r0		;r0 now points to rom image
-	str r3,rombase		;set rom base
+	mov r5,r0		;r0 now points to rom image
+	str r5,rombase		;set rom base
+
+	ldr r1,=paletteload
+	bl thumbcall_r1
+
+	mov r3,r5
 				;r3=rombase til end of loadcart so DON'T FUCK IT UP
 
 	;clear vram/sram?
