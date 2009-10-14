@@ -70,6 +70,52 @@ set_rom_start
 	strh	r0,[r1]
 	bx		lr
 
+visoly_reset
+	stmfd sp!,{lr}
+	bl		init_flashcart
+	mov		r0, #0
+	bl		set_rom_start
+	ldmfd sp!,{lr}
+	bx		lr
+
+ez4_reset
+	mov		r3,#0xD200
+	mov		r4,#0x1500
+
+	mov		r6,#0x08000000
+	add		r7,r6,#0x00020000           ; #0x08020000
+	add		r8,r7,#0x00020000			; #0x08040000
+
+	add		r5,r6,#0x02000000
+	sub		r1,r5,#0x00800000
+	add		r1,r1,#0x00080000			; #0x09880000
+	sub		r5,r5,#0x00020000			; #0x09FE0000
+	sub		r9,r5,#0x00020000           ; #0x09FC0000
+	
+	strh	r3,[r5]
+	strh	r4,[r6]
+	strh	r3,[r7]
+	strh	r4,[r8]
+
+	mov		r2,#0x00008000
+	strh	r2,[r1]
+
+	strh	r4,[r9]
+	
+	bx		lr
+
+supercard_reset
+	mov		r1, #0xa000000
+	sub		r1, r1, #2
+	mov		r2, #0xa500
+	add		r2, r2, #0x5a
+	strh	r2, [r1]
+	strh	r2, [r1]
+	mov		r0, #0
+	strh	r0, [r1]
+	strh	r0, [r1]
+	bx		lr
+
 ; Restore cartstart & Softreset
 doReset
 	mov r1,#REG_BASE
@@ -81,26 +127,50 @@ doReset
 	add r1,r1,#0x200
 	str r0,[r1,#8]		;interrupts off
 
-	bl		init_flashcart
+	;reset horizontal/vertical offset registers
+	ldr	r0,=bg_controls_reset
+	ldr	r1,=0x4000008
+	mov	r2, #12
+	swi	0x080000
+
+	bl visoly_reset
+	bl ez4_reset
+	bl supercard_reset
+
 	mov		r0, #0
 	ldr		r1,=0x3007ffa	;must be 0 before swi 0x00 is run, otherwise it tries to start from 0x02000000.
 	strh		r0,[r1]
-	bl		set_rom_start
-	mov		r0, #8		;VRAM clear
+	mov		r0, #0xfc		;VRAM clear
 	swi		0x010000
 	swi		0x000000
 
 flash_constants
-        DCD   0x5354
-        DCD   0x1234
-        DCD   0x5678
-        DCD   0xabcd
+	DCD   0x5354
+	DCD   0x1234
+	DCD   0x5678
+	DCD   0xabcd
 
-        DCD   (0x00987654 * 2) + 0x08000000
-        DCD   (0x00012345 * 2) + 0x08000000
-        DCD   (0x00007654 * 2) + 0x08000000
-        DCD   (0x00765400 * 2) + 0x08000000
-        DCD   (0x00013450 * 2) + 0x08000000
+	DCD   (0x00987654 * 2) + 0x08000000
+	DCD   (0x00012345 * 2) + 0x08000000
+	DCD   (0x00007654 * 2) + 0x08000000
+	DCD   (0x00765400 * 2) + 0x08000000
+	DCD   (0x00013450 * 2) + 0x08000000
 
-        END
+ALIGN
+bg_controls_reset
+	DCW	0x0000
+	DCW	0x0000
+	DCW	0x0000
+	DCW	0x0000
+	DCW	0
+	DCW	0
+	DCW	0
+	DCW	0
+	DCW	0
+	DCW	0
+	DCW	0
+	DCW	0
+
+
+	END
 

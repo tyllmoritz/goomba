@@ -1,6 +1,14 @@
 Goomba revision history
 -=-=-=-=-=-=-=-=-=-=-=-
 
+v2.36 - 2009-10-14 (Kuwanger)
+  More aggressive reset registers
+  Reset horizontal/vertical offset registers
+	Added Gameboy Color palettes (mixed by Asaki)
+
+v2.36RC1 - 2009-09-24 (Kuwanger)
+	Added exit support for EZ4 and Supercard
+
 v2.35 - 2009-05-01 (Kuwanger)
 	Fix custom palette loading (should fix SML)
 	Fix typo with Multi1/Multi2
