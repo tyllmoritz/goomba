@@ -1,0 +1,68 @@
+#!/usr/bin/python
+
+import sys, struct
+from sys import argv
+
+romheader_bin = \
+"\x00\x00\x00\x00\x24\xff\xae\x51\x69\x9a\xa2\x21\x3d\x84\x82\x0a" \
+"\x84\xe4\x09\xad\x11\x24\x8b\x98\xc0\x81\x7f\x21\xa3\x52\xbe\x19" \
+"\x93\x09\xce\x20\x10\x46\x4a\x4a\xf8\x27\x31\xec\x58\xc7\xe8\x33" \
+"\x82\xe3\xce\xbf\x85\xf4\xdf\x94\xce\x4b\x09\xc1\x94\x56\x8a\xc0" \
+"\x13\x72\xa7\xfc\x9f\x84\x4d\x73\xa3\xca\x9a\x61\x58\x97\xa3\x27" \
+"\xfc\x03\x98\x76\x23\x1d\xc7\x61\x03\x04\xae\x56\xbf\x38\x84\x00" \
+"\x40\xa7\x0e\xfd\xff\x52\xfe\x03\x6f\x95\x30\xf1\x97\xfb\xc0\x85" \
+"\x60\xd6\x80\x25\xa9\x63\xbe\x03\x01\x4e\x38\xe2\xf9\xa2\x34\xff" \
+"\xbb\x3e\x03\x44\x78\x00\x90\xcb\x88\x11\x3a\x94\x65\xc0\x7c\x63" \
+"\x87\xf0\x3c\xaf\xd6\x25\xe4\x8b\x38\x0a\xac\x72\x21\xd4\xf8\x07" \
+"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" \
+"\x00\x00\x96\x00\x80\x00\x00\x00\x00\x00\x00\x00\x00\xd1\x00\x00"
+
+def readfile(name):
+	try:
+		fd = open(name, "rb")
+		contents = fd.read()
+		fd.close()
+	except IOError:
+		print "Error reading", name
+		sys.exit(1)
+	return contents
+
+def writefile(name, contents):
+	try:
+		fd = open(name, "wb")
+		fd.write(contents)
+		fd.close()
+	except IOError:
+		print "Error writing", name
+		sys.exit(1)
+
+def usage(name):
+	print "Usage: %s input.gba [output.gba]" % name
+	sys.exit(0)
+
+if __name__ == "__main__":
+
+	if len(argv) < 2 or len(argv) > 3:
+		usage(argv[0])
+
+	input = argv[1]
+
+	if len(argv) == 3:
+		output = argv[2]
+	else:
+		output = argv[1]
+
+	romfile = readfile(input)
+
+	#fix romheader
+	#copy nintendo logo in and fixed value 96h and device type
+		
+	romfile = romfile[0:0x4] + romheader_bin[0x4:0xa0] + romfile[0xa0:0xb2] + "\x96" + romfile[0xb3] + "\x80" + "\x00\x00\x00\x00\x01\x10\x00" + romfile[0xbc:]
+	#compute checksum
+	chk = 0
+	for i in range(0xa0, 0xbd):
+		chk += struct.unpack("B", romfile[i])[0]
+	chk = (0x100 - ((chk + 0x19) & 0xff)) & 0xff
+	romfile = romfile[0:0xbd] + struct.pack("B", chk) + romfile[0xbe:]
+
+	writefile(output, romfile)

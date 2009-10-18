@@ -1,6 +1,10 @@
 Goomba revision history
 -=-=-=-=-=-=-=-=-=-=-=-
 
+v2.37 - 2009-10-18 (Kuwanger)
+  Altered the border style slightly to accomodate 240 tiles (enough for the whole screen)
+  Added Super Gameboy Borders (dumped by Asaki)
+
 v2.36 - 2009-10-14 (Kuwanger)
   More aggressive reset registers
   Reset horizontal/vertical offset registers

@@ -267,7 +267,7 @@ makeborder;		also called from UI.c
 	mov r4,r0
 	add r0,r0,#4
 	ldr r1,=0x06000000
-	add r1,r1,#0x800
+	add r1,r1,#0x500
 	swi 0x120000			;LZ77UnCompVram - r0 = src, r1 = dst
 	; palette
 	ldr r3,[r4]     ; load tiles size
@@ -276,8 +276,8 @@ makeborder;		also called from UI.c
 	add r1,r1,#0x1C0
 	mov r3,#16
 borderpal
-        ldrh r2,[r0],#2
-        strh r2,[r1],#2
+	ldrh r2,[r0],#2
+	strh r2,[r1],#2
 	subs r3,r3,#1
 	bne borderpal
 	; screen map
