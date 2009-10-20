@@ -49,9 +49,9 @@ void cls(int);
 void rommenu(void);
 int drawmenu(int);
 int getinput(void);
-u8 *add_palette(u8 *textstart);
-void add_palette_named(u8 *gameboy_palette, char *name);
-u8 *add_borders(u8 *textstart);
+u8 *add_palette(u8 *);
+void add_custom_palette(void);
+u8 *add_borders(u8 *);
 void splash(void);
 void drawtext(int,char*,int);
 void drawtextl(int,char*,int,int);
@@ -67,16 +67,15 @@ u8 *textstart;//points to first GB rom (initialized by boot.s)
 int roms;//total number of roms
 int selectedrom=0;
 
-#define MAXBORDERS 68
-#define MAXPALETTES 128
+#define MAXBORDERS 256
+#define MAXPALETTES 256
 
 u32 borders;
 u32 bborders;
 char *border_titles[MAXBORDERS];
-u32 palettes;
-char *paltxt[MAXPALETTES];
-u8 *gbpalettes[MAXPALETTES];
 
+u32 palettes;
+u8 *gbpalettes[MAXPALETTES];
 
 char pogoshell_romname[32];	//keep track of rom name (for state saving, etc)
 char rtc=0;
@@ -112,10 +111,10 @@ void C_entry() {
 	add_borders((u8 *)(&standard_borders+1));
 
 	palettes=0;
-	add_palette_named(&peasoup, "Pea Soup");
-	add_palette_named(&grey, "Grayscale");
-	add_palette_named(&multi1, "Multi 1");
-	add_palette_named(&multi2, "Multi 2");
+	add_palette(&peasoup);
+	add_palette(&grey);
+	add_palette(&multi1);
+	add_palette(&multi2);
 
 	bborders = baseborders = borders;
 	
@@ -214,7 +213,7 @@ void C_entry() {
 		if(!i)i=1;					//Stop Goomba from crashing if there are no ROMs
 		roms=i;
 	}
-	add_palette_named(&custompal, "Custom");
+	add_custom_palette();
 		
 	if(REG_DISPCNT==FORCE_BLANK)	//is screen OFF?
 		REG_DISPCNT=0;				//screen ON
@@ -242,19 +241,14 @@ void C_entry() {
 u8 *add_palette(u8 *textstart)
 {
 	if (palettes < MAXPALETTES - 1) {	//leave room for custom palette
-		gbpalettes[palettes] = textstart; 
-		paltxt[palettes++] = (char *) (textstart + 48);
+		gbpalettes[palettes++] = textstart; 
 	}
-
 	return textstart + (48+24);
 }
 
-void add_palette_named(u8 *gameboy_palette, char *name)
+void add_custom_palette(void)
 {
-	if (palettes < MAXPALETTES) {
-		gbpalettes[palettes] = gameboy_palette; 
-		paltxt[palettes++] = name;
-	}
+	gbpalettes[palettes++] = &custompal; 
 }
 
 u8 *add_borders(u8 *textstart)

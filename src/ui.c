@@ -62,15 +62,15 @@ extern char gbaversion;
 extern u32 palettes;
 extern u32 borders;
 extern u32 bborders;
-extern char *border_titles[388];
-extern char *paltxt[388];
-extern u8 *gbpalettes[388];
+extern char *border_titles[];
+extern u8 *gbpalettes[];
 
 u8 autoA,autoB;				//0=off, 1=on, 2=R
 u8 stime=0;
 u8 ewram=0;
 u8 autostate=0;
 
+char *paltxt(int);
 void autoAset(void);
 void autoBset(void);
 void swapAB(void);
@@ -99,8 +99,10 @@ void ewramset(void);
 void loadstatemenu(void);
 void savestatemenu(void);
 void autostateset(void);
+void chpalette(void);
 void incpalette(void);
 void decpalette(void);
+void chborder(void);
 void decborder(void);
 void incborder(void);
 void gbtype(void);
@@ -124,7 +126,7 @@ const char MENUXITEMS[]={CARTMENUITEMS,MULTIBOOTMENUITEMS,MENU2ITEMS,MENU3ITEMS}
 const fptr multifnlist[]={autoBset,autoAset,controller,ui3,ui2,multiboot,sleep,restart,exit};
 const fptr fnlist1[]={autoBset,autoAset,controller,ui3,ui2,multiboot,savestatemenu,loadstatemenu,managesram,sleep,go_multiboot,restart,exit};
 const fptr fnlist2[]={vblset,fpsset,sleepset,ewramset,swapAB,autostateset,detect,gbtype};
-const fptr fnlist3[]={incpalette,copypalette,ui4,brightset,incborder};
+const fptr fnlist3[]={chpalette,copypalette,ui4,brightset,chborder};
 
 const fptr* fnlistX[]={fnlist1,multifnlist,fnlist2,fnlist3};
 const fptr drawuiX[]={drawui1,drawui1,drawui2,drawui3};
@@ -231,9 +233,13 @@ void subui(int menunr) {
 		special2=(menunr == 3 && selected == 4);
 		if (special && key&(L_BTN))
 			decpalette();
+		if (special && key&(R_BTN))
+			incpalette();
 		if (special2 && key&(L_BTN))
 			decborder();
-		if(key&(A_BTN) || ((special || special2) && key&(R_BTN))) {
+		if (special2 && key&(R_BTN))
+			incborder();
+		if(key&(A_BTN)) {
 			oldsel=selected;
 			fnlistX[menunr][selected]();
 			selected=oldsel;
@@ -292,6 +298,11 @@ void ui4() {
 	}
 	if (modified)
 		palettesave();
+}
+
+char *paltxt(int palettebank)
+{
+	return (char *) gbpalettes[palettebank]+48;
 }
 
 char hextable[]="0123456789ABCDEF";
@@ -470,7 +481,7 @@ void drawui1() {
 	
 	drawtext(18,"Powered by Excelsior",0);
 	if(pogoshell) i=1;
-	strmerge(str,emuname[i],"v2.37 on ");
+	strmerge(str,emuname[i],"v2.38 on ");
 	strmerge(str,str,hostname[gbaversion]);
 	drawtext(19,str,0);
 
@@ -524,7 +535,7 @@ void drawui3() {
 
 	cls(2);
 	drawtext(32,"      Display Settings",0);
-	strmerge(str,"Palette: ",paltxt[palettebank]);
+	strmerge(str,"Palette: ",paltxt(palettebank));
 	text2(0,str);
 	text2(1,"Copy To Custom Palette");
 	text2(2,"Custom Palette->");
@@ -769,13 +780,60 @@ void autostateset() {
 	autostate = (autostate^1)&1;
 }
 
+void draw_palette_list()
+{
+	int scroll_top,scroll_bottom,row,item,offset;
+	
+	palettebank=selected;
+	paletteinit();
+	PaletteTxAll();
+	palettereload();
+
+	strmerge(&messagetxt, "Palette: ", paltxt(palettebank));
+	messageshow=150;
+	
+	cls(2);
+	
+	scroll_top=selected-9;
+	scroll_bottom=palettes-18;
+	if (scroll_top > scroll_bottom) scroll_top=scroll_bottom;
+	if (scroll_top<0) scroll_top=0;
+	
+	offset = (palettes < 18) ? (10-(palettes>>1)) : 1;
+	
+	for (item=scroll_top; item < palettes && item<scroll_top+18; item++)
+	{
+		row=item-scroll_top+offset;
+		drawtext(32+row,paltxt(item),selected==item);
+	}
+}
+
+void chpalette()
+{
+	int key;
+
+	selected=palettebank;
+	draw_palette_list();
+	oldkey=~REG_P1;			//reset key input
+	do {
+		key=getmenuinput(palettes);
+		if(key&(UP+DOWN+LEFT+RIGHT)) {
+			draw_palette_list();
+		}
+	} while(!(key&(A_BTN+B_BTN+R_BTN+L_BTN)));
+	while(key&(B_BTN+L_BTN+R_BTN)) {
+		waitframe();		//(polling REG_P1 too fast seems to cause problems)
+		key=~REG_P1;
+	}
+}
+
 void incpalette() {
 	palettebank++;
 	palettebank%=palettes;
 	paletteinit();
 	PaletteTxAll();
 	palettereload();
-	strmerge(&messagetxt, "Palette: ", paltxt[palettebank]);
+	strmerge(&messagetxt, "Palette: ", paltxt(palettebank));
 	messageshow=150;
 }
 
@@ -785,8 +843,52 @@ void decpalette() {
 	paletteinit();
 	PaletteTxAll();
 	palettereload();
-	strmerge(&messagetxt, "Palette: ", paltxt[palettebank]);
+	strmerge(&messagetxt, "Palette: ", paltxt(palettebank));
 	messageshow=150;
+}
+
+void draw_border_list()
+{
+	int scroll_top,scroll_bottom,row,item,offset;
+	
+	bcolor=selected;
+	makeborder();
+	strmerge(&messagetxt,"Border: ",border_titles[bcolor]);
+	messageshow=150;
+	
+	cls(2);
+	
+	scroll_top=selected-9;
+	scroll_bottom=borders-18;
+	if (scroll_top > scroll_bottom) scroll_top=scroll_bottom;
+	if (scroll_top<0) scroll_top=0;
+
+	offset = (borders < 18) ? (10-(borders>>1)) : 1;
+	
+	for (item=scroll_top; item < borders && item<scroll_top+18; item++)
+	{
+		row=item-scroll_top+offset;
+		drawtext(32+row,border_titles[item],selected==item);
+	}
+}
+
+void chborder()
+{
+	int key;
+
+	selected=bcolor;
+	draw_border_list();
+	oldkey=~REG_P1;			//reset key input
+	do {
+		key=getmenuinput(borders);
+		if(key&(UP+DOWN+LEFT+RIGHT)) {
+			draw_border_list();
+		}
+	} while(!(key&(A_BTN+B_BTN+R_BTN+L_BTN)));
+	while(key&(B_BTN+L_BTN+R_BTN)) {
+		waitframe();		//(polling REG_P1 too fast seems to cause problems)
+		key=~REG_P1;
+	}
 }
 
 void decborder() {

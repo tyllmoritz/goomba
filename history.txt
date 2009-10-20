@@ -1,6 +1,10 @@
 Goomba revision history
 -=-=-=-=-=-=-=-=-=-=-=-
 
+v2.38 - 2009-10-20 (Kuwanger)
+  Accomodate up to 256 borders and 256 palettes
+  Incorporated a border/palette list (modification of Dwedit's)
+
 v2.37 - 2009-10-18 (Kuwanger)
   Altered the border style slightly to accomodate 240 tiles (enough for the whole screen)
   Added Super Gameboy Borders (dumped by Asaki)

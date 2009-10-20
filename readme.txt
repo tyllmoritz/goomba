@@ -1,4 +1,4 @@
-Goomba v2.33
+Goomba v2.38
 -=-=-=-=-=-=-
 
 It's a Gameboy emulator for the GameBoy Advance. 
@@ -37,8 +37,8 @@ a new one if none exist).
 Quick pallete Change: L+LEFT moves left in the palette list
                       L+RIGHT moves right in the palette list
 
-Quick border Change: L+UP moves up in the palette list
-                     L+DOWN moves down in the palette list
+Quick border Change: L+UP moves up in the border list
+                     L+DOWN moves down in the border list
 
 Sleep:  START+SELECT wakes up from sleep mode (activated from menu or 5/10/30
 minutes of inactivity)
@@ -67,6 +67,32 @@ palette will blank the palette and remove the game's custom palette from the
 flashcard's SRAM (if you're using a flash card and if the game actually has
 a custom palette saved).  Each palette entry is in #RRGGBB form, just like in
 html.  Editing occurs on each color channel separately (ie, RR, GG, and BB).
+
+Custom Borders
+-=-=-=-=-=-=-=-
+
+Use append in the Append folder to convert one or more 240x160 15-color images
+into a custom border collection.  Append one or more of these custom border
+collections onto goomba.gba to use.  If using goomba.gba as a plugin with
+Pogoshell, you can also prepend a custom border collection to a ROM.
+
+ex. append
+copy /b goomba.gba+new_border.bin goomba_new.gba
+
+ex. prepend
+copy /b new_border.bin+game.gb game_new.gb
+
+Note: Do not try to use ROMs prepended with a custom border in a compilation. It
+probably won't work.
+
+
+Multiboot Pogoshell Plugin Note
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+If you are using goomba.gba as a multiboot plugin under Pogoshell, you only have
+about 56K of total space for your appended palettes and custom borders.  This is
+because multiboot mode copies the palettes and borders to RAM.  To work around
+this limitation, you can either prepend palettes and borders to each ROM file or
+you can use goomba.gba as a non-multiboot plugin.
 
 Other Stuff
 -=-=-=-=-=-=-
