@@ -1,6 +1,10 @@
 Goomba revision history
 -=-=-=-=-=-=-=-=-=-=-=-
 
+v2.39 - 2011-01-10 (Kuwanger)
+  Support GBC preset palettes
+  Renamed GBC built-in palettes to include "GBC" prefix
+
 v2.38 - 2009-10-20 (Kuwanger)
   Accomodate up to 256 borders and 256 palettes
   Incorporated a border/palette list (modification of Dwedit's)

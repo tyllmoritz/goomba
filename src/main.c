@@ -34,6 +34,7 @@ extern u8 grey;
 extern u8 multi1;
 extern u8 multi2;
 extern u8 custompal;
+extern u8 presetpal;
 
 //asm calls
 void loadcart(int,int,int);			//from cart.s
@@ -51,6 +52,7 @@ int drawmenu(int);
 int getinput(void);
 u8 *add_palette(u8 *);
 void add_custom_palette(void);
+void add_preset_palette(void);
 u8 *add_borders(u8 *);
 void splash(void);
 void drawtext(int,char*,int);
@@ -214,6 +216,7 @@ void C_entry() {
 		roms=i;
 	}
 	add_custom_palette();
+	add_preset_palette();
 		
 	if(REG_DISPCNT==FORCE_BLANK)	//is screen OFF?
 		REG_DISPCNT=0;				//screen ON
@@ -240,7 +243,7 @@ void C_entry() {
 
 u8 *add_palette(u8 *textstart)
 {
-	if (palettes < MAXPALETTES - 1) {	//leave room for custom palette
+	if (palettes < MAXPALETTES - 2) {	//leave room for custom and preset palette
 		gbpalettes[palettes++] = textstart; 
 	}
 	return textstart + (48+24);
@@ -249,6 +252,11 @@ u8 *add_palette(u8 *textstart)
 void add_custom_palette(void)
 {
 	gbpalettes[palettes++] = &custompal; 
+}
+
+void add_preset_palette(void)
+{
+	gbpalettes[palettes++] = &presetpal; 
 }
 
 u8 *add_borders(u8 *textstart)

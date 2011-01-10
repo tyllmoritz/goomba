@@ -481,7 +481,7 @@ void drawui1() {
 	
 	drawtext(18,"Powered by Excelsior",0);
 	if(pogoshell) i=1;
-	strmerge(str,emuname[i],"v2.38 on ");
+	strmerge(str,emuname[i],"v2.39 on ");
 	strmerge(str,str,hostname[gbaversion]);
 	drawtext(19,str,0);
 
