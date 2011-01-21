@@ -16,10 +16,13 @@ extern u32 romnum;	//from cart.s
 extern u8 *textstart;	//from main.c
 
 extern int pogoshell;
+extern u32 palettes;
+extern u32 bpalettes;
 extern u32 borders;
 extern u32 bborders;
 extern u32 oldkey;//init this before using getmenuinput
-extern char *border_titles[388];
+extern char **border_titles;
+extern u8 **gbpalettes;
 
 u32 max_multiboot_size;		//largest possible multiboot transfer (init'd by boot.s)
 
@@ -100,28 +103,36 @@ int SendMBImageToClient(void) {
 	u16 key;
 	u16 *p;
 	u16 ie;
-	u32 emusize1,emusize2,romsize;
-	int borderssize = 0;
-	int borders_to_use = borders;
+	u32 emusize1,emusize2,romsize, size;
+	int borderssize, palettesize, size_rolimit_data;
+	int borders_to_use = borders, palettes_to_use = palettes - 3;
 	u32 borders_header[2] = { BORDERTAG, 0 };
+	u32 palettes_header[1] = { PALETTETAG };
 
 	emusize1=((u32)(&Image$$RO$$Limit)&0x3ffff);
 	emusize2=((u32)(&Image$$ZI$$Base)&0x7fff);
+
+	size_rolimit_data = MAXBORDERS * 4 + MAXPALETTES * 4;
+
 //	if(pogoshell) romsize=48+16+(*(u8*)(findrom(romnum)+48+4))*16*1024+(*(u8*)(findrom(romnum)+48+5))*8*1024;  //need to read this from ROM
 //	else romsize=48+*(u32*)(findrom(romnum)+32);
 	romsize = (0x8000 << (*(findrom(romnum)+0x148)));
-	if(emusize1+emusize2+romsize>0x40000 || emusize1+romsize>max_multiboot_size) return 3;
+	size = emusize1+size_rolimit_data+romsize;
 
-	for (i = bborders; i < borders; i++)
-	{
+	if(size+emusize2>0x40000 || size>max_multiboot_size) return 3;
+
+	borderssize = 8;
+	for (i = bborders; i < borders_to_use; i++)
 		borderssize += *(u32 *)(border_titles[i]-4);
-	}
-	
-	if (emusize1+romsize+borderssize>max_multiboot_size) {
+
+	palettesize = (48+24+4)*(palettes_to_use - bpalettes);
+
+	if (size+borderssize+palettesize>max_multiboot_size) {
 		cls(1);
-		drawtext(8, "The size of all borders is too large",0);
-		drawtext(9,"      Truncate and send anyway?",0);
-		drawtext(10,"        A=YES, B=NO",0);
+		drawtext(8,  "  The size of all borders",0);
+		drawtext(9,  " and palettes are too large",0);
+		drawtext(10, " Truncate and send anyway?",0);
+		drawtext(11, "        A=YES, B=NO",0);
 		oldkey=~REG_P1;			//reset key input
 		do {
 			key=getmenuinput(10);
@@ -130,17 +141,30 @@ int SendMBImageToClient(void) {
 		} while(!(key&(A_BTN)));
 		oldkey=~REG_P1;			//reset key input
 		
-		j = i = 0;
-		borderssize = max_multiboot_size - romsize - emusize2 - emusize1;
+		cls(1);
+		drawtext(9,"          Sending...",0);
+		palettesize = max_multiboot_size - size_rolimit_data - 8 - romsize - emusize2 - emusize1;
+
+		palettes_to_use = palettesize/(48+24+4);
+		if (palettes_to_use < bpalettes)
+			palettes_to_use = bpalettes;
+		if (palettes_to_use > palettes - 3)
+			palettes_to_use = palettes - 3;
+		borderssize = palettesize - (palettes_to_use - bpalettes)*(48+24+4);
 		for (borders_to_use = bborders; borderssize >= 0; borders_to_use++)
-		{
-			i = *(u32 *)(border_titles[borders_to_use]-4);
-			borderssize -= i;
-			j += i;
-		}
-		borderssize = j - i;
+			borderssize -= *(u32 *)(border_titles[borders_to_use]-4);
 		borders_to_use--;
 	}
+
+	borderssize = 8;
+	// recompute sizes since some may have been trimmed off
+	for (i = bborders; i < borders_to_use; i++)
+		borderssize += *(u32 *)(border_titles[i]-4);
+
+	if (borderssize == 8)
+		borderssize = 0;
+
+	palettesize = (48+24+4)*(palettes_to_use - bpalettes);
 
 #if 0
     //this check frequently causes hangs, and is not necessary
@@ -223,8 +247,9 @@ int SendMBImageToClient(void) {
 		i=2;
 		goto transferEnd;
 	}
-	xfer(emusize1+emusize2+romsize+borderssize);		//transmission size..
-	xfer((emusize1+emusize2+romsize+borderssize)>>16);
+	size = emusize1+emusize2+romsize+borderssize+palettesize;
+	xfer(size);		//transmission size..
+	xfer(size>>16);
 
 	p=(u16*)((u32)0x2000000);	//(from ewram.)
 	for(;emusize1;emusize1-=2)		//send first part of emu
@@ -232,6 +257,22 @@ int SendMBImageToClient(void) {
 	p=(u16*)0x3000000;			//(from iwram)
 	for(;emusize2;emusize2-=2)		//send second part of emu
 		xfer(*(p++));
+
+	// Only send if greater than 0
+	if (palettes_to_use > bpalettes) {
+		for (i = bpalettes; i < palettes_to_use; i++)
+		{
+			p=(u16*)palettes_header;
+			for(j = 0; j < 2; j++)	//send palette header
+				xfer(*(p++));
+
+			// then send palette
+			p=(u16*)(gbpalettes[i]);
+			j=(24+48);
+			for (;j;j-=2)
+				xfer(*(p++));
+		}
+	}
 
 	// Only send if greater than 0
 	if (borders_to_use > bborders) {
@@ -245,7 +286,7 @@ int SendMBImageToClient(void) {
 		{
 			j = *(u32 *)(border_titles[i]-4);
 			p = (u16*)(border_titles[i]-4);
-			for (;j;j-=4)
+			for (;j;j-=2)
 				xfer(*(p++));
 		}
 	}

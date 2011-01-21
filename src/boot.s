@@ -105,8 +105,7 @@ _1	CMP	r3, r1 ; Zero init
 ;shift gb rom to right past emulator in ewram
 	ldr r0,=|Image$$RO$$Limit|
 	;mov r3,#0x20000		;up to 128kbyte
-	mov r3,#0x2b000		;up to (128+58)kbyte
-	add r3,r3,#0x800
+	mov r3,#0x38000		;up to (128+96)kbyte
 	mov r1,r0
 _loop
 	ldr r2,[r6],#4			;old textstart

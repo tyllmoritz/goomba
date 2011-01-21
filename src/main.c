@@ -35,6 +35,7 @@ extern u8 multi1;
 extern u8 multi2;
 extern u8 custompal;
 extern u8 presetpal;
+extern u8 dgbmaxpal;
 
 //asm calls
 void loadcart(int,int,int);			//from cart.s
@@ -50,9 +51,13 @@ void cls(int);
 void rommenu(void);
 int drawmenu(int);
 int getinput(void);
+void add_base_extras(void);
+u8 *add_extras(u8 *, u32);
+u8 *add_dgbmaxpalette(u8 *);
 u8 *add_palette(u8 *);
 void add_custom_palette(void);
 void add_preset_palette(void);
+void add_dgbmax_palette(void);
 u8 *add_borders(u8 *);
 void splash(void);
 void drawtext(int,char*,int);
@@ -69,15 +74,17 @@ u8 *textstart;//points to first GB rom (initialized by boot.s)
 int roms;//total number of roms
 int selectedrom=0;
 
-#define MAXBORDERS 256
-#define MAXPALETTES 256
-
 u32 borders;
 u32 bborders;
-char *border_titles[MAXBORDERS];
+char **border_titles;
 
 u32 palettes;
-u8 *gbpalettes[MAXPALETTES];
+u32 bpalettes;
+u8 **gbpalettes;
+
+u8 *dgbmaxpalettes;
+
+u8 *go_multiboot_rolimit;
 
 char pogoshell_romname[32];	//keep track of rom name (for state saving, etc)
 char rtc=0;
@@ -93,9 +100,10 @@ char gbaversion;
 #define WORSTCASE (STATESIZE+OVERHEAD)
 
 void C_entry() {
-	int i;
+	int i, size_rolimit_data, size;
+	u8 *ro_limit;
 	vu16 *timeregs=(u16*)0x080000c8;
-	u32 border_id = BORDERTAG, palette_id = PALETTETAG, baseborders;
+	u32 baseborders;
 	u32 temp=(u32)(*(u8**)0x0203FBFC);
 	pogoshell=((temp & 0xFE000000) == 0x08000000)?1:0;
 	*timeregs=1;
@@ -107,81 +115,74 @@ void C_entry() {
 
 	borders=0;
 	// The maximal space
-	buffer1=(&Image$$RO$$Limit);
-	buffer2=(&Image$$RO$$Limit+0x10000);
+	ro_limit=(&Image$$RO$$Limit);
 
-	add_borders((u8 *)(&standard_borders+1));
+	size_rolimit_data = 0x10000 + WORSTCASE;
 
 	palettes=0;
-	add_palette(&peasoup);
-	add_palette(&grey);
-	add_palette(&multi1);
-	add_palette(&multi2);
 
-	bborders = baseborders = borders;
-	
+	// rebase for multiboot transfer
+	if ((int) textstart == (int) ro_limit) {
+		size = max_multiboot_size - ((int) ro_limit - 0x2000000) - MAXBORDERS*4 - MAXPALETTES*4;
+		memmove(ro_limit + MAXBORDERS * 4 + MAXPALETTES * 4, ro_limit, size);
+		textstart = ro_limit + MAXBORDERS * 4 + MAXPALETTES * 4;
+	}
+
+	border_titles = (char **) ro_limit;
+	ro_limit += MAXBORDERS * 4;
+	gbpalettes = (u8 **) ro_limit;
+	ro_limit += MAXPALETTES * 4;
+
+	add_base_extras();
+	baseborders = borders;
+
 	if(pogoshell){
-		u8 *ro_limit;
 		char *d=(char*)0x203fc08;
 		do d++; while(*d);
 		do d++; while(*d);
 		do d--; while(*d!='/');
 		d++;			//d=GB rom name
 
-
-		ro_limit = &Image$$RO$$Limit;
-
-		while (*(u32*)ro_limit==border_id || *(u32*)ro_limit==palette_id) {
-			if(*(u32*)ro_limit == border_id) {
+		while ((*(u32*)ro_limit==BORDERTAG || *(u32*)ro_limit==PALETTETAG || *(u32*)ro_limit==DGBMAXTAG))
+		{
+			/* Using max_multiboot_size to indirectly use END_OF_EXRAM
+			 * to see if we're using too much RAM for this. */
+			if(*(u32*)ro_limit == BORDERTAG)
+			{
 				buffer1 = add_borders(ro_limit+4);
-				/* Using max_multiboot_size to indirectly use END_OF_EXRAM
-				 * to see if we're using too much RAM for this. */
-				if ((u32) buffer1 + 0x10000 + WORSTCASE > max_multiboot_size+0x2000000) {
+				if ((u32) buffer1 + size_rolimit_data > max_multiboot_size+0x2000000)
+				{
 					borders = baseborders;
 					buffer1 = ro_limit;
 					break;
 				} else if (borders > baseborders) {
-					buffer2 = buffer1 + 0x10000;
 					bcolor = baseborders;
 					baseborders = borders;
 				}
 				ro_limit = buffer1;
 			}
-			if(*(u32*)ro_limit==palette_id) {
-				/* Using max_multiboot_size to indirectly use END_OF_EXRAM
-				 * to see if we're using too much RAM for this. */
-				if ((u32) ro_limit + 4 + 72 + 0x10000 + WORSTCASE > max_multiboot_size+0x2000000)
+			if(*(u32*)ro_limit==PALETTETAG)
+			{
+				if ((u32) ro_limit + 4 + 72 + size_rolimit_data > max_multiboot_size+0x2000000)
 					break;
 				ro_limit = add_palette(ro_limit+4);
 			}
-		}
-	
-		/* Prevents double appends and unsafe appends */
-		if (((u32)textstart)&0x8000000) {
-			while (*(u32*)textstart==border_id || *(u32*)textstart==palette_id) {
-				if(*(u32*)textstart==border_id) {
-					textstart = add_borders(textstart+4);
-					// Set to first custom
-					if (borders > baseborders)
-						bcolor = baseborders;
-				}
-				if(*(u32*)textstart==palette_id)
-					textstart = add_palette(textstart+4);
+			if(*(u32*)ro_limit==DGBMAXTAG)
+			{
+				if ((u32) ro_limit + 6 + *(u16*)(ro_limit+4)*(2+36) + size_rolimit_data > max_multiboot_size+0x2000000)
+					break;
+				ro_limit = add_dgbmaxpalette(ro_limit+4);
 			}
 		}
+
+		/* Prevents double appends and unsafe appends */
+		if (((u32)textstart)&0x8000000)
+			textstart = add_extras(textstart, baseborders);
 		
 		roms=1;
 		textstart=(*(u8**)0x0203FBFC);
-		while (*(u32*)textstart==border_id || *(u32*)textstart==palette_id) {
-			if(*(u32*)textstart==border_id) {
-				textstart = add_borders(textstart+4);
-				// Set to first custom
-				if (borders > baseborders)
-					bcolor = baseborders;
-			}
-			if(*(u32*)textstart==palette_id)
-				textstart = add_palette(textstart+4);
-		}
+
+		textstart = add_extras(textstart, baseborders);
 
 		memcpy(pogoshell_romname,d,32);
 	}
@@ -190,15 +191,14 @@ void C_entry() {
 		u32 gbx_id=0x6666edce;
 		u8 *p;
 
-		while (*(u32*)textstart==border_id || *(u32*)textstart==palette_id) {
-			if(*(u32*)textstart==border_id) {
-				textstart = add_borders(textstart+4);
-				if (borders > 0)
-					bcolor = baseborders;
-			}
-			if(*(u32*)textstart==palette_id)
-				textstart = add_palette(textstart+4);
+		// rebase for link transfer
+		if ((int) textstart == (int) ro_limit) {
+			size = max_multiboot_size - ((int) ro_limit - 0x2000000) - MAXBORDERS*4 - MAXPALETTES*4;
+			memmove(ro_limit + MAXBORDERS * 4 + MAXPALETTES * 4, ro_limit, size);
+			textstart = ro_limit + MAXBORDERS * 4 + MAXPALETTES * 4;
 		}
+
+		textstart = add_extras(textstart, baseborders);
 
 		//splash screen present?
 		if(*(u32*)(textstart+0x104)!=gbx_id) {
@@ -217,6 +217,11 @@ void C_entry() {
 	}
 	add_custom_palette();
 	add_preset_palette();
+	add_dgbmax_palette();
+
+	go_multiboot_rolimit = ro_limit;
+	buffer1 = ro_limit;
+	buffer2 = buffer1 + 0x10000;
 		
 	if(REG_DISPCNT==FORCE_BLANK)	//is screen OFF?
 		REG_DISPCNT=0;				//screen ON
@@ -241,12 +246,62 @@ void C_entry() {
 	rommenu();
 }
 
+void add_base_extras(void)
+{
+	add_borders((u8 *)(&standard_borders+1));
+	add_palette(&peasoup);
+	add_palette(&grey);
+	add_palette(&multi1);
+	add_palette(&multi2);
+
+	bborders = borders;
+	bpalettes = palettes;
+}
+
+u8 *add_extras(u8 *textstart, u32 baseborders)
+{
+	while (*(u32*)textstart==BORDERTAG || *(u32*)textstart==PALETTETAG || *(u32*)textstart==DGBMAXTAG)
+	{
+		switch (*(u32*)textstart)
+		{
+			case BORDERTAG:
+				textstart = add_borders(textstart+4);
+				// Set to first custom
+				if (borders > baseborders)
+					bcolor = baseborders;
+				break;
+			case PALETTETAG:
+				textstart = add_palette(textstart+4);
+				break;
+			case DGBMAXTAG:
+				textstart = add_dgbmaxpalette(textstart+4);
+				break;
+		}
+	}
+	return textstart;
+}
+
 u8 *add_palette(u8 *textstart)
 {
-	if (palettes < MAXPALETTES - 2) {	//leave room for custom and preset palette
+	if (palettes < MAXPALETTES - 3) {	//leave room for custom, preset, and dgbmax palette
 		gbpalettes[palettes++] = textstart; 
 	}
 	return textstart + (48+24);
+}
+
+u8 *add_dgbmaxpalette(u8 *textstart)
+{
+	int count;
+
+	dgbmaxpalettes = textstart;
+
+	count = *(u16*)textstart;
+	textstart += (2+36)*count+2;
+
+	if (((int)textstart)&3)
+		textstart += 2;
+
+	return textstart;
 }
 
 void add_custom_palette(void)
@@ -259,22 +314,27 @@ void add_preset_palette(void)
 	gbpalettes[palettes++] = &presetpal; 
 }
 
+void add_dgbmax_palette(void)
+{
+	gbpalettes[palettes++] = &dgbmaxpal; 
+}
+
 u8 *add_borders(u8 *textstart)
 {
-   u8 i, tmp;
+   u8 i, count;
   
-   tmp = *(u32 *)textstart;
+   count = *(u32 *)textstart;
    textstart+=4;
    
-   for (i = 0; i < tmp; i++)
+   for (i = 0; i < count; i++)
    {
-	/* Optimial border size is ~214 bytes, so 384*214 > 59KB
-	 * which means we won't run out of space at least in the
-	 * wholly memory resident borders case.
-	 */
-	if (borders < MAXBORDERS) // 4 more for standard borders
-		border_titles[borders++] = (char *) (textstart+4);
-	textstart += *(u32 *)textstart;
+		/* Optimial border size is ~214 bytes, so 384*214 > 59KB
+		 * which means we won't run out of space at least in the
+		 * wholly memory resident borders case.
+		 */
+		if (borders < MAXBORDERS) // 4 more for standard borders
+			border_titles[borders++] = (char *) (textstart+4);
+		textstart += *(u32 *)textstart;
    }
 
    return textstart;

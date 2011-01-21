@@ -43,6 +43,29 @@ Quick border Change: L+UP moves up in the border list
 Sleep:  START+SELECT wakes up from sleep mode (activated from menu or 5/10/30
 minutes of inactivity)
 
+Precompiled, For Your Convenience
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+The following collection of pre-compiled versions of goomba.gba.  That is, they
+have already appended a collection of either palettes or borders so you don't
+have to go through the effort:
+
+goomba_raw.gba                 : Contains the minimal palettes and borders
+goomba_with_some_borders.gba   : Contains the old Goomba built-in palettes,
+                                 Super Gameboy Palettes, Gameboy Color Palettes,
+                                 the DGBMax Preset Palettes, and a few borders
+goomba_with_most_borders.gba   : Contains all of goomba_with_some_borders.gba
+                                 along with all Super Gameboy's built-in borders
+                                 both cropped and resized to fit the GBA screen
+goomba_with_marc_borders_and_palettes.gba : Contains all the palettes (but not the
+                                            borders) from above along with a few
+                                            more as well as a collection of cropped
+                                            Super Gameboy game borders
+goomba_with_all_borders_and_palettes.gba : Everything above, borders and palettes
+                                           alike; there are some duplicates where
+                                           Marc's palettes and borders overlap the
+                                           other borders and palettes
+
 Appendable Palette
 -=-=-=-=-=-=-=-=-=-
 
@@ -68,6 +91,35 @@ flashcard's SRAM (if you're using a flash card and if the game actually has
 a custom palette saved).  Each palette entry is in #RRGGBB form, just like in
 html.  Editing occurs on each color channel separately (ie, RR, GG, and BB).
 
+Quasi-GBC Preset Palette
+-=-=-=-=-=-=-=-=-=-=-=-=-
+
+The GBC BIOS includes a simple checksum plus lookup routine to construct a
+palette from a palette dictionary for a select number of Nintendo games.
+However, the actually algorithm at least hypothetically could apply to any
+game although with obviously unpredictable results (as it would be just a
+coincidence that a non-Nintendo game would match).  Since I didn't see a
+reason to limit the routine to just Nintendo games, the result generates
+only quasi-GBC preset palettes.  For Nintendo games, the results should be
+accurate; for non-Nintendo games, it's more of a crap shoot.
+
+DGBMax Palettes
+-=-=-=-=-=-=-=-=-
+
+DGBMax was a program for flashing the Doctor GB flash cart with a game.  It
+also included the feature of adding color palettes to game (presumably the
+flash cart's boot program acted like a GBC and DGBMax inserted the palettes
+into the flash cart's boot program based on the game, not unlike my fork of
+gbc2gba.gb does although my fork uses a small preset bunch of palettes).  In
+any case, the result is a relatively large database of game-specific palettes
+in a dgbmax.ini file.  Now, Goomba Paletted supports these palettes as well
+if dgbmax.bin is appended.  More importantly, you can create your own dgbmax.bin
+by altering dgbmax.ini or creating a new similarly formatted file.   An important
+note:  only the last dgbmax.bin appended will work.  The rest end up being
+pointless filler.  To append, do as follows:
+
+copy /b goomba.gba+dgbmax.bin goomba_new.gba
+
 Custom Borders
 -=-=-=-=-=-=-=-
 
@@ -89,10 +141,10 @@ probably won't work.
 Multiboot Pogoshell Plugin Note
 -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 If you are using goomba.gba as a multiboot plugin under Pogoshell, you only have
-about 56K of total space for your appended palettes and custom borders.  This is
-because multiboot mode copies the palettes and borders to RAM.  To work around
-this limitation, you can either prepend palettes and borders to each ROM file or
-you can use goomba.gba as a non-multiboot plugin.
+about 48K of total space for your appended palettes, dgbmax palettes, and custom
+borders.  This is because multiboot mode copies the palettes and borders to RAM.
+To work around this limitation, you can either prepend palettes and borders to
+each ROM file or you can use goomba.gba as a non-multiboot plugin.
 
 Other Stuff
 -=-=-=-=-=-=-

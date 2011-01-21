@@ -49,7 +49,7 @@ extern u32 bcolor;			//from lcd.s ,border color, black, grey, blue
 // custom palette components
 extern u8 custompal; 
 
-extern u8 Image$$RO$$Limit;
+extern u8* go_multiboot_rolimit;
 extern u32 max_multiboot_size;
 
 extern u32 g_emuflags;  // from cart.s
@@ -60,10 +60,11 @@ extern char pogoshell;
 extern char gameboyplayer;
 extern char gbaversion;
 extern u32 palettes;
+extern u32 bpalettes;
 extern u32 borders;
 extern u32 bborders;
-extern char *border_titles[];
-extern u8 *gbpalettes[];
+extern char **border_titles;
+extern u8 **gbpalettes;
 
 u8 autoA,autoB;				//0=off, 1=on, 2=R
 u8 stime=0;
@@ -481,7 +482,7 @@ void drawui1() {
 	
 	drawtext(18,"Powered by Excelsior",0);
 	if(pogoshell) i=1;
-	strmerge(str,emuname[i],"v2.39 on ");
+	strmerge(str,emuname[i],"v2.40 on ");
 	strmerge(str,str,hostname[gbaversion]);
 	drawtext(19,str,0);
 
@@ -546,45 +547,26 @@ void drawui3() {
 }
 
 void drawui4() {
-	char str[30];
+	char str[30], numstr[2];
+	char *title[4] = { "Background #", "Window #", "Object 1 #", "Object 2 #" };
+	char *ending[4] = { ": #", ":     #", ":   #", ":   #" };
 	u16 *here;
 	u16 value;
 	int i,j;
 
+	numstr[1] = 0;
+
 	cls(2);
 	drawtext(32,"        Custom Palette",0);
-	strmerge(str,"Background #0: #",threehex(&custompal,0));
-	text3(0,str);
-	strmerge(str,"Background #1: #",threehex(&custompal,3));
-	text3(1,str);
-	strmerge(str,"Background #2: #",threehex(&custompal,6));
-	text3(2,str);
-	strmerge(str,"Background #3: #",threehex(&custompal,9));
-	text3(3,str);
-	strmerge(str,"Window #0:     #",threehex(&custompal,12));
-	text3(4,str);
-	strmerge(str,"Window #1:     #",threehex(&custompal,15));
-	text3(5,str);
-	strmerge(str,"Window #2:     #",threehex(&custompal,18));
-	text3(6,str);
-	strmerge(str,"Window #3:     #",threehex(&custompal,21));
-	text3(7,str);
-	strmerge(str,"Object 1 #0:   #",threehex(&custompal,24));
-	text3(8,str);
-	strmerge(str,"Object 1 #1:   #",threehex(&custompal,27));
-	text3(9,str);
-	strmerge(str,"Object 1 #2:   #",threehex(&custompal,30));
-	text3(10,str);
-	strmerge(str,"Object 1 #3:   #",threehex(&custompal,33));
-	text3(11,str);
-	strmerge(str,"Object 2 #0:   #",threehex(&custompal,36));
-	text3(12,str);
-	strmerge(str,"Object 2 #1:   #",threehex(&custompal,39));
-	text3(13,str);
-	strmerge(str,"Object 2 #2:   #",threehex(&custompal,42));
-	text3(14,str);
-	strmerge(str,"Object 2 #3:   #",threehex(&custompal,45));
-	text3(15,str);
+	for (i = 0; i < 16; i++)
+	{
+		numstr[0] = (i&3) + 48;
+		strcpy(str, title[i>>2]);
+		strcat(str, numstr);
+		strcat(str, ending[i>>2]);
+		strcat(str, threehex(&custompal,i*3));
+		text3(i,str);
+	}
 	text3(16,"Clear Custom Palette");
 	
 	here = SCREENBASE+35*32+24;
@@ -780,17 +762,20 @@ void autostateset() {
 	autostate = (autostate^1)&1;
 }
 
+void paletteloadandshow() {
+	paletteinit();
+	PaletteTxAll();
+	palettereload();
+	strmerge(&messagetxt, "Palette: ", paltxt(palettebank));
+	messageshow=150;
+}
+
 void draw_palette_list()
 {
 	int scroll_top,scroll_bottom,row,item,offset;
 	
 	palettebank=selected;
-	paletteinit();
-	PaletteTxAll();
-	palettereload();
-
-	strmerge(&messagetxt, "Palette: ", paltxt(palettebank));
-	messageshow=150;
+	paletteloadandshow();
 	
 	cls(2);
 	
@@ -830,20 +815,18 @@ void chpalette()
 void incpalette() {
 	palettebank++;
 	palettebank%=palettes;
-	paletteinit();
-	PaletteTxAll();
-	palettereload();
-	strmerge(&messagetxt, "Palette: ", paltxt(palettebank));
-	messageshow=150;
+	paletteloadandshow();
 }
 
 void decpalette() {
 	palettebank+=(palettes-1);
 	palettebank%=palettes;
-	paletteinit();
-	PaletteTxAll();
-	palettereload();
-	strmerge(&messagetxt, "Palette: ", paltxt(palettebank));
+	paletteloadandshow();
+}
+
+void borderloadandshow() {
+	makeborder();
+	strmerge(&messagetxt,"Border: ",border_titles[bcolor]);
 	messageshow=150;
 }
 
@@ -852,9 +835,7 @@ void draw_border_list()
 	int scroll_top,scroll_bottom,row,item,offset;
 	
 	bcolor=selected;
-	makeborder();
-	strmerge(&messagetxt,"Border: ",border_titles[bcolor]);
-	messageshow=150;
+	borderloadandshow();
 	
 	cls(2);
 	
@@ -892,17 +873,15 @@ void chborder()
 }
 
 void decborder() {
-	bcolor = (bcolor+borders-1)%(borders);
-	makeborder();
-	strmerge(&messagetxt,"Border: ",border_titles[bcolor]);
-	messageshow=150;
+	bcolor+=(borders-1);
+	bcolor%=borders;
+	borderloadandshow();
 }
 
 void incborder() {
-	bcolor = (bcolor+1)%(borders);
-	makeborder();
-	strmerge(&messagetxt,"Border: ",border_titles[bcolor]);
-	messageshow=150;
+	bcolor++;
+	bcolor%=borders;
+	borderloadandshow();
 }
 
 void detect(void) {
@@ -925,18 +904,21 @@ void go_multiboot()
 	char *src, *dest;
 	int size, key, romsize;
 	int i, j;
-	int borderssize;
+	int borderssize, palettesize;
 	int borders_to_use;
+	int palettes_to_use;
 	
-	borderssize = 0;
 	borders_to_use = borders;
+	palettes_to_use = palettes - 3;
 
+	borderssize = 0;
 	for (i = bborders; i < borders; i++)
-	{
 		borderssize += *(u32 *)(border_titles[i]-4);
-	}
+
+	palettesize = (48+24)*(palettes_to_use - bpalettes);
+
 	src=(char*)findrom(selectedrom);
-	dest=(char *)&Image$$RO$$Limit;
+	dest=(char *)go_multiboot_rolimit;
 	romsize = (0x8000 << (*(src+0x148)));
 	
 	size=max_multiboot_size-((int) dest-0x02000000);
@@ -955,11 +937,14 @@ void go_multiboot()
 		} while(!(key&(A_BTN)));
 		oldkey=~REG_P1;			//reset key input
 		borders_to_use = bborders;
-	} else if (romsize+borderssize>size) {
+		palettes_to_use = bpalettes;
+	} else if (romsize+borderssize+palettesize>size) {
 		cls(1);
-		drawtext(8, "The size of all borders is too large",0);
-		drawtext(9,"   Truncate and go multiboot anyway?",0);
-		drawtext(10,"        A=YES, B=NO",0);
+		drawtext(7,  "  The size of all borders",0);
+		drawtext(8,  " and palettes are too large",0);
+		drawtext(9,  "     Truncate and Go",0);
+		drawtext(10, "    Multiboot anyway?",0);
+		drawtext(11, "        A=YES, B=NO",0);
 		oldkey=~REG_P1;			//reset key input
 		do {
 			key=getmenuinput(10);
@@ -967,13 +952,29 @@ void go_multiboot()
 				return;
 		} while(!(key&(A_BTN)));
 		oldkey=~REG_P1;			//reset key input
-		borderssize = size - romsize;
+		palettesize = size - romsize;
+		palettes_to_use = palettesize/(48+24);
+		if (palettes_to_use < bpalettes)
+			palettes_to_use = bpalettes;
+		if (palettes_to_use > palettes - 3)
+			palettes_to_use = palettes - 3;
+		borderssize = size - romsize - (palettes_to_use - bpalettes)*(48+24);
 		for (borders_to_use = bborders; borderssize >= 0; borders_to_use++)
-		{
 			borderssize -= *(u32 *)(border_titles[borders_to_use]-4);
-		}
 		borders_to_use--;
 	}
+
+	// Copy palettes over
+	for (i = bpalettes; i < palettes_to_use; i++)
+	{
+		memmove(dest, gbpalettes[i], (48+24));
+		gbpalettes[i] = (u8 *) dest;
+		dest += (48+24);
+	}
+
+	// Rebase custom, preset, and dgbmax palettes
+	for (j = 0; j < 3; j++)
+		gbpalettes[palettes_to_use+j] = gbpalettes[palettes-3+j];
 
 	for (i = bborders; i < borders_to_use; i++)
 	{
@@ -987,11 +988,12 @@ void go_multiboot()
 	selectedrom=0;
 	roms=1;
 	mainmenuitems=MENUXITEMS[1];
+	palettes=palettes_to_use + 3;
 	borders=borders_to_use;
-	if (bcolor>borders-1) {
-		bcolor = 0;
-		//makeborder(); // loadcart calls GFX_reset which reloads the border
-	}
+	if (palettebank>palettes-1)
+		palettebank = palettes - 1;
+	if (bcolor>borders-1)
+		bcolor = borders-1;
 	loadcart(selectedrom,g_emuflags&0x300,CLEARVRAM);
 }
 

@@ -1,6 +1,15 @@
 Goomba revision history
 -=-=-=-=-=-=-=-=-=-=-=-
 
+v2.40 - 2011-01-21 (Kuwanger)
+  Added DGBMax Palette support and tools
+  Added DGBmax Palettes (thanks Marc R)
+  Added more borders and palettes (thanks Marc R)
+  Added a compiled palette tool which uses a slightly different format (written by Marc R)
+  Fixed a bug involving support 256 borders and 256 palettes
+  Multiboot is working (again?) under Go Multiboot, Link Transfer, and Plugin2GBA; should work
+    under Pogoshell as well
+
 v2.39 - 2011-01-10 (Kuwanger)
   Support GBC preset palettes
   Renamed GBC built-in palettes to include "GBC" prefix
