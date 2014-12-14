@@ -2,9 +2,9 @@
 
 extern char gameboyplayer;
 
-u32 SerialIn, DoRumble, RumbleCnt;
-u16 stage, ind;
-u16 SerOut0, SerOut1;
+EWRAM_BSS u32 SerialIn, DoRumble, RumbleCnt;
+EWRAM_BSS u16 stage, ind;
+EWRAM_BSS u16 SerOut0, SerOut1;
 char const GBPData[]={"NINTENDO"};
 
 void RumbleInterrupt(void) {

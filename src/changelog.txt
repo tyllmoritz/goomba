@@ -1,2 +1,0 @@
-
-5:44 PM 1/14/2008	-	fix timers double speed mode

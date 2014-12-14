@@ -1,497 +1,573 @@
+#pragma once
 
-	MACRO
-	start_map $base, $register
-	GBLA _map_address_
-_map_address_ SETA $base
-	MEND
+	.macro global_func function
+	.global \function
+	.type   \function STT_FUNC
+	.endm
 
-	MACRO
-	_m_ $label,$size
-	[ "$label" = ""
-	|
-$label EQU _map_address_
-	]
-_map_address_ SETA _map_address_ + $size
-	MEND
+	.macro adrl2 reg,label
+	mov \reg,#\label&0x0FF00000
+	add \reg,\reg,#\label&0x000FFFFF
+	.endm
 
-	MACRO
-	ldr_ $reg,$label
-	ldr $reg,[globalptr,#$label]
-	MEND
+	.macro start_map base, register
+	@GBLA _map_address_
+ _map_address_ = \base
+	.endm
+
+	.macro _m_ label=0,size
+	.if \label != 0
+ \label = _map_address_
+	.endif
+ _map_address_ = _map_address_ + \size
+	.endm
+
+	.macro ldr_ reg,label
+	ldr \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	ldrb_ $reg,$label
-	ldrb $reg,[globalptr,#$label]
-	MEND
+	.macro ldrb_ reg,label
+	ldrb \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	ldrh_ $reg,$label
-	ldrh $reg,[globalptr,#$label]
-	MEND
+	.macro ldrh_ reg,label
+	ldrh \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	str_ $reg,$label
-	str $reg,[globalptr,#$label]
-	MEND
+	.macro str_ reg,label
+	str \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	strb_ $reg,$label
-	strb $reg,[globalptr,#$label]
-	MEND
+	.macro strb_ reg,label
+	strb \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	strh_ $reg,$label
-	strh $reg,[globalptr,#$label]
-	MEND
+	.macro strh_ reg,label
+	strh \reg,[globalptr,#\label]
+	.endm
 
 
 
-	MACRO
-	ldreq_ $reg,$label
-	ldreq $reg,[globalptr,#$label]
-	MEND
+	.macro ldreq_ reg,label
+	ldreq \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	ldreqb_ $reg,$label
-	ldreqb $reg,[globalptr,#$label]
-	MEND
+	.macro ldreqb_ reg,label
+	ldreqb \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	streq_ $reg,$label
-	streq $reg,[globalptr,#$label]
-	MEND
+	.macro streq_ reg,label
+	streq \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	streqb_ $reg,$label
-	streqb $reg,[globalptr,#$label]
-	MEND
+	.macro streqb_ reg,label
+	streqb \reg,[globalptr,#\label]
+	.endm
 	
 
 
 
-	MACRO
-	ldrne_ $reg,$label
-	ldrne $reg,[globalptr,#$label]
-	MEND
+	.macro ldrne_ reg,label
+	ldrne \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	ldrneb_ $reg,$label
-	ldrneb $reg,[globalptr,#$label]
-	MEND
+	.macro ldrneb_ reg,label
+	ldrneb \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	strne_ $reg,$label
-	strne $reg,[globalptr,#$label]
-	MEND
+	.macro strne_ reg,label
+	strne \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	strneb_ $reg,$label
-	strneb $reg,[globalptr,#$label]
-	MEND
+	.macro strneb_ reg,label
+	strneb \reg,[globalptr,#\label]
+	.endm
 	
 
 
-	MACRO
-	ldrhi_ $reg,$label
-	ldrhi $reg,[globalptr,#$label]
-	MEND
+	.macro ldrhi_ reg,label
+	ldrhi \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	ldrhib_ $reg,$label
-	ldrhib $reg,[globalptr,#$label]
-	MEND
+	.macro ldrhib_ reg,label
+	ldrhib \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	strhi_ $reg,$label
-	strhi $reg,[globalptr,#$label]
-	MEND
+	.macro strhi_ reg,label
+	strhi \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	strhib_ $reg,$label
-	strhib $reg,[globalptr,#$label]
-	MEND
+	.macro strhib_ reg,label
+	strhib \reg,[globalptr,#\label]
+	.endm
 
 
-	MACRO
-	ldrmi_ $reg,$label
-	ldrmi $reg,[globalptr,#$label]
-	MEND
+	.macro ldrmi_ reg,label
+	ldrmi \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	ldrmib_ $reg,$label
-	ldrmib $reg,[globalptr,#$label]
-	MEND
+	.macro ldrmib_ reg,label
+	ldrmib \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	strmi_ $reg,$label
-	strmi $reg,[globalptr,#$label]
-	MEND
+	.macro strmi_ reg,label
+	strmi \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	strmib_ $reg,$label
-	strmib $reg,[globalptr,#$label]
-	MEND
+	.macro strmib_ reg,label
+	strmib \reg,[globalptr,#\label]
+	.endm
 
-	MACRO
-	ldrpl_ $reg,$label
-	ldrpl $reg,[globalptr,#$label]
-	MEND
+	.macro ldrpl_ reg,label
+	ldrpl \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	ldrplb_ $reg,$label
-	ldrplb $reg,[globalptr,#$label]
-	MEND
+	.macro ldrplb_ reg,label
+	ldrplb \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	strpl_ $reg,$label
-	strpl $reg,[globalptr,#$label]
-	MEND
+	.macro strpl_ reg,label
+	strpl \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	strplb_ $reg,$label
-	strplb $reg,[globalptr,#$label]
-	MEND
+	.macro strplb_ reg,label
+	strplb \reg,[globalptr,#\label]
+	.endm
 
 
-	MACRO
-	ldrgt_ $reg,$label
-	ldrgt $reg,[globalptr,#$label]
-	MEND
+	.macro ldrgt_ reg,label
+	ldrgt \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	ldrgtb_ $reg,$label
-	ldrgtb $reg,[globalptr,#$label]
-	MEND
+	.macro ldrgtb_ reg,label
+	ldrgtb \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	strgt_ $reg,$label
-	strgt $reg,[globalptr,#$label]
-	MEND
+	.macro strgt_ reg,label
+	strgt \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	strgtb_ $reg,$label
-	strgtb $reg,[globalptr,#$label]
-	MEND
+	.macro strgtb_ reg,label
+	strgtb \reg,[globalptr,#\label]
+	.endm
 
 
-	MACRO
-	ldrge_ $reg,$label
-	ldrge $reg,[globalptr,#$label]
-	MEND
+	.macro ldrge_ reg,label
+	ldrge \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	ldrgeb_ $reg,$label
-	ldrgeb $reg,[globalptr,#$label]
-	MEND
+	.macro ldrgeb_ reg,label
+	ldrgeb \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	strge_ $reg,$label
-	strge $reg,[globalptr,#$label]
-	MEND
+	.macro strge_ reg,label
+	strge \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	strgeb_ $reg,$label
-	strgeb $reg,[globalptr,#$label]
-	MEND
+	.macro strgeb_ reg,label
+	strgeb \reg,[globalptr,#\label]
+	.endm
 
 
-	MACRO
-	ldrlt_ $reg,$label
-	ldrlt $reg,[globalptr,#$label]
-	MEND
+	.macro ldrlt_ reg,label
+	ldrlt \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	ldrltb_ $reg,$label
-	ldrltb $reg,[globalptr,#$label]
-	MEND
+	.macro ldrltb_ reg,label
+	ldrltb \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	strlt_ $reg,$label
-	strlt $reg,[globalptr,#$label]
-	MEND
+	.macro strlt_ reg,label
+	strlt \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	strltb_ $reg,$label
-	strltb $reg,[globalptr,#$label]
-	MEND
+	.macro strltb_ reg,label
+	strltb \reg,[globalptr,#\label]
+	.endm
 
 
-	MACRO
-	ldrle_ $reg,$label
-	ldrle $reg,[globalptr,#$label]
-	MEND
+	.macro ldrle_ reg,label
+	ldrle \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	ldrleb_ $reg,$label
-	ldrleb $reg,[globalptr,#$label]
-	MEND
+	.macro ldrleb_ reg,label
+	ldrleb \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	strle_ $reg,$label
-	strle $reg,[globalptr,#$label]
-	MEND
+	.macro strle_ reg,label
+	strle \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	strleb_ $reg,$label
-	strleb $reg,[globalptr,#$label]
-	MEND
+	.macro strleb_ reg,label
+	strleb \reg,[globalptr,#\label]
+	.endm
 
 
-	MACRO
-	ldrlo_ $reg,$label
-	ldrlo $reg,[globalptr,#$label]
-	MEND
+	.macro ldrlo_ reg,label
+	ldrlo \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	ldrlob_ $reg,$label
-	ldrlob $reg,[globalptr,#$label]
-	MEND
+	.macro ldrlob_ reg,label
+	ldrlob \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	strlo_ $reg,$label
-	strlo $reg,[globalptr,#$label]
-	MEND
+	.macro strlo_ reg,label
+	strlo \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	strlob_ $reg,$label
-	strlob $reg,[globalptr,#$label]
-	MEND
-
-	MACRO
-	adr_ $reg,$label
-	add $reg,globalptr,#$label
-	MEND
+	.macro strlob_ reg,label
+	strlob \reg,[globalptr,#\label]
+	.endm
 	
-	MACRO
-	adrl_ $reg,$label
-	add $reg,globalptr,#(($label) :AND: 0xFF00)
-	add $reg,$reg,#(($label) :AND: 0x00FF)
-	MEND
 
+	.macro adr_ reg,label
+	add \reg,globalptr,#\label
+	.endm
+	
+	.macro adrl_ reg,label
+	.if \label&0x80000000
+	sub \reg,globalptr,#((-(\label)) & 0xFF00FF00)
+	sub \reg,\reg,#((-(\label)) & 0x000000FF)
+	.else
+	add \reg,globalptr,#((\label) & 0xFF00FF00)
+	add \reg,\reg,#((\label) & 0x000000FF)
+	.endif
+	.endm
 
-
-
- [ VERSION_IN_ROM
-	MACRO
-	bl_long $label
+ .if VERSION_IN_ROM
+	.macro bl_long label
 	mov lr,pc
-	ldr pc,=$label
-	MEND
+	ldr pc,=\label
+	.endm
 
-	MACRO
-	bleq_long $label
+	.macro bleq_long label
 	moveq lr,pc
-	ldreq pc,=$label
-	MEND
+	ldreq pc,=\label
+	.endm
 
-	MACRO
-	bllo_long $label
+	.macro bllo_long label
 	movlo lr,pc
-	ldrlo pc,=$label
-	MEND
+	ldrlo pc,=\label
+	.endm
 
-	MACRO
-	blhi_long $label
+	.macro blhi_long label
 	movhi lr,pc
-	ldrhi pc,=$label
-	MEND
+	ldrhi pc,=\label
+	.endm
 
-	MACRO
-	bllt_long $label
+	.macro bllt_long label
 	movlt lr,pc
-	ldrlt pc,=$label
-	MEND
+	ldrlt pc,=\label
+	.endm
 
-	MACRO
-	blgt_long $label
+	.macro blgt_long label
 	movgt lr,pc
-	ldrgt pc,=$label
-	MEND
+	ldrgt pc,=\label
+	.endm
 
-	MACRO
-	blne_long $label
+	.macro blle_long label
+	movle lr,pc
+	ldrle pc,=\label
+	.endm
+
+	.macro blge_long label
+	movge lr,pc
+	ldrge pc,=\label
+	.endm
+
+	.macro blne_long label
 	movne lr,pc
-	ldrne pc,=$label
-	MEND
+	ldrne pc,=\label
+	.endm
 
-	MACRO
-	blcc_long $label
+	.macro blcc_long label
 	movcc lr,pc
-	ldrcc pc,=$label
-	MEND
+	ldrcc pc,=\label
+	.endm
 
-	MACRO
-	blpl_long $label
+	.macro blpl_long label
 	movpl lr,pc
-	ldrpl pc,=$label
-	MEND
+	ldrpl pc,=\label
+	.endm
 
-	MACRO
-	b_long $label
-	ldr pc,=$label
-	MEND
+	.macro blx_long label
+	add lr,pc,#4
+	ldr r12,=\label
+	bx r12
+	.endm
 
-	MACRO
-	bcc_long $label
-	ldrcc pc,=$label
-	MEND
+	.macro blxeq_long label
+	addeq lr,pc,#4
+	ldreq r12,=\label
+	bxeq r12
+	.endm
 
-	MACRO
-	bhs_long $label
-	ldrhs pc,=$label
-	MEND
+	.macro blxlo_long label
+	addlo lr,pc,#4
+	ldrlo r12,=\label
+	bxlo r12
+	.endm
 
-	MACRO
-	beq_long $label
-	ldreq pc,=$label
-	MEND
+	.macro blxhi_long label
+	addhi lr,pc,#4
+	ldrhi r12,=\label
+	bxhi r12
+	.endm
 
-	MACRO
-	bne_long $label
-	ldrne pc,=$label
-	MEND
+	.macro blxlt_long label
+	addlt lr,pc,#4
+	ldrlt r12,=\label
+	bxlt r12
+	.endm
 
-	MACRO
-	blo_long $label
-	ldrlo pc,=$label
-	MEND
+	.macro blxgt_long label
+	addgt lr,pc,#4
+	ldrgt r12,=\label
+	bxgt r12
+	.endm
 
-	MACRO
-	bhi_long $label
-	ldrhi pc,=$label
-	MEND
+	.macro blxne_long label
+	addne lr,pc,#4
+	ldrne r12,=\label
+	bxne r12
+	.endm
 
-	MACRO
-	bgt_long $label
-	ldrgt pc,=$label
-	MEND
+	.macro blxcc_long label
+	addcc lr,pc,#4
+	ldrcc r12,=\label
+	bxcc r12
+	.endm
 
-	MACRO
-	blt_long $label
-	ldrlt pc,=$label
-	MEND
+	.macro blxpl_long label
+	addpl lr,pc,#4
+	ldrpl r12,=\label
+	bxpl r12
+	.endm
 
-	MACRO
-	bcs_long $label
-	ldrcs pc,=$label
-	MEND
+	.macro blxmi_long label
+	addmi lr,pc,#4
+	ldrmi r12,=\label
+	bxmi r12
+	.endm
 
-	MACRO
-	bmi_long $label
-	ldrmi pc,=$label
-	MEND
+	.macro b_long label
+	ldr pc,=\label
+	.endm
 
-	MACRO
-	bpl_long $label
-	ldrpl pc,=$label
-	MEND
+	.macro bcc_long label
+	ldrcc pc,=\label
+	.endm
 
-	|
+	.macro bhs_long label
+	ldrhs pc,=\label
+	.endm
 
-	MACRO
-	bl_long $label
-	bl $label
-	MEND
+	.macro beq_long label
+	ldreq pc,=\label
+	.endm
 
-	MACRO
-	bleq_long $label
-	bleq $label
-	MEND
+	.macro bne_long label
+	ldrne pc,=\label
+	.endm
 
-	MACRO
-	bllo_long $label
-	bllo $label
-	MEND
+	.macro blo_long label
+	ldrlo pc,=\label
+	.endm
 
-	MACRO
-	blhi_long $label
-	blhi $label
-	MEND
+	.macro bhi_long label
+	ldrhi pc,=\label
+	.endm
 
-	MACRO
-	bllt_long $label
-	bllt $label
-	MEND
+	.macro bgt_long label
+	ldrgt pc,=\label
+	.endm
 
-	MACRO
-	blgt_long $label
-	blgt $label
-	MEND
+	.macro blt_long label
+	ldrlt pc,=\label
+	.endm
 
-	MACRO
-	blne_long $label
-	blne $label
-	MEND
+	.macro bge_long label
+	ldrge pc,=\label
+	.endm
 
-	MACRO
-	blcc_long $label
-	blcc $label
-	MEND
+	.macro ble_long label
+	ldrle pc,=\label
+	.endm
 
-	MACRO
-	blpl_long $label
-	blpl $label
-	MEND
+	.macro bcs_long label
+	ldrcs pc,=\label
+	.endm
 
-	MACRO
-	b_long $label
-	b $label
-	MEND
+	.macro bmi_long label
+	ldrmi pc,=\label
+	.endm
 
-	MACRO
-	bcc_long $label
-	bcc $label
-	MEND
+	.macro bpl_long label
+	ldrpl pc,=\label
+	.endm
 
-	MACRO
-	bhs_long $label
-	bhs $label
-	MEND
+	.else
 
-	MACRO
-	beq_long $label
-	beq $label
-	MEND
+	.macro blx_long label
+	add lr,pc,#4
+	ldr r12,=\label
+	bx r12
+	.endm
 
-	MACRO
-	bne_long $label
-	bne $label
-	MEND
+	.macro blxeq_long label
+	addeq lr,pc,#4
+	ldreq r12,=\label
+	bxeq r12
+	.endm
 
-	MACRO
-	blo_long $label
-	blo $label
-	MEND
+	.macro blxlo_long label
+	addlo lr,pc,#4
+	ldrlo r12,=\label
+	bxlo r12
+	.endm
 
-	MACRO
-	bhi_long $label
-	bhi $label
-	MEND
+	.macro blxhi_long label
+	addhi lr,pc,#4
+	ldrhi r12,=\label
+	bxhi r12
+	.endm
 
-	MACRO
-	bgt_long $label
-	bgt $label
-	MEND
+	.macro blxlt_long label
+	addlt lr,pc,#4
+	ldrlt r12,=\label
+	bxlt r12
+	.endm
 
-	MACRO
-	blt_long $label
-	blt $label
-	MEND
+	.macro blxgt_long label
+	addgt lr,pc,#4
+	ldrgt r12,=\label
+	bxgt r12
+	.endm
 
-	MACRO
-	bcs_long $label
-	bcs $label
-	MEND
+	.macro blxne_long label
+	addne lr,pc,#4
+	ldrne r12,=\label
+	bxne r12
+	.endm
 
-	MACRO
-	bmi_long $label
-	bmi $label
-	MEND
+	.macro blxcc_long label
+	addcc lr,pc,#4
+	ldrcc r12,=\label
+	bxcc r12
+	.endm
 
-	MACRO
-	bpl_long $label
-	bpl $label
-	MEND
- ]
+	.macro blxpl_long label
+	addpl lr,pc,#4
+	ldrpl r12,=\label
+	bxpl r12
+	.endm
 
-	END
+	.macro blxmi_long label
+	addmi lr,pc,#4
+	ldrmi r12,=\label
+	bxmi r12
+	.endm
+
+	.macro bl_long label
+	bl \label
+	.endm
+
+	.macro bleq_long label
+	bleq \label
+	.endm
+
+	.macro bllo_long label
+	bllo \label
+	.endm
+
+	.macro blhi_long label
+	blhi \label
+	.endm
+
+	.macro bllt_long label
+	bllt \label
+	.endm
+
+	.macro blgt_long label
+	blgt \label
+	.endm
+	
+	.macro blle_long label
+	blle \label
+	.endm
+
+	.macro blge_long label
+	blge \label
+	.endm
+
+	.macro blne_long label
+	blne \label
+	.endm
+
+	.macro blcc_long label
+	blcc \label
+	.endm
+
+	.macro blpl_long label
+	blpl \label
+	.endm
+
+	.macro b_long label
+	b \label
+	.endm
+
+	.macro bcc_long label
+	bcc \label
+	.endm
+
+	.macro bhs_long label
+	bhs \label
+	.endm
+
+	.macro beq_long label
+	beq \label
+	.endm
+
+	.macro bne_long label
+	bne \label
+	.endm
+
+	.macro blo_long label
+	blo \label
+	.endm
+
+	.macro bhi_long label
+	bhi \label
+	.endm
+
+	.macro bgt_long label
+	bgt \label
+	.endm
+
+	.macro blt_long label
+	blt \label
+	.endm
+
+	.macro bge_long label
+	bge \label
+	.endm
+
+	.macro ble_long label
+	ble \label
+	.endm
+
+	.macro bcs_long label
+	bcs \label
+	.endm
+
+	.macro bmi_long label
+	bmi \label
+	.endm
+
+	.macro bpl_long label
+	bpl \label
+	.endm
+ .endif
+
+	@.end
+

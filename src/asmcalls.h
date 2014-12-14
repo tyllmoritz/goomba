@@ -1,7 +1,13 @@
 #ifndef __ASMCALLS_H__
 #define __ASMCALLS_H__
 
-#include "fs.h"
+static __inline void breakpoint()
+{
+	__asm volatile ("mov r11,r11");
+}
+
+
+//#include "fs.h"
 //#include "cache.h"
 
 #if ROMVERSION
@@ -23,9 +29,12 @@ extern u8 ui_border_visible;
 extern u8 darkness;
 //extern u8 border_visible;
 extern int ui_x;
-extern int ui_y;
+extern int ui_y_real;
 
 extern u8 sgb_palette_number;
+
+extern u32 ewram_canary_1;
+extern u32 ewram_canary_2;
 
 #if !GCC
 extern u8 Image$$RO$$Base[];
@@ -37,7 +46,7 @@ extern u8 Image$$RW$$Limit[];
 extern u32 max_multiboot_size;
 
 //gbz80.s
-#if SPEEDHACK2
+#if SPEEDHACKS_OLD
 extern u32 SPEEDHACK_FIND_JR_Z_BUF[16];
 extern u32 SPEEDHACK_FIND_JR_NZ_BUF[16];
 extern u32 SPEEDHACK_FIND_JR_C_BUF[16];
@@ -55,6 +64,13 @@ void run(int dont_stop);
 extern u32 op_table[256];
 extern void default_scanlinehook(void);
 extern u32 cpustate[26];
+extern u32 _lastbank;
+
+#define STATE_A  (cpustate[1] >> 24)
+#define STATE_BC (cpustate[2] >> 16)
+#define STATE_DE (cpustate[3] >> 16)
+#define STATE_HL (cpustate[4] >> 16)
+#define STATE_PC (cpustate[6] - (u32)_lastbank);
 
 extern u8 *rommap[16];
 extern u8 *g_memmap_tbl[16];
@@ -145,7 +161,7 @@ extern int bcolor;		//Border Color
 extern u32 joycfg;				//from io.s
 //void resetSIO(u32);				//io.s
 void vbaprint(const char *text);		//io.s
-void LZ77UnCompVram(void *source,u16 *destination);		//io.s
+void LZ77UnCompVram(const void *source,u16 *destination);		//io.s
 void waitframe(void);			//io.s
 int CheckGBAVersion(void);		//io.s
 void suspend(void);			//io.s
@@ -175,7 +191,7 @@ void debug_(int,int);		//lcd.s
 void paletteinit(void);		//lcd.s
 void PaletteTxAll(void);	//lcd.s
 void transfer_palette(void);	//lcd.s
-void move_ui(void);
+void move_ui_asm(void);
 //void makeborder(void);		//lcd.s
 extern u32 FPSValue;		//from lcd.s
 extern u8 fpsenabled;		//from lcd.s
@@ -184,6 +200,33 @@ extern u32 palettebank;		//from lcd.s palette bank
 extern u8 gammavalue;	//from lcd.s
 
 extern u8 g_lcdhack;
+extern u8 _dmamode;
+extern u16 _dma_src;
+extern u16 _dma_dest;
+extern u8 _vrambank;
+
+extern u8 gbc_palette[];
+
+extern u8* _dirty_tile_bits;
+extern u8* _gb_oam_buffer_screen;
+extern u8* _gb_oam_buffer_writing;
+extern u8* _gb_oam_buffer_alt;
+
+//extern u8* _dirty_tiles;
+//extern u8* _dirty_rows;
+
+//void _set_bg_cache_full(int mode);
+
+extern u8 dirty_map_words[];
+
+void memcpy32(void *dest, const void *src, int byteCount);
+void memset32(void *dest, u32 value, int byteCount);
+void memset8(u8 *dest, u8 value, int byteCount);
+void memcpy_unaligned_src(void *dest, const void *src, int byteCount);
+
+void copy_map_and_compare(u8 *destAddress, u8 *sourceAddress, int byteCount, u8* dirtyMapWordsPtr);
+
+
 void update_lcdhack(void);
 
 //ppu.s
@@ -229,5 +272,15 @@ void doReset(void);
 
 //sgb.s
 extern u8 g_update_border_palette;
+
+#if SPEEDHACKS_NEW
+extern u8 _quickhackcount;
+extern u8 _quickhackused;
+extern const u8* _speedhack_pc;
+
+void speedhack_reset(void);
+void install_speedhack(const u8 *speedhack_pc, int isJump);
+
+#endif
 
 #endif

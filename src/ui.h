@@ -37,8 +37,6 @@ void restart(void);
 void exit_(void);
 void sleep_(void);
 void fadetowhite(void);
-void scrolll(int f);
-void scrollr(void);
 void swapAB(void);
 void autostateset(void);
 void chpalette(void);
@@ -49,8 +47,9 @@ void timermode(void);
 void go_multiboot(void);
 void changeautoborder(void);
 void changelcdhack(void);
+void changedmamode(void);
 
-#if SPEEDHACK2
+#if SPEEDHACKS_OLD
 void find_best_speedhack(void);
 void autodetect_speedhack(void);
 #endif

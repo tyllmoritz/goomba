@@ -1,227 +1,288 @@
-	INCLUDE equates.h
-	INCLUDE memory.h
-	INCLUDE lcd.h
-	INCLUDE sound.h
-	INCLUDE cart.h
-	INCLUDE gbz80.h
-	INCLUDE gbz80mac.h
-	INCLUDE sgb.h
+	.text
+	global_func SaveIo
+	global_func LoadIo
+	global_func SaveRegs
+	global_func LoadRegs
+	global_func AfterLoadState
 
- AREA rom_code2, CODE, READONLY ;-- - - - - - - - - - - - - - - - - - - - - -
-
-;20
-save_emu
-	;r0 = dest
-	ldr r1,frame
-	str r1,[r0],#4
-	ldr r1,cycles
-	str r1,[r0],#4
-	ldr r1,dividereg
-	str r1,[r0],#4
-	ldr r1,timercounter
-	str r1,[r0],#4
-	ldrb r1,gb_ime
-	strb r1,[r0],#1
-	ldrb r1,gbcmode
-	strb r1,[r0],#1
-	ldrb r1,sgbmode
-	strb r1,[r0],#1
-	ldrb r1,doubletimer_
-	strb r1,[r0],#1
-	bx lr
-load_emu
-	;r0 = src
-	ldr r1,[r0],#4
-	str r1,frame
-	ldr r1,[r0],#4
-	str r1,cycles
-	ldr r1,[r0],#4
-	str r1,dividereg
-	ldr r1,[r0],#4
-	str r1,timercounter
-	ldrb r1,[r0],#1
-	strb r1,gb_ime
-	ldrb r1,[r0],#1
-	strb r1,gbcmode
-	ldrb r1,[r0],#1
-	strb r1,sgbmode
-	ldrb r1,[r0],#1
-	strb r1,doubletimer_
-	bx lr
-
-;12
-save_cpu
-	;r0 = destination address
-	stmfd sp!,{r0-addy,lr}
-	mov addy,r0
+SaveRegs:
+	stmfd sp!,{r3-r11,lr}
+	mov r12,r0
 	
-	adr r1,cpuregs
-	ldmia r1,{gb_flg-gb_pc}	;restore GB-Z80 state
-	;force the bottom bits to be zero for no reason, this really isn't necessary
-	ldr r2,#0xFFFF
-	bic gb_a,gb_a,r2
-	bic gb_a,gb_a,#0xFF0000
-	bic gb_bc,gb_bc,r2
-	bic gb_de,gb_de,r2
-	bic gb_hl,gb_hl,r2
-		
+	@AF, BC, DE, HL, SP, PC, Cycles
+	ldr r10,=GLOBAL_PTR_BASE
+	adr_ r2,cpuregs
+	ldmia r2,{gb_flg-gb_pc,gb_sp}
 	encodeFLG
 	orr r0,r0,gb_a,lsr#16
-	orr r0,r0,gb_bc
-	str r0,[addy],#4
-	orr r0,gb_hl,gb_de,lsr#16
-	str r0,[addy],#4
-	ldr r0,gb_sp
-	ldr r1,lastbank
-	sub r1,gb_pc,r1
-	mov r1,r1,lsl#16
-	orr r0,r1,r0,lsr#16
-	str r0,[addy],#4
+	strh r0,[r12],#2
+	mov r0,gb_bc,lsr#16
+	strh r0,[r12],#2
+	mov r0,gb_de,lsr#16
+	strh r0,[r12],#2
+	mov r0,gb_hl,lsr#16
+	strh r0,[r12],#2
+	mov r0,gb_sp,lsr#16
+	strh r0,[r12],#2
+	ldr_ r0,lastbank
+	sub r0,gb_pc,r0
+	strh r0,[r12],#2
+	str cycles,[r12],#4
+	ldmfd sp!,{r3-r11,lr}
+	mov r0,#16
+	bx lr
+LoadRegs:
+	stmfd sp!,{r3-r11,lr}
+	mov r12,r0
+	ldr r10,=GLOBAL_PTR_BASE
+	@AF, BC, DE, HL, SP, PC, Cycles
 	
-	ldmfd sp!,{r0-addy,pc}
-
-load_cpu
-	stmfd sp!,{r0-addy,lr}
-	mov addy,r0
-	ldrb r0,[addy],#1
+	adr_ r2,cpuregs
+	ldmia r2,{gb_flg-gb_pc,gb_sp}
+	ldrb r0,[r12],#1
 	decodeFLG
-	ldrb r0,[addy],#1
+	ldrb r0,[r12],#1
 	mov gb_a,r0,lsl#24
-	ldrh r0,[addy],#2 ;4
+	ldrh r0,[r12],#2
 	mov gb_bc,r0,lsl#16
-	ldrh r0,[addy],#2
+	ldrh r0,[r12],#2
 	mov gb_de,r0,lsl#16
-	ldrh r0,[addy],#2 ;4
+	ldrh r0,[r12],#2
 	mov gb_hl,r0,lsl#16
-	ldrh r0,[addy],#2
-	mov r0,r0,lsl#16
-	str r0,gb_sp
-	mov r0,#0
-	str r0,lastbank
-	ldrh r0,[addy],#2 ;4
+	ldrh r0,[r12],#2
+	mov gb_sp,r0,lsl#16
+	ldrh r0,[r12],#2
 	mov gb_pc,r0
-	;you must fix PC afterwards by calling flush or something, not doing it now because mapper information may not be loaded yet
-	ldmfd sp!,{r0-addy,pc}
+	ldr cycles,[r12],#4
+	
+	stmia r2,{gb_flg-gb_pc,gb_sp}
+	ldmfd sp!,{r3-r11,lr}
+	mov r0,#1
+	bx lr
 
-;256
-load_io
-	;NOT SAVED:
-	;sound information
+SaveIo:
+	@r0 = address to write 256 bytes to
+	stmfd sp!,{r3-r11,lr}
 	
-	
-	;r0 = address to read from (becomes r3)
-	stmfd sp!,{r0-addy,lr}
+	ldr r10,=GLOBAL_PTR_BASE
+	ldr_ cycles,cpuregs+0x14
 	mov r3,r0
+	@clear state to 00s
+	mov r2,#0x80
+	mov r1,#0
+	bl memset32_
 	
-	add r1,r3,#0x80
-	ldr r0,=XGB_HRAM
-	mov r2,#0x80/4
-	bl copy_
-	
-	ldrb r0,[r3,#0x00]
-	strb r0,joy0serial
-	ldrb r0,[r3,#0x02]
-	strb r0,stctrl
-	ldrb r0,[r3,#0x06]
-	strb r0,timermodulo
-	ldrb r0,[r3,#0x07]
-	strb r0,timerctrl
-	ldrb r0,[r3,#0x0F]
-	strb r0,gb_if
-
-	ldr r0,[r3,#0x40]
-	str r0,lcdctrl
-	ldr r0,[r3,#0x44]
-	str r0,scanline
-	ldr r0,[r3,#0x48]
-	str r0,ob0palette
-	
-	ldrb r0,[r3,#0x4D]
-	strb r0,doublespeed
-	ldrb r0,[r3,#0x4F]
-	strb r0,vrambank
-	ldrb r0,[r3,#0x51]
-	strb r0,dma_src+0
-	ldrb r0,[r3,#0x52]
-	strb r0,dma_src+1
-	ldrb r0,[r3,#0x53]
-	strb r0,dma_dest+0
-	ldrb r0,[r3,#0x54]
-	strb r0,dma_dest+1
-	ldrb r0,[r3,#0x68]
-	strb r0,BCPS_index
-	ldrb r0,[r3,#0x6A]
-	strb r0,OCPS_index
-	ldrb r0,[r3,#0x70]
-	strb r0,rambank
-	ldrb r0,[r3,#0xFF]
-	strb r0,gb_ie
-	
-	ldmfd sp!,{r0-addy,pc}
-
-save_io
-	;NOT SAVED:
-	;sound information
-
-	;r0 = address to dump to (becomes r3)	
-	stmfd sp!,{r0-addy,lr}
-	mov r3,r0
-	mov r1,r0
+	mov r4,#0
+0:
 	mov r0,#0
-	mov r2,0x100/4
-	bl filler_
-
-	add r0,r3,#0x80
-	ldr r1,=XGB_HRAM
-	mov r2,#0x80/4
-	bl copy_
+	mov r2,r4
+	bl IO_High_R
+	strb r0,[r3,r4]
+	add r4,r4,#1
+	cmp r4,#0x100
+	blt 0b
 	
-	ldrb r0,joy0serial
-	strb r0,[r3,#0x00]
-	ldrb r0,stctrl
-	strb r0,[r3,#0x02]
-	ldrb r0,timermodulo
-	strb r0,[r3,#0x06]
-	ldrb r0,timerctrl
-	strb r0,[r3,#0x07]
-	ldrb r0,gb_if
-	strb r0,[r3,#0x0F]
+	@write-only sound registers
+	ldrb_ r0,sound_shadow+0
+	strb r0,[r3,#0x11]
+	ldrb_ r0,sound_shadow+1
+	strb r0,[r3,#0x13]
+	ldrb_ r0,sound_shadow+2
+	strb r0,[r3,#0x14]
 
-	ldr r0,lcdctrl
-	str r0,[r3,#0x40]
-	ldr r0,scanline
-	str r0,[r3,#0x44]
-	ldr r0,ob0palette
-	str r0,[r3,#0x48]
+	ldrb_ r0,sound_shadow+3
+	strb r0,[r3,#0x16]
+	ldrb_ r0,sound_shadow+4
+	strb r0,[r3,#0x18]
+	ldrb_ r0,sound_shadow+5
+	strb r0,[r3,#0x19]
+
+	ldrb_ r0,sound_shadow+6
+	strb r0,[r3,#0x1B]
+	ldrb_ r0,sound_shadow+7
+	strb r0,[r3,#0x1D]
+	ldrb_ r0,sound_shadow+8
+	strb r0,[r3,#0x1E]
 	
-	ldrb r0,doublespeed
-	strb r0,[r3,#0x4D]
-	ldrb r0,vrambank
-	strb r0,[r3,#0x4F]
-	ldrb r0,dma_src+0
-	strb r0,[r3,#0x51]
-	ldrb r0,dma_src+1
-	strb r0,[r3,#0x52]
-	ldrb r0,dma_dest+0
-	strb r0,[r3,#0x53]
-	ldrb r0,dma_dest+1
-	strb r0,[r3,#0x54]
-	ldrb r0,BCPS_index
-	strb r0,[r3,#0x68]
-	ldrb r0,OCPS_index
-	strb r0,[r3,#0x6A]
-	ldrb r0,rambank
-	strb r0,[r3,#0x70]
-	ldrb r0,gb_ie
-	strb r0,[r3,#0xFF]
+	
+	ldmfd sp!,{r3-r11,lr}
+	mov r0,#0x100
+	bx lr
+	
+	
+LoadIo:
+	@TODO: write this
+	@r0 = address to read 256 bytes from
+	stmfd sp!,{r3-r11,lr}
+	ldr r10,=GLOBAL_PTR_BASE
+	ldr_ cycles,cpuregs+0x14
+	mov r3,r0
+	@joystick, serial port
+	ldrb r0,[r3,#0x00]
+	strb_ r0,joy0serial
+	ldrb r0,[r3,#0x02]
+	strb_ r0,stctrl
+	@divider, timer, interrupt flags
+	ldrb r0,[r3,#0x04]
+	strb_ r0,dividereg+3
+	
+	@timer flags, interrupt flags, sound registers...
+	mov r0,#0x05
+	
+	ldrb r0,[r3,#0x05]
+	strb_ r0,timercounter+3
+	ldrb r0,[r3,#0x06]
+	strb_ r0,timermodulo
+	ldrb r0,[r3,#0x07]
+	strb_ r0,timerctrl
+	ldrb r0,[r3,#0x0F]
+	strb_ r0,gb_if
+	
+	@write IO registers 10-3F directly
+	mov r4,#0x10
+0:
+	ldrb r0,[r3,r4]
+	@set Initial flag on all sound registers
+@	cmp r4,#0x14
+@	cmpne r4,#0x19
+@	cmpne r4,#0x1E
+@	cmpne r4,#0x23
+@	orreq r0,r0,#0x80
+	mov r2,r4
+	bl_long IO_High_W
+	add r4,r4,#1
+	cmp r4,#0x40
+	blt 0b
+	
+	@lcd control, lcd status, scrolling
+	ldrb r0,[r3,#0x40]
+	strb_ r0,lcdctrl
+	mov r1,r0
+	bl_long FF40W_entry
+	ldrb r0,[r3,#0x41]
+	ldr r1,=lcdstat
+	strb r0,[r1]
+	bl_long FF41_W
+	ldrb r0,[r3,#0x42]
+	bl_long FF42W_entry
+	ldrb r0,[r3,#0x43]
+	bl_long FF43W_entry
+	
+	@ignore FF44 (scanline number)
+	
+	@line compare
+	ldrb r0,[r3,#0x45]
+	bl_long FF45_W
+	
+	@ignore FF46 (sprite DMA transfer)
+	
+	@gb palettes, windows
+	ldrb r0,[r3,#0x47]
+	bl_long FF47_W_
+	ldrb r0,[r3,#0x48]
+	bl_long FF48_W_
+	ldrb r0,[r3,#0x49]
+	bl_long FF49_W_
+	ldrb r0,[r3,#0x4A]
+	bl_long FF4A_W_
+	ldrb r0,[r3,#0x4B]
+	bl_long FF4B_W_
+	
+	@double speed
+	ldrb r0,[r3,#0x4D]
+	strb_ r0,doublespeed
+	bl updatespeed
+	
+	@vram bank
+	ldrb r0,[r3,#0x4F]
+	bl_long FF4F_W
+	
+	@HDMA
+	ldrb r0,[r3,#0x51]
+	bl_long FF51_W
+	ldrb r0,[r3,#0x52]
+	bl_long FF52_W
+	ldrb r0,[r3,#0x53]
+	bl_long FF53_W
+	ldrb r0,[r3,#0x54]
+	bl_long FF54_W
+	
+	@palette index
+	ldrb r0,[r3,#0x68]
+	bl_long FF68_W
+	ldrb r0,[r3,#0x6A]
+	bl_long FF6A_W
+	
+	@ram bank
+	ldrb r0,[r3,#0x70]
+	bl_long _FF70W
+	
+	@HRAM and IE
+	mov r4,#0x80
+0:
+	ldrb r0,[r3,r4]
+	mov r2,r4
+	bl_long IO_High_W
+	add r4,r4,#1
+	cmp r4,#0x100
+	blt 0b
 
-	ldmfd sp!,{r0-addy,pc}
+	
+	ldmfd sp!,{r3-r11,lr}
+	mov r0,#1
+	bx lr
 
+AfterLoadState:
+	stmfd sp!,{r3-r11,lr}
+	ldr r10,=GLOBAL_PTR_BASE
+	@AF, BC, DE, HL, SP, PC, Cycles
+	adr_ r2,cpuregs
+	ldmia r2,{gb_flg-gb_pc,gb_sp}
+	
+	mov r0,#0
+	str_ r0,lastbank
+	
+	@make VRAM all dirty
+	mov r1,#0xFFFFFFFF
+	ldr r0,=DIRTY_TILE_BITS
+	mov r2,#48
+	bl memset32_
+	ldr r0,=dirty_map_words
+	mov r2,#64
+	bl memset32_
 
-
-	END
-
-
-
-
-
+	@clear all VRAM packets (Shantae)
+	mov r1,#0
+	ldr r0,=vram_packets_incoming
+	mov r2,#128
+	bl memset32_
+	ldr r0,=vram_packets_registered_bank0
+	mov r2,#128
+	bl memset32_
+	ldr r0,=vram_packets_registered_bank1
+	mov r2,#128
+	bl memset32_
+	ldr r0,=vram_packets_dirty
+	mov r2,#132
+	bl memset32_
+	
+	@load banks
+	ldr_ r0,bank0
+	bl_long map0123_
+	ldr_ r0,bank1
+	bl_long map4567_
+	@ram enable/ram bank
+	bl_long RamSelect
+	
+	adr_ r2,cpuregs
+	stmia r2,{gb_flg-gb_pc,gb_sp}
+	
+	bl_long copy_gbc_palette
+	bl_long transfer_palette
+	bl_long display_sprites
+	@these destroy r10
+	bl_long render_dirty_tiles
+	bl_long render_dirty_bg
+	
+	ldmfd sp!,{r3-r11,lr}
+	bx lr

@@ -1,5 +1,12 @@
 Goomba revision history
 -=-=-=-=-=-=-=-=-=-=-=-
+version 2014-12-14
+   Rewrote some of the save system, now it works correctly with less RAM avaliable.
+Added a system to fix up some EWRAM variables if they get overwritten, but it hasn't been necessary yet.
+   Fixed the bug that causes problems when loading state from a GBC game with SGB borders, and another game was running at the time you loaded the state.  It no longer loads the new game in SGB mode to try to get its border (and crashes).
+   Fixed crashes due to stupid code waiting for vblank with vblank interrupts disabled.  Slow motion works fine again.
+   Fixed graphics corruption in Who Wants to be a Millionaire and other games
+
 version 2009-04-21
    Added Asaki's extra palettes
 

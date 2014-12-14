@@ -1,7 +1,15 @@
 #ifndef GBA_HEADER
 #define GBA_HEADER
 
-#define SAVE_FORBIDDEN return;
+#ifndef EWRAM_BSS
+#define EWRAM_BSS	__attribute__((section(".sbss")))
+#endif
+
+#ifndef EWRAM_DATA
+#define EWRAM_DATA	__attribute__((section(".ewram")))
+#endif
+
+#define SAVE_FORBIDDEN //return;
 
 typedef unsigned char u8;
 typedef unsigned short u16;

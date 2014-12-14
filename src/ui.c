@@ -1,13 +1,16 @@
 #include "includes.h"
 
-u8 autoA,autoB;				//0=off, 1=on, 2=R
-u8 stime=0;
-u8 autostate=0;
-int selected;//selected menuitem.  used by all menus.
-int mainmenuitems;//? or CARTMENUITEMS, depending on whether saving is allowed
-u32 oldkey;//init this before using getmenuinput
+EWRAM_BSS u8 autoA,autoB;				//0=off, 1=on, 2=R
+EWRAM_BSS u8 stime=0;
+EWRAM_BSS u8 autostate=0;
+EWRAM_BSS int main_ui_selection;
+//EWRAM_BSS int selected;//selected menuitem.  used by all menus.
+EWRAM_BSS int mainmenuitems;//? or CARTMENUITEMS, depending on whether saving is allowed
+//EWRAM_BSS u32 oldkey;//init this before using getmenuinput
 
+#ifndef ARRSIZE
 #define ARRSIZE(xxxx) (sizeof((xxxx))/sizeof((xxxx)[0]))
+#endif
 
 int savestate(void* dest){return 0;}
 void loadstate(int foo, void* dest){}
@@ -20,7 +23,7 @@ void quicksave(){} void quickload(){}
 //void multiboot(){}
 #endif
 
-char str[32]; //ZOMG global variable!
+EWRAM_BSS char str[32]; //ZOMG global variable!
 int print_2_func(int row, const char *src1, const char *src2);
 int print_1_func(int row, const char *src1, const char *src2);
 int strmerge_str(int unused, const char *src1, const char *src2);
@@ -65,7 +68,7 @@ int text2_str(int row)
 #define print_1_1(xxxx) row=text(row,(xxxx));
 #define print_2_1(xxxx) row=text2(row,(xxxx));
 
-//#define MENU2ITEMS 8+SPEEDHACK2			//othermenu items
+//#define MENU2ITEMS 8+SPEEDHACKS_OLD			//othermenu items
 //#define MENU3ITEMS 3			//displaymenu items
 //
 ////mainmenuitems when running from cart (not multiboot)
@@ -94,26 +97,26 @@ go_multiboot,
 restart,exit_};
 
 const fptr fnlist2[]={vblset,fpsset,sleepset,swapAB,autostateset,
-#if SPEEDHACK2
+#if SPEEDHACKS_OLD
 autodetect_speedhack,
 #endif
 gbtype,changeautoborder,gbatype};
 const fptr fnlist3[]={chpalette,brightset,sgbpalnum};
 
 const fptr fnlist4[]={
-#if SPEEDHACK2
+#if SPEEDHACKS_OLD
 autodetect_speedhack,
 #endif
-timermode,changelcdhack};
+timermode,changelcdhack}; //,changedmamode};
 
-const fptr* fnlistX[]={fnlist1,multifnlist,fnlist2,fnlist3,fnlist4};
+const fptr *const fnlistX[]={fnlist1,multifnlist,fnlist2,fnlist3,fnlist4};
 const fptr drawuiX[]={drawui1,drawui1,drawui2,drawui3,drawui4};
 const char MENUXITEMS[]=
 {
 	ARRSIZE(fnlist1),ARRSIZE(multifnlist),ARRSIZE(fnlist2),ARRSIZE(fnlist3),ARRSIZE(fnlist4)
 };
 
-
+/*
 u32 getmenuinput(int menuitems)
 {
 	u32 keyhit;
@@ -141,14 +144,16 @@ u32 getmenuinput(int menuitems)
 	selected=sel;
 	return keyhit;
 }
+*/
 
 void ui()
 {
-	int key,soundvol,oldsel,tm0cnt,i;
+	int key,soundvol,tm0cnt,i;
 	int mb=(u32)textstart<0x8000000;
 	int savesuccess=1;
 	int usefade=1;
 
+	main_ui_selection = 0;
 	make_ui_visible();
 
 	autoA=joycfg&A_BTN?0:1;
@@ -180,15 +185,19 @@ void ui()
 	}
 #endif
 	selected=0;
+	main_ui_selection = selected;
 	drawui1();
 	if (usefade)
 	{
+		scrollr(1);
+		/*
 		for(i=0;i<8;i++)
 		{
-			waitframe();
 			setdarkness(i);		//Darken game screen
-			ui_x=224-i*32; move_ui();
+			ui_x=224-i*32;
+			move_ui_wait();
 		}
+		*/
 	}
 #if CARTSRAM
 	savesuccess=backup_gb_sram(1);
@@ -205,14 +214,15 @@ void ui()
 	do {
 		drawclock();
 		key=getmenuinput(mainmenuitems);
+		main_ui_selection = selected;
 		if(key&(A_BTN)) {
-			oldsel=selected;
 			fnlistX[mb][selected]();
-			selected=oldsel;
-			if (mb != (u32)textstart<0x8000000)
+			selected = main_ui_selection;
+			if (mb != ((u32)textstart<0x8000000))
 			{
 				mb=1;
 				selected=0;
+				main_ui_selection = selected;
 			}
 		}
 		if(key&(A_BTN+UP+DOWN+LEFT+RIGHT))
@@ -225,12 +235,15 @@ void ui()
 	}
 	writeconfig();			//save any changes
 #endif
+	scrolll(2);
+	/*
 	for(i=1;i<9;i++)
 	{
-		waitframe();
 		setdarkness(8-i);	//Lighten screen
-		ui_x=i*32; move_ui();
+		ui_x=i*32;
+		move_ui_wait();
 	}
+	*/
 	while(key&(B_BTN)) {
 		waitframe();		//(polling REG_P1 too fast seems to cause problems)
 		key=~REG_P1;
@@ -239,11 +252,12 @@ void ui()
 	REG_TM0CNT=tm0cnt;		//resume sound (directsound)
 	cls(3);
 	make_ui_invisible();
+	main_ui_selection = -1;
 }
 
 void subui(int menunr)
 {
-	int key,oldsel;
+	int key, oldsel;
 
 	selected=0;
 	drawuiX[menunr]();
@@ -260,7 +274,8 @@ void subui(int menunr)
 			drawuiX[menunr]();
 		}
 	} while(!(key&(B_BTN+R_BTN+L_BTN)));
-	scrollr();
+	drawui1();
+	scrollr(0);
 	while(key&(B_BTN+L_BTN+R_BTN)) {
 		waitframe();		//(polling REG_P1 too fast seems to cause problems)
 		key=~REG_P1;
@@ -273,7 +288,9 @@ void ui2()
 }
 void ui3()
 {
+	setdarkness(0);
 	subui(3);
+	setdarkness(8);
 }
 void ui4()
 {
@@ -356,25 +373,78 @@ char *const paltxt[]=
 "SGB 4E",
 "SGB 4F",
 "SGB 4G",
-"SGB 4H"	
+"SGB 4H",
+"Balloon Kid",
+"Tetris",
+"Alleyway",
+"Mario's Picross",
+"Space Invaders",
+"X",
+"Pocket Camera",
+"Radar Mission",
+"Pokemon Blue",
+"Kaeru no Tame ni Kane wa Naru",
+"Pokemon Red",
+"Pokemon Green",
+"Dr. Mario",
+"Pinocchio",
+"Mole Mania",
+"Game and Watch Gallery",
+"Yoshi",
+"Donkey Kong",
+"Kirby's Pinball Land",
+"Super Mario Land",
+"Pocket Bomberman",
+"Kid Icarus",
+"Golf",
+"Dynablaster",
+"Battletoads",
+"Wario Blast",
+"Tetris Attack",
+"Yoshi's Cookie",
+"Qix",
+"Wario Land",
+"Donkey Kong Land",
+"Soccer",
+"Baseball",
+"Kirby's Dream Land",
+"Super Mario Land 2",
+"Wave Race",
+"Donkey Kong Land 2",
+"Killer Instinct",
+"Mystic Quest",
+"Mega Man",
+"Zelda Link's Awakening",
+"Star Wars",
+"Metroid II",
+"Wario Land II",
+"Pac-in-Time"
 };
 char *const gbtxt[]={"GB","Prefer SGB over GBC","Prefer GBC over SGB","GBC+SGB"};
 char *const clocktxt[]={"Full","Half speed"};
 char *const lcdhacktxt[]={"OFF","Low","Medium","High"};
+//char *const dmamodetxt[]={"Buffered", "Direct to VRAM", "WayForward"};
 
 #define EMUNAME "Goomba Color"
 //char *const emuname = "Goomba Color ";
 char *const palnumtxt[]={"0","1","2","3"};
 
-#if SPEEDHACK2
+#if SPEEDHACKS_OLD
 char *const hacknames[]={"jr nz","jr z", "jr nc", "jr c"};
 #endif
 
 void drawui1()
 {
+	int oldsel = selected;
 	int row=0;
 	cls(1);
-	strmerge(str,EMUNAME " " VERSION " on ",hostname[gbaversion]);
+	if (main_ui_selection == -1)
+	{
+		return;
+	}
+	selected = main_ui_selection;
+	
+	strmerge(str,EMUNAME " " VERSION " on ",hostname[(u32)gbaversion]);
 	drawtext(18,str,0);
 	drawtext(19,"by Flubba and Dwedit",0);
 
@@ -401,6 +471,8 @@ void drawui1()
 	}
 	print_1_1("Restart");
 	print_1_1("Exit");
+	
+	selected = oldsel;
 }
 
 void drawui2()
@@ -434,7 +506,7 @@ void drawui4()
 	cls(2);
 	/////////////0123456789ABCDEF0123456789ABCD
 	drawtext(32, "        Speed Hacks",0);
-#if SPEEDHACK2
+#if SPEEDHACKS_OLD
 	if (g_hackflags==0)
 	{
 		print_2_1("Autodetect Speed Hack");
@@ -446,6 +518,7 @@ void drawui4()
 #endif
 	print_2("Double Speed: ",clocktxt[doubletimer==1]);
 	print_2("LCD scanline hack: ", lcdhacktxt[g_lcdhack]);
+//	print_2("DMA Mode: ", dmamodetxt[_dmamode]);
 }
 
 
@@ -568,15 +641,7 @@ void restart()
 	writeconfig();					//save any changes
 #endif
 	scrolll(1);
-#if GCC
-	extern u8 __sp_usr[];
-	u32 newstack=(u32)(&__sp_usr);
-	__asm__ volatile ("mov sp,%0": :"r"(newstack));
-#else
-	__asm {mov r0,#0x3007f00}		//stack reset
-	__asm {mov sp,r0}
-#endif
-	rommenu();
+	jump_to_rommenu();
 }
 
 void exit_()
@@ -614,14 +679,15 @@ void fadetowhite()
 	}
 }
 
+/*
 void scrolll(int f)
 {
 	int i;
 	for(i=0;i<9;i++)
 	{
 		if(f) setdarkness(8+i);	//Darken screen
-		ui_x=i*32; move_ui();
-		waitframe();
+		ui_x=i*32;
+		move_ui_wait();
 	}
 }
 void scrollr()
@@ -629,11 +695,12 @@ void scrollr()
 	int i;
 	for(i=8;i>=0;i--)
 	{
-		waitframe();
-		ui_x=i*32; move_ui();
+		ui_x=i*32;
+		move_ui_wait();
 	}
 	cls(2);							//Clear BG2
 }
+*/
 
 void swapAB()
 {
@@ -674,7 +741,7 @@ void draw_palette_list()
 
 void chpalette()
 {
-	int key,oldsel;
+	int key;//,oldsel;
 
 	setdarkness(0);
 
@@ -734,7 +801,15 @@ void changelcdhack()
 	if (g_lcdhack>=4) g_lcdhack=0;
 	update_lcdhack();
 }
-
+#if 0
+void changedmamode()
+{
+	if (_dmamode < 2)
+	{
+		_dmamode ^= 1;
+	}
+}
+#endif
 
 #if GOMULTIBOOT
 void go_multiboot()
@@ -831,7 +906,7 @@ void go_multiboot()
 #endif
 
 
-#if SPEEDHACK2
+#if SPEEDHACKS_OLD
 u32*const speedhack_buffers[]=
 {
 	SPEEDHACK_FIND_JR_NZ_BUF,

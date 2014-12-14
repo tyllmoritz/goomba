@@ -21,7 +21,7 @@ u8 *make_instant_pages(u8* rom_base)
 	//this is for cases where there is no caching!
 	u32 *p=(u32*)rom_base;
 	u8 *page0_rom;
-	u8 cartsizebyte;
+//	u8 cartsizebyte;
 	int i;
 	
 #if MOVIEPLAYER
@@ -53,7 +53,7 @@ u8 *make_instant_pages(u8* rom_base)
 		}
 	}
 	page0_rom=INSTANT_PAGES[0];
-	cartsizebyte=page0_rom[0x148];
+//	cartsizebyte=page0_rom[0x148];
 
 //	if (cartsizebyte>0)
 	{
