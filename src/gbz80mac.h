@@ -43,12 +43,15 @@
 
 	.macro fetch count
  .if PROFILE
-	bl profile_it
- .endif
+	subs cycles,cycles,#\count*CYCLE
+	b_long fetch_profile
+	.pool
+ .else
 	subs cycles,cycles,#\count*CYCLE
 	ldrplb r0,[gb_pc],#1
 	ldrpl pc,[gb_optbl,r0,lsl#2]
 	ldr_ pc,nexttimeout
+ .endif
 	.endm
 
 	.macro readmemHL

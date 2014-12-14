@@ -1,7 +1,5 @@
-#include "equates.h"
-
 	.section	".init"
-	global_func _start
+	.global     _start
 	.align
 	.arm
 @---------------------------------------------------------------------------------
@@ -45,7 +43,7 @@ __slave_number:
 	.word   0    				@ reserved
 	.word   0    				@ reserved
 
-    global_func start_vector
+    .global     start_vector
     .align
 @---------------------------------------------------------------------------------
 start_vector:
@@ -72,8 +70,7 @@ start_vector:
 goback:
 	ldr	r0, =__text_start
 	lsl	r0, #5				@ Was code compiled at 0x08000000 or higher?
-@	bcs     DoEWRAMClear			@ yes, you can not run it in external WRAM
-	bcs     SkipEWRAMClear			@ yes, you can not run it in external WRAM
+	bcs     DoEWRAMClear			@ yes, you can not run it in external WRAM
 
 	mov     r0, pc
 	lsl     r0, #5				@ Are we running from ROM (0x8000000 or higher) ?
@@ -96,34 +93,50 @@ goback:
 	ldr r0,=goback+1
 	mov pc,r0
 
-@	bx	r6				@ Jump to the code to execute
+;	bx	r6				@ Jump to the code to execute
 
 @---------------------------------------------------------------------------------
-@DoEWRAMClear:					@ Clear External WRAM to 0x00
+DoEWRAMClear:					@ Clear External WRAM to 0x00
 @---------------------------------------------------------------------------------
-@	mov	r1, #0x40
-@	lsl	r1, #12				@ r1 = 0x40000
-@	lsl	r0, r1, #7			@ r0 = 0x2000000
-@	bl	ClearMem
+	mov	r1, #0x40
+	lsl	r1, #12				@ r1 = 0x40000
+	lsl	r0, r1, #7			@ r0 = 0x2000000
+	bl	ClearMem
 
 @---------------------------------------------------------------------------------
 SkipEWRAMClear:					@ Clear Internal WRAM to 0x00
 @---------------------------------------------------------------------------------
 
 @---------------------------------------------------------------------------------
+@ Clear BSS section to 0x00
+@---------------------------------------------------------------------------------
+	ldr	r0, =__bss_start
+	ldr	r1, =__bss_end
+	sub	r1, r0
+	bl	ClearMem
+
+@---------------------------------------------------------------------------------
+@ Clear SBSS section to 0x00
+@---------------------------------------------------------------------------------
+	ldr	r0, =__sbss_start
+	ldr	r1, =__sbss_end
+	sub	r1, r0
+	bl	ClearMem
+
+@---------------------------------------------------------------------------------
 @ Copy initialized data (data section) from LMA to VMA (ROM to RAM)
 @---------------------------------------------------------------------------------
 	ldr	r1, =__data_lma
-	ldr	r2, =__data_start__
-	ldr	r4, =__data_end__
+	ldr	r2, =__data_start
+	ldr	r4, =__data_end
 	bl	CopyMemChk
 
 @---------------------------------------------------------------------------------
 @ Copy internal work ram (iwram section) from LMA to VMA (ROM to RAM)
 @---------------------------------------------------------------------------------
 	ldr	r1,= __iwram_lma
-	ldr	r2,= __iwram_start__
-	ldr	r4,= __iwram_end__
+	ldr	r2,= __iwram_start
+	ldr	r4,= __iwram_end
 	bl	CopyMemChk
 
 @---------------------------------------------------------------------------------
@@ -147,22 +160,6 @@ CIW0Skip:
 	bl	CopyMemChk
 
 @---------------------------------------------------------------------------------
-@ Clear BSS section to 0x00
-@---------------------------------------------------------------------------------
-	ldr	r0, =__bss_start__
-	ldr	r1, =__bss_end__
-	sub	r1, r0
-	bl	ClearMem
-
-@---------------------------------------------------------------------------------
-@ Clear SBSS section to 0x00
-@---------------------------------------------------------------------------------
-	ldr	r0, =__sbss_start__
-	ldr	r1, =__sbss_end__
-	sub	r1, r0
-	bl	ClearMem
-
-@---------------------------------------------------------------------------------
 CEW0Skip:
 @---------------------------------------------------------------------------------
 @ set heap end
@@ -174,7 +171,7 @@ CEW0Skip:
 @ global constructors
 @---------------------------------------------------------------------------------
 	ldr	r3, =__libc_init_array
-	bl	_blx_r3_stub
+	bl	_call_via_r3
 @---------------------------------------------------------------------------------
 @ Jump to user code
 @---------------------------------------------------------------------------------
@@ -183,8 +180,9 @@ CEW0Skip:
 	
 	mov	r0, #0				@ int argc
 	mov	r1, #0				@ char	*argv[]
+	
 	ldr	r3, =main
-	bl	_blx_r3_stub
+	bl	_call_via_r3
 @---------------------------------------------------------------------------------
 @ Clear memory to 0x00 if length != 0
 @---------------------------------------------------------------------------------
@@ -210,11 +208,6 @@ ClrLoop:
 ClearMX:
 @---------------------------------------------------------------------------------
 	bx	lr
-
-@---------------------------------------------------------------------------------
-_blx_r3_stub:
-@---------------------------------------------------------------------------------
-	bx	r3
 
 @---------------------------------------------------------------------------------
 @ Copy memory if length	!= 0

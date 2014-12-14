@@ -1,9 +1,4 @@
- .align
- .pool
- .section .iwram, "ax", %progbits
- .subsection 0
- .align
- .pool
+ .section .iwram.0, "ax", %progbits
 
 @	#include "equates.h"
 @	#include "gbz80mac.h"
@@ -25,14 +20,6 @@
 	
 	.global immediate_check_irq
 	
- .if SPEEDHACKS
-	.global g_hackflags
-	.global g_hackflags2
-	.global SPEEDHACK_FIND_JR_Z_BUF
-	.global SPEEDHACK_FIND_JR_NZ_BUF
-	.global SPEEDHACK_FIND_JR_C_BUF
-	.global SPEEDHACK_FIND_JR_NC_BUF
- .endif	
 	.global CHR_DECODE
 	.global XGB_RAM
 	.global XGB_HRAM
@@ -41,30 +28,25 @@
 	.global XGB_VRAM
 	.global GBC_EXRAM
  .endif
-	.global update_doublespeed_ui
+	global_func update_doublespeed_ui
 	
-	.global emu_reset
-	.global run
+	global_func emu_reset
+	global_func run
 	.global op_table
-	.global default_scanlinehook
+	global_func default_scanlinehook
 	.global cpustate
 	.global rommap
 	.global g_memmap_tbl
 	.global frametotal
 	.global sleeptime
 	.global novblankwait
-	.global request_gba_mode
-	.global request_gb_type
-	.global line145_to_end
-	.global checkIRQ
-	.global _00
+	global_func request_gba_mode
+	global_func request_gb_type
+	global_func line145_to_end
+	global_func checkIRQ
+	global_func _00
 	.global gbc_mode
 	
-	.if SPEEDHACKS
-	.global g_hackflags
-	.global g_hackflags2
-	.global cpuhack_reset
-	.endif
 	.global g_hackflags
 	.global doubletimer
 	
@@ -87,10 +69,19 @@
 	.ascii "WRAM"
 	.endif
 
+#if SPEEDHACKS_NEW
+	global_func install_speedhack
+	global_func speedhack_reset
+	.global _speedhack_pc
+	.global _quickhackused
+	.global _quickhackcounter
+#endif
+
 @----------------------------------------------------------------------------
 _GO:@	Continue running
 @----------------------------------------------------------------------------
 	fetch 0
+
 @----------------------------------------------------------------------------
 _ED:@	DEBUG					;actually invalid opcode
 @----------------------------------------------------------------------------
@@ -116,8 +107,8 @@ _xx:@	???					;invalid opcode
 		adr r0,_xx
 		mov r1,#0
 		bl debug_
+		fetch 4
 	.endif
-	fetch 4
 @----------------------------------------------------------------------------
 _40:@	LD B,B
 _49:@	LD C,C
@@ -263,6 +254,18 @@ _18:@	JR *	relative jump
 	ldrsb r0,[gb_pc],#1
 	add gb_pc,gb_pc,r0
 	fetch 8
+#if SPEEDHACKS_NEW
+@----------------------------------------------------------------------------
+_18x:@	JR *	relative jump
+@----------------------------------------------------------------------------
+	ldrsb r0,[gb_pc],#1
+	add gb_pc,gb_pc,r0
+_18x_modify:
+	cmp r0,#-4
+	bleq speedhack_check
+fetch8:
+	fetch 8
+#endif
 @----------------------------------------------------------------------------
 _19:@	ADD HL,DE
 @----------------------------------------------------------------------------
@@ -302,20 +305,6 @@ _1F:@	RRA	rotate accu right through C
 	bic gb_a,gb_a,#0x00800000
 	fetch 4
 
-	.if SPEEDHACKS
-@----------------------------------------------------------------------------
-_20x:@	JR NZ,*	jump if not zero - speedhack version
-@----------------------------------------------------------------------------
-	ldrsb r0,[gb_pc],#1
-	tst gb_flg,#PSR_Z
-	bne 0f
-	add gb_pc,gb_pc,r0
-	sub cycles,cycles,#4*CYCLE
-	cmp r0,#-4
-	andeq cycles,cycles,#CYC_MASK
-0:
-	fetch 8
-	.endif
 @----------------------------------------------------------------------------
 _20:@	JR NZ,*	jump if not zero
 @----------------------------------------------------------------------------
@@ -323,9 +312,46 @@ _20:@	JR NZ,*	jump if not zero
 	ldrsb r0,[gb_pc],#1
 	addeq gb_pc,gb_pc,r0
 	subeq cycles,cycles,#4*CYCLE
-@	cmpeq r0,#-4
-@	andeq cycles,cycles,#CYC_MASK
+nobranch:
 	fetch 8
+#if SPEEDHACKS_NEW
+@----------------------------------------------------------------------------
+_20x:@	JR NZ,*	jump if not zero - speedhack version
+@----------------------------------------------------------------------------
+	tst gb_flg,#PSR_Z
+	ldrsb r0,[gb_pc],#1
+	bne nobranch
+	add gb_pc,gb_pc,r0
+_20x_modify:
+	cmp r0,#-4
+	bleq speedhack_check
+fetch12:
+	fetch 12
+speedhack_check:
+	ldr_ r1,speedhack_pc
+	cmp gb_pc,r1
+	beq speedhack_apply
+speedhack_modify:
+	bx lr
+	@second chance using RAM address (for games that have lots of scattered polling loops)
+	ldrb r2,[r9,#0]
+	cmp r2,#0xFA	@ld a,(nnnn)
+	bxne lr
+	ldrb r1,[r9,#1]
+	ldrb r2,[r9,#2]
+	orr r1,r1,r2,lsl#8
+	ldrh_ r12,speedhack_ram_address
+	cmp r1,r12
+	bxne lr
+speedhack_apply:
+	and cycles,cycles,#CYC_MASK
+	mov r1,#1
+	strb_ r1,quickhackused
+	bx lr
+
+#endif
+
+
 @----------------------------------------------------------------------------
 _21:@	LD HL,#nnnn
 @----------------------------------------------------------------------------
@@ -356,20 +382,6 @@ _25:@	DEC H
 _26:@	LD H,#nn
 @----------------------------------------------------------------------------
 	opLDIM8H gb_hl
-	.if SPEEDHACKS
-@----------------------------------------------------------------------------
-_28x:@	JR Z,*	jump if zero - speedhack version
-@----------------------------------------------------------------------------
-	tst gb_flg,#PSR_Z
-	ldrsb r0,[gb_pc],#1
-	beq 0f
-	add gb_pc,gb_pc,r0
-	sub cycles,cycles,#4*CYCLE
-	cmp r0,#-4
-	andeq cycles,cycles,#CYC_MASK
-0:
-	fetch 8
-	.endif
 @----------------------------------------------------------------------------
 _28:@	JR Z,*	jump if zero
 @----------------------------------------------------------------------------
@@ -382,10 +394,132 @@ _28:@	JR Z,*	jump if zero
 @	andeq cycles,cycles,#CYC_MASK
 _28_:
 	fetch 8
+
+#if SPEEDHACKS_NEW
+@----------------------------------------------------------------------------
+_28x:@	JR Z,*	jump if zero - speedhack version
+@----------------------------------------------------------------------------
+	tst gb_flg,#PSR_Z
+	ldrsb r0,[gb_pc],#1
+	beq nobranch
+	add gb_pc,gb_pc,r0
+_28x_modify:
+	cmp r0,#-4
+	bleq speedhack_check
+	fetch 12
+#endif
+
+
 @----------------------------------------------------------------------------
 _29:@	ADD HL,HL
 @----------------------------------------------------------------------------
 	opADD16_2
+
+
+#if FAST_LDI_A_HL
+@----------------------------------------------------------------------------
+_2Ax:@	LDI A,(HL)	load A from (HL), incr HL
+@----------------------------------------------------------------------------
+@new code: remember the last page it read from, so it can run faster for the next read
+	mov r1,gb_hl,lsr#28
+_2Ax_:
+	ldr r1,[pc,r1,lsl#2]
+	b 0f
+	.word _2A_page0
+	.word _2A_page0
+	.word _2A_page0
+	.word _2A_page0
+	.word _2A_page4
+	.word _2A_page4
+	.word _2A_page4
+	.word _2A_page4
+	.word _2A_page8
+	.word _2A_page8
+	.word _2A_pageA
+	.word _2A_pageA
+	.word _2A_pageC
+	.word _2A_pageD
+	.word _2A_pageEF
+	.word _2A_pageEF
+0:
+	str r1,[r10,#0x2A*4]
+	bx r1
+
+_2A_pageEF:
+	cmp gb_hl,#0xE0000000
+	blo _2Ax
+_2A:
+	readmemHL
+	add gb_hl,gb_hl,#0x00010000
+	mov gb_a,r0,lsl#24
+	fetch 8
+
+_2A_pageC:
+	mov r1,gb_hl,lsr#28
+	cmp r1,#0x0C
+	bne _2Ax_
+_2A_pageC_:
+	ldr_ r1,memmap_tbl+0x0C*4
+	ldrb r0,[r1,gb_hl,lsr#16]
+	mov gb_a,r0,lsl#24
+	add gb_hl,gb_hl,#0x10000
+	fetch 8
+
+_2A_pageD:
+	mov r1,gb_hl,lsr#28
+	cmp r1,#0x0D
+	bne _2Ax_
+_2A_pageD_:
+	ldr_ r1,memmap_tbl+0x0D*4
+	ldrb r0,[r1,gb_hl,lsr#16]
+	mov gb_a,r0,lsl#24
+	add gb_hl,gb_hl,#0x10000
+	fetch 8
+
+_2A_page0:
+	cmp gb_hl,#0x40000000
+	bcs _2Ax
+_2A_page0_:
+	ldr_ r1,memmap_tbl+0x00*4
+	ldrb r0,[r1,gb_hl,lsr#16]
+	mov gb_a,r0,lsl#24
+	add gb_hl,gb_hl,#0x10000
+	fetch 8
+
+_2A_page4:
+	mov r1,gb_hl,lsr#30
+	cmp r1,#0x01
+	bne _2Ax
+_2A_page4_:
+	ldr_ r1,memmap_tbl+0x04*4
+	ldrb r0,[r1,gb_hl,lsr#16]
+	mov gb_a,r0,lsl#24
+	add gb_hl,gb_hl,#0x10000
+	fetch 8
+
+_2A_page8:
+	mov r1,gb_hl,lsr#29
+	cmp r1,#0x04
+	bne _2Ax
+_2A_page8_:
+	ldr_ r1,memmap_tbl+0x08*4
+	ldrb r0,[r1,gb_hl,lsr#16]
+	mov gb_a,r0,lsl#24
+	add gb_hl,gb_hl,#0x10000
+	fetch 8
+
+_2A_pageA:
+	mov r1,gb_hl,lsr#29
+	cmp r1,#0x05
+	bne _2Ax
+_2A_pageA_:
+	ldr_ r1,memmap_tbl+0x0A*4
+	ldrb r0,[r1,gb_hl,lsr#16]
+	mov gb_a,r0,lsl#24
+	add gb_hl,gb_hl,#0x10000
+	fetch 8
+#else
+_2Ax:
 @----------------------------------------------------------------------------
 _2A:@	LDI A,(HL)	load A from (HL), incr HL
 @----------------------------------------------------------------------------
@@ -393,6 +527,8 @@ _2A:@	LDI A,(HL)	load A from (HL), incr HL
 	add gb_hl,gb_hl,#0x00010000
 	mov gb_a,r0,lsl#24
 	fetch 8
+#endif
+
 @----------------------------------------------------------------------------
 _2B:@	DEC HL
 @----------------------------------------------------------------------------
@@ -416,20 +552,6 @@ _2F:@	CPL	complement A
 	eor gb_a,gb_a,#0xFF000000
 	orr gb_flg,gb_flg,#PSR_n|PSR_h		@set n & h
 	fetch 4
-	.if SPEEDHACKS
-@----------------------------------------------------------------------------
-_30x:@	JR NC,*	jump if no carry - speedhack version
-@----------------------------------------------------------------------------
-	tst gb_flg,#PSR_C
-	ldrsb r0,[gb_pc],#1
-	bne 0f
-	add gb_pc,gb_pc,r0
-	sub cycles,cycles,#4*CYCLE
-	cmp r0,#-4
-	andeq cycles,cycles,#CYC_MASK
-0:
-	fetch 8
-	.endif
 @----------------------------------------------------------------------------
 _30:@	JR NC,*	jump if no carry
 @----------------------------------------------------------------------------
@@ -438,6 +560,21 @@ _30:@	JR NC,*	jump if no carry
 	addeq gb_pc,gb_pc,r0
 	subeq cycles,cycles,#4*CYCLE
 	fetch 8
+#if SPEEDHACKS_NEW
+@----------------------------------------------------------------------------
+_30x:@	JR NC,*	jump if no carry - speedhack version
+@----------------------------------------------------------------------------
+	tst gb_flg,#PSR_C
+	ldrsb r0,[gb_pc],#1
+	bne nobranch
+	add gb_pc,gb_pc,r0
+_30x_modify:
+	cmp r0,#-4
+	bleq speedhack_check
+	fetch 12
+#endif
+
+
 @----------------------------------------------------------------------------
 _31:@	LD SP,#nnnn
 @----------------------------------------------------------------------------
@@ -482,20 +619,6 @@ _37:@	SCF	set carry flag
 	and gb_flg,gb_flg,#PSR_Z	@clear n & h, keep zero
 	orr gb_flg,gb_flg,#PSR_C	@set carry.
 	fetch 4
-	.if SPEEDHACKS
-@----------------------------------------------------------------------------
-_38x:@	JR C,*	jump if carry - speedhack version
-@----------------------------------------------------------------------------
-	tst gb_flg,#PSR_C
-	ldrsb r0,[gb_pc],#1
-	beq 0f
-	add gb_pc,gb_pc,r0
-	sub cycles,cycles,#4*CYCLE
-	cmp r0,#-4
-	andeq cycles,cycles,#CYC_MASK
-0:
-	fetch 8
-	.endif
 @----------------------------------------------------------------------------
 _38:@	JR C,*	jump if carry
 @----------------------------------------------------------------------------
@@ -504,6 +627,21 @@ _38:@	JR C,*	jump if carry
 	addne gb_pc,gb_pc,r0
 	subne cycles,cycles,#4*CYCLE
 	fetch 8
+#if SPEEDHACKS_NEW
+@----------------------------------------------------------------------------
+_38x:@	JR C,*	jump if carry - speedhack version
+@----------------------------------------------------------------------------
+	tst gb_flg,#PSR_C
+	ldrsb r0,[gb_pc],#1
+	beq nobranch
+	add gb_pc,gb_pc,r0
+_38x_modify:
+	cmp r0,#-4
+	bleq speedhack_check
+	fetch 12
+#endif
+
+
 @----------------------------------------------------------------------------
 _39:@	ADD HL,SP
 @----------------------------------------------------------------------------
@@ -869,7 +1007,8 @@ _76:@	HALT, wait for interrupt.
 	ands r0,r0,r1
 	bne _noHalt
 	sub gb_pc,gb_pc,#1
-	mov cycles,#0
+	and cycles,cycles,#CYC_MASK
+	@orr cycles,cycles,#CYC_HALT
 	fetch 4
 _noHalt:
 	sub cycles,cycles,#4*CYCLE
@@ -1197,8 +1336,25 @@ _C2:@	JP NZ,$nnnn
 @----------------------------------------------------------------------------
 	tst gb_flg,#PSR_Z
 	beq _C3
+nojump:
 	add gb_pc,gb_pc,#2
 	fetch 12
+#if SPEEDHACKS_NEW
+@----------------------------------------------------------------------------
+_C2x:@	JP NZ,$nnnn
+@----------------------------------------------------------------------------
+	tst gb_flg,#PSR_Z
+	bne nojump
+	b _C3x
+#endif
+#if SPEEDHACKS_NEW
+@----------------------------------------------------------------------------
+_C3x:@	JP $nnnn
+@----------------------------------------------------------------------------
+	ldr_ r1,speedhack_pc
+	cmp gb_pc,r1
+	bleq speedhack_3
+#endif
 @----------------------------------------------------------------------------
 _C3:@	JP $nnnn
 @----------------------------------------------------------------------------
@@ -1207,6 +1363,14 @@ _C3:@	JP $nnnn
 	orr gb_pc,r0,r1,lsl#8
 	encodePC
 	fetch 16
+#if SPEEDHACKS_NEW
+speedhack_3:
+	and cycles,cycles,#CYC_MASK
+	mov r1,#1
+	strb_ r1,quickhackused
+	bx lr
+#endif
+
 @----------------------------------------------------------------------------
 _C4:@	CALL NZ,$nnnn
 @----------------------------------------------------------------------------
@@ -1264,6 +1428,15 @@ _CA:@	JP Z,$nnnn
 	bne _C3
 	add gb_pc,gb_pc,#2
 	fetch 12
+#if SPEEDHACKS_NEW
+@----------------------------------------------------------------------------
+_CAx:@	JP Z,$nnnn
+@----------------------------------------------------------------------------
+	tst gb_flg,#PSR_Z
+	beq nojump
+	b _C3x
+#endif
+
 @----------------------------------------------------------------------------
 _CC:@	CALL Z,$nnnn
 @----------------------------------------------------------------------------
@@ -1306,6 +1479,14 @@ _D2:@	JP NC,$nnnn
 	beq _C3
 	add gb_pc,gb_pc,#2
 	fetch 12
+#if SPEEDHACKS_NEW
+@----------------------------------------------------------------------------
+_D2x:@	JP NC,$nnnn
+@----------------------------------------------------------------------------
+	tst gb_flg,#PSR_C
+	bne nojump
+	b _C3x
+#endif
 @----------------------------------------------------------------------------
 _D4:@	CALL NC,$nnnn
 @----------------------------------------------------------------------------
@@ -1340,6 +1521,14 @@ _DA:@	JP C,$nnnn
 	bne _C3
 	add gb_pc,gb_pc,#2
 	fetch 12
+#if SPEEDHACKS_NEW
+@----------------------------------------------------------------------------
+_DAx:@	JP C,$nnnn
+@----------------------------------------------------------------------------
+	tst gb_flg,#PSR_C
+	beq nojump
+	b _C3x
+#endif
 @----------------------------------------------------------------------------
 _DC:@	CALL C,$nnnn
 @----------------------------------------------------------------------------
@@ -1382,17 +1571,25 @@ _E6:@	AND #nn
 _E8:@	ADD SP,dd
 @----------------------------------------------------------------------------
 	ldrsb r0,[gb_pc],#1
-	eor r1,gb_sp,r0,lsl#16		@prepare for h check.
-	adds gb_sp,gb_sp,r0,lsl#16
-	eor gb_flg,r1,gb_sp
+	@halfcarry and carry are based on unsigned low byte addition result
+	mov r2,gb_sp,lsl#8
+	eor r1,r2,r0,lsl#24
+	adds r2,r2,r0,lsl#24
+	eor gb_flg,r1,r2
 	and gb_flg,gb_flg,#PSR_h
+	add gb_sp,gb_sp,r0,lsl#16
 	orrcs gb_flg,gb_flg,#PSR_C
 	fetch 12
 @----------------------------------------------------------------------------
 _E9:@	JP HL
 @----------------------------------------------------------------------------
-	mov gb_pc,gb_hl,lsr#16
-	encodePC
+	mov r1,gb_hl,lsr#28
+	adr_ r2,memmap_tbl
+	ldr r0,[r2,r1,lsl#2]
+	str_ r0,lastbank
+	add gb_pc,r0,gb_hl,lsr#16
+@	mov gb_pc,gb_hl,lsr#16
+@	encodePC
 	fetch 4
 @----------------------------------------------------------------------------
 _EA:@	LD (nnnn),A	write A to (nnnn)
@@ -1425,8 +1622,9 @@ _F1:@	POP AF
 @----------------------------------------------------------------------------
 _F3:@	DI, disable interrupt
 @----------------------------------------------------------------------------
-	mov r0,#0
-	strb_ r0,gb_ime
+	bic cycles,cycles,#CYC_IE
+@	mov r0,#0
+@	strb_ r0,gb_ime
 	fetch 4
 @----------------------------------------------------------------------------
 _F5:@	PUSH AF
@@ -1444,10 +1642,13 @@ _F6:@	OR #nn
 _F8:@	LD HL,SP+dd
 @----------------------------------------------------------------------------
 	ldrsb r0,[gb_pc],#1
-	eor r1,gb_sp,r0,lsl#16
-	adds gb_hl,gb_sp,r0,lsl#16
-	eor gb_flg,r1,gb_hl
+	@halfcarry and carry are based on unsigned low byte addition result
+	mov r2,gb_sp,lsl#8
+	eor r1,r2,r0,lsl#24
+	adds r2,r2,r0,lsl#24
+	eor gb_flg,r1,r2
 	and gb_flg,gb_flg,#PSR_h
+	add gb_hl,gb_sp,r0,lsl#16
 	orrcs gb_flg,gb_flg,#PSR_C
 	fetch 12
 @----------------------------------------------------------------------------
@@ -1473,8 +1674,9 @@ _D9:@	RETI, return and enable interrupt
 @----------------------------------------------------------------------------
 _FB:@	EI, enable interrupt
 @----------------------------------------------------------------------------
-	mov r0,#1
-	strb_ r0,gb_ime
+	orr cycles,cycles,#CYC_IE
+@	mov r0,#1
+@	strb_ r0,gb_ime
 	sub cycles,cycles,#4*CYCLE
 	b checkIRQ
 @----------------------------------------------------------------------------
@@ -1532,435 +1734,9 @@ _CB76:@		BIT 6,(HL)
 	fetch 12
 @------------------------------------------------------------------------------
 
+	.text
 
-@----------------------------------------------------------------------------
-run_core:	@r0=0 to return after frame
-@----------------------------------------------------------------------------
-	tst r0,#1
-	stmeqfd sp!,{gb_flg-gb_pc,globalptr,r11,lr}
-
-	ldr globalptr,=GLOBAL_PTR_BASE
-	strb_ r0,dontstop_
-	mov r1,#0
-	strb_ r1,novblankwait_
-
-	b line0x
-@----------------------------------------------------------------------------
-@cycles ran out
-@----------------------------------------------------------------------------
-line0:
-	adr_ r2,cpuregs
-	stmia r2,{gb_flg-gb_pc,gb_sp}	@save gbz80 state
-	
-	ldrb_ r0,autoborderstate
-	cmp r0,#1
-	bne 0f
-	ldr_ r0,frame
-	ldr_ r1,auto_border_reboot_frame
-	cmp r0,r1
-	blt 0f
-	bl_long loadcart_after_sgb_border
-0:
-	
-
-
-@waitformulti
-	ldr r1,=REG_P1		@refresh input every frame
-	ldrh r0,[r1]
-		eor r0,r0,#0xff
-		eor r0,r0,#0x300	@r0=button state (raw)
-	ldr_ r1,AGBjoypad
-	eor r1,r1,r0
-	and r1,r1,r0		@r1=button state (0->1)
-	str_ r0,AGBjoypad
-
-	ldrb_ r2,dontstop_
-	cmp r2,#0
-	ldmeqfd sp!,{gb_flg-gb_pc,globalptr,r11,lr}	@exit here if doing single frame:
-	bxeq lr							@return to rommenu()
-
-	@----anything from here til line0x won't get executed while rom menu is active---
-
-@	mov r2,#REG_BASE
-@	mov r3,#0x0110				;was 0x0310
-@	strh r3,[r2,#REG_BLDMOD]	;stop darkened screen,OBJ blend to BG0/1
-@	mov r3,#0x1000				;BG0/1=16, OBJ=0
-@	strh r3,[r2,#REG_BLDALPHA]	;Alpha values
-
-	adr lr,line0x		@return here after doing L/R + SEL/START
-
-	tst r1,#0x300		@if L or R was pressed
-	tstne r0,#0x100
-	tstne r0,#0x200		@and both L+R are held..
-	ldrne r1,=ui
-	bxne r1			@do menu
-
-
-	ands r3,r0,#0x300		@if either L or R is pressed (not both)
-	eornes r3,r3,#0x300
-	bicne r0,r0,#0x0c		@	hide sel,start from NES
-	str_ r0,XGBjoypad
-	beq line0x		@skip ahead if neither or both are pressed
-
-@	tst r0,#0x200
-@	tstne r1,#4		;L+SEL for BG adjust
-@	ldrne r2,adjustblend
-@	addne r2,r2,#1
-@	strne r2,adjustblend
-
-	tst r0,#0x200		@L?
-	tstne r1,#8		@START?
-	ldrb_ r2,novblankwait_	@0=Normal, 1=No wait, 2=Slomo
-	addne r2,r2,#1
-	cmp r2,#3
-	moveq r2,#0
-	strb_ r2,novblankwait_
-
-	tst r0,#0x100		@R?
-	tstne r1,#8		@START:
-	ldrne r1,=quickload
-	bxne r1
-
-	tst r0,#0x100		@R?
-	tstne r1,#4		@SELECT:
-	ldrne r1,=quicksave
-	bxne r1
-line0x:
-	bl refreshNESjoypads	@Z=1 if communication ok
-@	bne waitformulti	;waiting on other GBA..
-
-	ldr_ r0,AGBjoypad
-	ldr_ r2,fiveminutes_		@sleep after 5/10/30 minutes of inactivity
-	cmp r0,#0				@(left out of the loop so waiting on multi-link
-	ldrne_ r2,sleeptime_		@doesn't accelerate time)
-	subs r2,r2,#1
-	str_ r2,fiveminutes_
-	bleq_long suspend
-
-	mov r1,#0
-	strb_ r1,scanline		@reset scanline count
-	bl newframe		@display update
-
-	@now do double speed vblank stuff:
-	ldr_ r0,doubletimer_
-	tst r0,#0x01
-	blne_long updatespeed
-
-	adr_ r0,cpuregs
-	ldmia r0,{gb_flg-gb_pc,gb_sp}	@restore GB-Z80 state
-
-@	ldrb r1,lcdctrl		;not liked by SML.
-@	tst r1,#0x80
-	adrl r1,lcdstat
-	ldrb r0,[r1]		@
-	and r2,r0,#0x7C		@reset lcd mode flags (vblank/hblank/oam/lcd)
-	cmp r0,r2
-	strneb r2,[r1]		@
-	strneb r2,[r1,#-12] @FIXME
-
-	ldr_ r0,cyclesperscanline
-	add cycles,cycles,r0
-
-	adr r0,line1_to_71
-	str_ r0,nexttimeout
-
-	adrl_ r1,FF41_R_function
-	ldr r0,[r1]
-@	ldr r0,=FF41_R
-	ldr r1,=FF41_R_ptr
-	str r0,[r1]
-
-	ldr_ pc,scanlinehook
-	
-line1_to_71: @------------------------
-	ldr_ r0,cyclesperscanline
-	add cycles,cycles,r0
-
-	ldrb_ r1,scanline
-	add r1,r1,#1
-	strb_ r1,scanline
-	cmp r1,#71
-	ldrmi_ pc,scanlinehook
-@--------------------------------------------- between 71 and 72
-
-	ldrb_ r0,lcdctrl
-	strb_ r0,lcdctrl0midframe		@Chase HQ likes this
-	
-	@@@
-	@@@bl gbc_chr_update
-	@@@
-
-	adr addy,line72_to_143
-	str_ addy,nexttimeout
-	ldr_ pc,scanlinehook
-line72_to_143: @------------------------
-	ldr_ r0,cyclesperscanline
-	add cycles,cycles,r0
-
-	ldrb_ r1,scanline
-	add r1,r1,#1
-	strb_ r1,scanline
-	cmp r1,#143
-	ldrmi_ pc,scanlinehook
-
-	adr addy,line144
-	str_ addy,nexttimeout
-	ldr_ pc,scanlinehook
-line144: @------------------------
-	ldrb_ r0,doubletimer_
-	tst r0,#1
-	blne_long updatespeed
-	bl newframe_vblank
-@	stmfd sp!,{r0-addy,lr}
-
-@ [ BUILD <> "DEBUG"
-@	ldrb r2,novblankwait
-@	teq r2,#1
-@	beq l03
-@l01
-@	mov r0,#0				;don't wait if not necessary
-@	mov r1,#1				;VBL wait
-@	swi 0x040000			; Turn of CPU until IRQ if not too late allready.
-@	teq r2,#2				;Check for slomo
-@	moveq r2,#0
-@	beq l01
-@l03
-@ ]
-@	ldmfd sp!,{r0-addy,lr}
-
-
-	ldr_ r0,fpsvalue
-	add r0,r0,#1
-	str_ r0,fpsvalue
-
-
-
-@ [ DEBUG
-@	mov r1,#REG_BASE			;darken screen during GB vblank
-@	mov r0,#0x00f1
-@	strh r0,[r1,#REG_BLDMOD]
-@	ldrh r0,[r1,#REG_VCOUNT]
-@	mov r1,#19
-@	bl debug_
-@ ]
-	ldrb_ r0,lcdctrl		@LCD turned on?
-	tst r0,#0x80
-	beq novbirq
-
-	adrl_ r1,FF41_R_vblank_function
-	ldr r0,[r1]
-@	ldr r0,=FF41_R_vblank
-	ldr r1,=FF41_R_ptr
-	str r0,[r1]
-
-	adrl r1,lcdstat
-	ldrb r0,[r1]		@vbl flag
-	and r0,r0,#0x7C
-	orr r0,r0,#0x01
-	strb r0,[r1]		@vbl flag
-	strb r0,[r1,#-12] @FIXME
-
-
-	ldrb_ r0,gb_if
-	orr r0,r0,#0x01		@1=VBL
-	strb_ r0,gb_if
-novbirq:
-	mov r0,#24*CYCLE
-	add cycles,cycles,r0
-
-	mov r1,#144
-	strb_ r1,scanline
-
-	adr addy,VBL_Hook
-	str_ addy,nexttimeout
-	b _GO
-VBL_Hook:
-	ldr_ r0,cyclesperscanline
-	sub r0,r0,#24*CYCLE
-	add cycles,cycles,r0
-
-	adr addy,line145_to_end
-	str_ addy,nexttimeout
-	ldr_ pc,scanlinehook
-line145_to_end: @------------------------
-	ldr_ r0,cyclesperscanline
-	add cycles,cycles,r0
-
-	ldrb_ r1,scanline
-	add r1,r1,#1
-	strb_ r1,scanline
-	cmp r1,#153				@last scanline
-	ldrmi_ pc,scanlinehook
-
-	adr addy,line0
-	str_ addy,nexttimeout
-	ldr_ r0,frame
-	add r0,r0,#1
-	str_ r0,frame
-	ldr_ pc,scanlinehook
-
-
-immediate_check_irq:
-	ldrb_ r0,gb_ie		@0xFFFF=Interrupt Enable.
-	ldrb_ r1,gb_if
-	ands r1,r1,r0
-	bxeq lr
-	ldrb_ r0,gb_ime
-	movs r0,r0
-	bxeq lr
-	@different ugly hack which doesn't mess up timing,
-	@this is necessary because goomba can't handle GB interrupts from within a memory write
-	sub cycles,cycles,#1024*CYCLE  @this just makes it go somewhere else instead of the next instruction
-	ldr_ r0,nexttimeout
-	str_ r0,nexttimeout_alt
-	ldr r0,=no_more_irq_hack
-	str_ r0,nexttimeout
-	bx lr
-
-no_more_irq_hack:
-	add cycles,cycles,#1024*CYCLE
-	ldr_ r0,nexttimeout_alt
-	str_ r0,nexttimeout
-	b_long checkIRQ
-	
-
-
-@----------------------------------------------------------
-default_scanlinehook:
-checkScanlineIRQ:
-	@do LCDYC test
-	ldrb_ r1,scanline
-	ldrb_ r0,lcdyc
-	cmp r0,r1
-	adrl r1,lcdstat
-	ldrb r0,[r1]
-	orreq r2,r0,#4
-	bicne r2,r0,#4
-	cmp r2,r0
-	strneb r2,[r1]
-	strneb r2,[r1,#-12] @FIXME
-	
-	@screen turned on?  (not sure if this is correct)
-	ldrb_ r1,lcdctrl
-	tst r1,#0x80
-	beq noScanlineIRQ
-	
-@	ldrb r2,lcdstat
-	and r0,r2,#0x09		@LCD stat HBlank IRQ/VBL.
-	cmp r0,#0x08		@LCD stat HBlank IRQ.
-	beq ScanlineIRQ
-	
-@	;hackhack
-@@	and r0,r2,#0x21
-@	cmp r0,#0x20
-@	beq ScanlineIRQ
-	
-	
-@	ldrb r1,scanline
-@	ldrb r0,lcdyc
-@	cmp r0,r1
-	tst r2,#4
-	beq noScanlineIRQ
-	tst r2,#0x40		@LCD stat LYC IRQ.
-	beq noScanlineIRQ
-ScanlineIRQ:
-	ldrb_ r0,gb_if
-	orr r0,r0,#0x02		@2=LCD STAT
-	strb_ r0,gb_if
-noScanlineIRQ:
-@------------------
-
-@------------------
-checkTimerIRQ:
-	ldr_ r2,timercyclesperscanline
-	
-	ldr_ r0,dividereg
-	add r0,r0,r2,lsl#12		@256th cycles.
-	str_ r0,dividereg
-
-	ldrb_ r1,timerctrl
-	tst r1,#0x4
-	beq noTimer
-	ands r1,r1,#3
-	moveq r1,#4
-	mov r0,#18
-	sub r1,r0,r1,lsl#1
-	ldr_ r0,timercounter
-	adds r0,r0,r2,lsl r1
-	bcc noTimerIRQ
-	ldrb_ r0,gb_if
-	orr r0,r0,#0x04		@4=Timer
-	strb_ r0,gb_if
-	ldrb_ r0,timermodulo
-	mov r0,r0,lsl#24
-noTimerIRQ:
-	str_ r0,timercounter
-noTimer:
-	ldrb_ r1,gb_if
-	tst r1,#0x08			@Serial
-	ldrneb_ r0,stctrl
-	andne r0,r0,#0x7F		@Clear Serial Transfer flag.
-	strneb_ r0,stctrl
-@----------------------------------------------------------
-checkMasterIRQ:
-@----------------------------------------------------------
-	ldrb_ r2,gb_ime
-	tst r2,#1
-	beq _GO
-@----------------------------------------------------------
-checkIRQ:
-@----------------------------------------------------------
-	ldrb_ r0,gb_ie
-	ldrb_ r1,gb_if
-	ands r0,r0,r1
-	beq _GO
-@----------------------------------------------------------
-irqGBZ80:
-@----------------------------------------------------------
-	ldrb r2,[gb_pc]
-	cmp r2,#0x76			@Check if we're doing Halt.
-@	cmpne r2,#0x10                  ;or STOP
-	addeq gb_pc,gb_pc,#1	@get out of HALT
-	mov r2,#0				@disable IRQ
-	strb_ r2,gb_ime
-
-	tst r0,#0x01			@VBlank
-	movne r2,#0x40
-	bicne r1,r1,#0x01		@clear the IRQ flag
-	bne doIRQ
-
-	tst r0,#0x02			@LCD Stat
-	movne r2,#0x48
-	bicne r1,r1,#0x02		@clear the  IRQ flag
-	bne doIRQ
-
-	tst r0,#0x04			@Timer
-	movne r2,#0x50
-	bicne r1,r1,#0x04		@clear the  IRQ flag
-	bne doIRQ
-
-	tst r0,#0x08			@Serial
-	movne r2,#0x58
-	bicne r1,r1,#0x08		@clear the  IRQ flag
-	bne doIRQ
-
-	tst r0,#0x10			@Joypad
-	movne r2,#0x60
-	bicne r1,r1,#0x10		@clear the  IRQ flag
-	bne doIRQ
-
-	and r1,r1,#0x1f			@unknown IRQ?
-	mov r2,#0x40
-doIRQ:
-	strb_ r1,gb_if
-	ldr_ r0,lastbank
-	sub r0,gb_pc,r0
-	mov gb_pc,r2			@get IRQ vector
-
-	push16_novram					@save PC
-	encodePC_afterpush16
-
-	fetch 24
+ .section .iwram.0, "ax", %progbits
 
 @these got moved from rom because they were used frequently
 @----------------------------------------------------------------------------
@@ -2029,47 +1805,40 @@ _10:@	STOP	stops the processor until an (joypad) interrupt.
 @	strneb r0,gb_ic
 @	subeq gb_pc,gb_pc,#1
 @	moveq cycles,#0
-_noStop:
+@_noStop
 @	add gb_pc,gb_pc,#1
 	fetch 4
 
 	.ltorg
 @----------------------------------------------------------------------------
-_27:@	DAA	decimal adjust ackumulator
+_27:@	DAA	decimal adjust accumulator
 @----------------------------------------------------------------------------
-	mov r0,#0
-
-	and r1,gb_a,#0x0F000000
-	cmp r1,#0x0A000000
-	orrpl r0,r0,#0x06000000
-	cmppl gb_a,#0x90000000
-	cmpmi gb_a,#0xA0000000
-	orrhs gb_flg,gb_flg,#PSR_C			@C
-noextra:
-	tst gb_flg,#PSR_h					@half carry.
-	orrne r0,r0,#0x06000000
-
-	tst gb_flg,#PSR_C					@carry.
-	orrne r0,r0,#0x60000000
-
-	tst gb_flg,#PSR_n					@check if last instruction was add or sub.
-	bne doSUBconv
-
-doADDconv:
-	and gb_flg,gb_flg,#PSR_C+PSR_n	@keep C & n
-	adds gb_a,gb_a,r0
-	orreq gb_flg,gb_flg,#PSR_Z
-	cmp r1,#0x0A000000
-	orrpl gb_flg,gb_flg,#PSR_h
+	tst gb_flg,#PSR_n
+	bne 1f
+	@adding
+	mov r0,gb_a,lsl#4
+	adds r0,r0,#0x60000000
+	movccs r0,gb_flg,lsl#4
+	addcss gb_a,gb_a,#0x06000000
+	orrcs gb_flg,gb_flg,#PSR_C
+	adds r0,gb_a,#0x60000000
+	movccs r0,gb_flg,lsl#3
+	addcss gb_a,gb_a,#0x60000000
+	orrcs gb_flg,gb_flg,#PSR_C
+2:
+	@set flags after either adding or subtracting
+	bic gb_flg,gb_flg,#PSR_Z|PSR_h	@clear zero and halfcarry flags
+	tst gb_a,#0xFF000000
+	orreq gb_flg,gb_flg,#PSR_Z	@set zero flag if zero
 	fetch 4
+1:
+	@subtracting
+	tst gb_flg,#PSR_h
+	subne gb_a,gb_a,#0x06000000
+	tst gb_flg,#PSR_C
+	subne gb_a,gb_a,#0x60000000
+	b 2b
 
-doSUBconv:
-	and gb_flg,gb_flg,#PSR_C+PSR_n+PSR_h	@keep C & n & H
-	subs gb_a,gb_a,r0
-	orreq gb_flg,gb_flg,#PSR_Z
-	cmp r1,#0x06000000
-	bicpl gb_flg,gb_flg,#PSR_h
-	fetch 4
 @----------------------------------------------------------------------------
 _3B:@	DEC SP
 @----------------------------------------------------------------------------
@@ -2168,6 +1937,8 @@ _CB0E:@		RRC (HL)
 _CB0F:@		RRC A
 @----------------------------------------------------------------------------
 	opRRCA
+
+	.pushsection .iwram.0
 @----------------------------------------------------------------------------
 _CB10:@		RL B
 @----------------------------------------------------------------------------
@@ -2176,10 +1947,15 @@ _CB10:@		RL B
 _CB11:@		RL C
 @----------------------------------------------------------------------------
 	opRLL gb_bc
+	.popsection
+
+	.pushsection .vram1, "ax", %progbits
 @----------------------------------------------------------------------------
 _CB15:@		RL L
 @----------------------------------------------------------------------------
 	opRLL gb_hl
+	.popsection
+
 @----------------------------------------------------------------------------
 _CB16:@		RL (HL)
 @----------------------------------------------------------------------------
@@ -2196,26 +1972,36 @@ _CB17:@		RL A
 _CB18:@		RR B
 @----------------------------------------------------------------------------
 	opRRH gb_bc
+	.pushsection .vram1, "ax", %progbits
 @----------------------------------------------------------------------------
 _CB19:@		RR C
 @----------------------------------------------------------------------------
 	opRRL gb_bc
+	.popsection
 @----------------------------------------------------------------------------
 _CB1A:@		RR D
 @----------------------------------------------------------------------------
 	opRRH gb_de
+
+	.pushsection .iwram.0
 @----------------------------------------------------------------------------
 _CB1B:@		RR E
 @----------------------------------------------------------------------------
 	opRRL gb_de
+	.popsection
+
 @----------------------------------------------------------------------------
 _CB1C:@		RR H
 @----------------------------------------------------------------------------
 	opRRH gb_hl
+
+	.pushsection .iwram.0
 @----------------------------------------------------------------------------
 _CB1D:@		RR L
 @----------------------------------------------------------------------------
 	opRRL gb_hl
+	.popsection
+
 @----------------------------------------------------------------------------
 _CB1E:@		RR (HL)
 @----------------------------------------------------------------------------
@@ -2232,10 +2018,14 @@ _CB1F:@		RR A
 _CB20:@		SLA B
 @----------------------------------------------------------------------------
 	opSLAH gb_bc
+
+	.pushsection .iwram.0
 @----------------------------------------------------------------------------
 _CB21:@		SLA C
 @----------------------------------------------------------------------------
 	opSLAL gb_bc
+	.popsection
+
 @----------------------------------------------------------------------------
 _CB22:@		SLA D
 @----------------------------------------------------------------------------
@@ -2282,10 +2072,12 @@ _CB2E:@		SRA (HL)
 	opSRAb
 	writemem
 	fetch 16
+	.pushsection .iwram.0
 @----------------------------------------------------------------------------
 _CB2F:@		SRA A
 @----------------------------------------------------------------------------
 	opSRAA
+	.popsection
 @----------------------------------------------------------------------------
 _CB30:@		SWAP B
 @----------------------------------------------------------------------------
@@ -2317,22 +2109,30 @@ _CB36:@		SWAP (HL)
 	opSWAPb
 	writemem
 	fetch 16
+
+	.pushsection .iwram.0
 @----------------------------------------------------------------------------
 _CB38:@		SRL B
 @----------------------------------------------------------------------------
 	opSRLH gb_bc
+	.popsection
+	
+	.pushsection .vram1, "ax", %progbits
 @----------------------------------------------------------------------------
 _CB3A:@		SRL D
 @----------------------------------------------------------------------------
 	opSRLH gb_de
+	.popsection
 @----------------------------------------------------------------------------
 _CB3B:@		SRL E
 @----------------------------------------------------------------------------
 	opSRLL gb_de
+	.pushsection .vram1, "ax", %progbits
 @----------------------------------------------------------------------------
 _CB3C:@		SRL H
 @----------------------------------------------------------------------------
 	opSRLH gb_hl
+	.popsection
 @----------------------------------------------------------------------------
 _CB3D:@		SRL L
 @----------------------------------------------------------------------------
@@ -2344,6 +2144,8 @@ _CB3E:@		SRL (HL)
 	opSRLx r0,r0,1
 	writemem
 	fetch 16
+
+	.pushsection .iwram.0
 @----------------------------------------------------------------------------
 _CB3F:@		SRL A
 @----------------------------------------------------------------------------
@@ -2353,26 +2155,37 @@ _CB40:@		BIT x,B		, actually CB-40,48,50,58,60,68,70 & 78
 @----------------------------------------------------------------------------
 	opBITH gb_bc
 	fetch 8
+	.popsection
+
+	.pushsection .vram1, "ax", %progbits
 @----------------------------------------------------------------------------
 _CB41:@		BIT x,C		, actually CB-41,49,51,59,61,69,71 & 79
 @----------------------------------------------------------------------------
 	opBITL gb_bc
 	fetch 8
+	.popsection
 @----------------------------------------------------------------------------
 _CB42:@		BIT x,D		, actually CB-42,4A,52,5A,62,6A,72 & 7A
 @----------------------------------------------------------------------------
 	opBITH gb_de
 	fetch 8
+
+	.pushsection .vram1, "ax", %progbits
 @----------------------------------------------------------------------------
 _CB43:@		BIT x,E		, actually CB-43,4B,53,5B,63,6B,73 & 7B
 @----------------------------------------------------------------------------
 	opBITL gb_de
 	fetch 8
+	.popsection
+
+	.pushsection .iwram.0
 @----------------------------------------------------------------------------
 _CB44:@		BIT x,H		, actually CB-44,4C,54,5C,64,6C,74 & 7C
 @----------------------------------------------------------------------------
 	opBITH gb_hl
 	fetch 8
+	.popsection
+
 @----------------------------------------------------------------------------
 _CB80:@		RES x,B		, actually CB-80,88,90,98,A0,A8,B0 & B8
 @----------------------------------------------------------------------------
@@ -2383,11 +2196,15 @@ _CB81:@		RES x,C		, actually CB-81,89,81,89,A1,A9,B1 & B9
 @----------------------------------------------------------------------------
 	opRESL gb_bc
 	fetch 8
+
+	.pushsection .iwram.0
 @----------------------------------------------------------------------------
 _CB82:@		RES x,D		, actually CB-82,8A,92,9A,A2,AA,B2 & BA
 @----------------------------------------------------------------------------
 	opRESH gb_de
 	fetch 8
+	.popsection
+
 @----------------------------------------------------------------------------
 _CB83:@		RES x,E		, actually CB-83,8B,93,9B,A3,AB,B3 & BB
 @----------------------------------------------------------------------------
@@ -2403,6 +2220,8 @@ _CB85:@		RES x,L		, actually CB-85,8D,95,9D,A5,AD,B5 & BD
 @----------------------------------------------------------------------------
 	opRESL gb_hl
 	fetch 8
+
+	.pushsection .iwram.0
 @----------------------------------------------------------------------------
 _CB86:@		RES x,(HL)	, actually CB-86,8E,96,9E,A6,AE,B6 & BE
 @----------------------------------------------------------------------------
@@ -2413,6 +2232,8 @@ _CB86:@		RES x,(HL)	, actually CB-86,8E,96,9E,A6,AE,B6 & BE
 	mov r0,r2,lsr#16
 	writemem
 	fetch 16
+	.popsection
+
 @----------------------------------------------------------------------------
 _CB87:@		RES x,A		, actually CB-87,8F,97,9F,A7,AF,B7 & BF
 @----------------------------------------------------------------------------
@@ -2428,11 +2249,15 @@ _CBC1:@		SET x,C		, actually CB-C1,C9,D1,D9,E1,E9,F1 & F9
 @----------------------------------------------------------------------------
 	opSETL gb_bc
 	fetch 8
+
+	.pushsection .iwram.0
 @----------------------------------------------------------------------------
 _CBC2:@		SET x,D		, actually CB-C2,CA,D2,DA,E2,EA,F2 & FA
 @----------------------------------------------------------------------------
 	opSETH gb_de
 	fetch 8
+	.popsection
+
 @----------------------------------------------------------------------------
 _CBC3:@		SET x,E		, actually CB-C3,CB,D3,DB,E3,EB,F3 & FB
 @----------------------------------------------------------------------------
@@ -2448,6 +2273,8 @@ _CBC5:@		SET x,L		, actually CB-C5,CD,D5,DD,E5,ED,F5 & FD
 @----------------------------------------------------------------------------
 	opSETL gb_hl
 	fetch 8
+
+	.pushsection .vram1, "ax", %progbits
 @----------------------------------------------------------------------------
 _CBC6:@		SET x,(HL)	, actually CB-C6,CE,D6,DE,E6,EE,F6 & FE
 @----------------------------------------------------------------------------
@@ -2458,57 +2285,13 @@ _CBC6:@		SET x,(HL)	, actually CB-C6,CE,D6,DE,E6,EE,F6 & FE
 	mov r0,r2,lsr#16
 	writemem
 	fetch 16
+	.popsection
 @----------------------------------------------------------------------------
 _CBC7:@		SET x,A		, actually CB-C7,CF,D7,DF,E7,EF,F7 & FF
 @----------------------------------------------------------------------------
 	opSETH gb_a
 	fetch 8
 @----------------------------------------------------------------------------
-
-	.if SPEEDHACKS
-@----------------------------------------------------------------------------
-_20z:@	JR NZ,*	jump if not zero - speedhack version
-@----------------------------------------------------------------------------
-	ldr r1,=SPEEDHACK_FIND_JR_NZ_BUF
-	ldr r2,=_20
-	b _find_speedhack_thingy
-@----------------------------------------------------------------------------
-_28z:@	JR Z,*	jump if zero - speedhack version
-@----------------------------------------------------------------------------
-	ldr r1,=SPEEDHACK_FIND_JR_Z_BUF
-	ldr r2,=_28
-	b _find_speedhack_thingy
-@----------------------------------------------------------------------------
-_30z:@	JR NC,*	jump if no carry - speedhack version
-@----------------------------------------------------------------------------
-	ldr r1,=SPEEDHACK_FIND_JR_NC_BUF
-	ldr r2,=_30
-	b _find_speedhack_thingy
-@----------------------------------------------------------------------------
-_38z:@	JR C,*	jump if carry - speedhack version
-@----------------------------------------------------------------------------
-	ldr r1,=SPEEDHACK_FIND_JR_C_BUF
-	ldr r2,=_38
-	b _find_speedhack_thingy
-
-_find_speedhack_thingy:
-	ldrsb r0,[gb_pc]
-
-	@between -17 and -2
-	cmp r0,#-17
-	bxlt r2
-	cmp r0,#-2
-	bxgt r2
-	rsb r0,r0,#0
-	sub r0,r0,#2
-	mov r0,r0,lsl#2
-	add r0,r0,r1
-	ldr r1,[r0]
-	add r1,r1,#1
-	str r1,[r0]
-	bx r2
-	.endif
-
 
 update_doublespeed_ui: @called from UI
 	stmfd sp!,{globalptr,addy,lr}
@@ -2532,8 +2315,32 @@ updatespeed:
 	ldr r12,=FF41_modify1
 	ldr r0,FF41_modifydata
 	str r0,[r12]
+	ldr r12,=FF41_modify2
 	ldr r0,FF41_modifydata+4
-	str r0,[r12,#12]
+	str r0,[r12]
+#if LCD_HACKS
+#if !LCD_HACKS_ACCURATE_DIV
+	ldr r0,FF41_modifydata+16
+	ldr r12,=FF41_modify1b
+	str r0,[r12]
+#endif
+
+#if LCD_HACKS_ACCURATE
+	ldr r0,FF41_modifydata+40
+	ldr r12,=FF41_hack_setmode0
+	str r0,[r12]
+#endif
+#endif
+#if EARLY_LINE_0
+	ldr r0,FF41_modifydata+24
+	ldr r12,=toLineZero_modify1
+	str r0,[r12]
+	ldr r0,FF41_modifydata+32
+	ldr r12,=toLineZero_modify2
+	str r0,[r12]
+#endif
+	
+	ldr r0,FF41_modifydata
 	
 	ldrb_ r0,doublespeed
 	tst r0,#0x80
@@ -2549,10 +2356,34 @@ updatespeed:
 	str_ r0,cyclesperscanline
 	mov r0,#DOUBLE_SPEED_SCANLINE_OAM_POSITION
 	str_ r0,scanline_oam_position
+	ldr r12,=FF41_modify1
 	ldr r0,FF41_modifydata+8
 	str r0,[r12]
+	ldr r12,=FF41_modify2
 	ldr r0,FF41_modifydata+12
-	str r0,[r12,#12]
+	str r0,[r12]
+#if LCD_HACKS
+#if !LCD_HACKS_ACCURATE_DIV
+	ldr r0,FF41_modifydata+20
+	ldr r12,=FF41_modify1b
+	str r0,[r12]
+#endif
+
+#if LCD_HACKS_ACCURATE
+	ldr r0,FF41_modifydata+44
+	ldr r12,=FF41_hack_setmode0
+	str r0,[r12]
+#endif
+	
+#endif
+#if EARLY_LINE_0
+	ldr r0,FF41_modifydata+28
+	ldr r12,=toLineZero_modify1
+	str r0,[r12]
+	ldr r0,FF41_modifydata+36
+	ldr r12,=toLineZero_modify2
+	str r0,[r12]
+#endif
 	bx lr
 
 FF41_modifydata:
@@ -2560,9 +2391,22 @@ FF41_modifydata:
 	cmp cycles,#376*CYCLE
 	cmp cycles,#204*CYCLE*2
 	cmp cycles,#376*CYCLE*2
-
+	add cycles,cycles,#204*CYCLE
+	add cycles,cycles,#204*CYCLE*2
+	adds cycles,cycles,#8*CYCLE
+	adds cycles,cycles,#16*CYCLE
+	sub r0,r0,#8*CYCLE
+	sub r0,r0,#16*CYCLE
+	subs r2,cycles,#204*CYCLE
+	subs r2,cycles,#204*CYCLE*2
 
  .if PROFILE
+fetch_profile:
+	bl profile_it
+	ldrplb r0,[gb_pc],#1
+	ldrpl pc,[gb_optbl,r0,lsl#2]
+	ldr_ pc,nexttimeout
+	
 profile_it:
 	ldr_ r0,lastbank
 	sub r0,gb_pc,r0
@@ -2570,14 +2414,14 @@ profile_it:
 	bic r0,r0,#0x8000
 	
 	mov r0,r0,lsl#2
-	ldr_ r1,profiler
+	ldr r1,=0x02008000
 	ldr r2,[r1,r0]
 	add r2,r2,#1
 	str r2,[r1,r0]
 	bx lr
 profile_reset:
-	ldr_ r0,profiler
-	mov r1,#32768
+	ldr r0,=0x02008000
+	mov r1,#0x8000
 	mov r2,#0
 pr_loop:
 	str r2,[r0],#4
@@ -2586,51 +2430,15 @@ pr_loop:
 	bx lr
  .endif
 
-	.if SPEEDHACKS
-normalops:
-	.word _20,_28,_30,_38
-jmpops:
-	.word _20x,_28x,_30x,_38x
-finderops:
-	.word _20z,_28z,_30z,_38z
-opindex:
-	.word op_table+0x20*4,op_table+0x28*4,op_table+0x30*4,op_table+0x38*4
+sram_W2_instruction_save32:
+ 	sub r1,r1,#0x4000   @32k sram: A000>>6000
+sram_W2_instruction_save64:
+	add r1,r1,#0x4000   @64k sram: A000>>E000
 
-cpuhack_reset:
-	stmfd sp!,{r0-r4,r10}
-	ldr r10,=GLOBAL_PTR_BASE
-	ldrb_ r0,hackflags
-	cmp r0,#1
-	adreq r2,finderops
-	adrne r2,normalops
-	adr r3,opindex
-	mov r4,#3
-0:
-	ldr r0,[r2,r4,lsl#2]
-	ldr r1,[r3,r4,lsl#2]
-	str r0,[r1]
-	subs r4,r4,#1
-	bpl 0b
-	
-	ldrb_ r4,hackflags
-	subs r4,r4,#2
-	bmi 1f
-	adr r2,jmpops
-	ldr r0,[r2,r4,lsl#2]
-	ldr r1,[r3,r4,lsl#2]
-	str r0,[r1]
-	
-	ldrb_ r1,hackflags2
-	strb r1,[r0,#5*4]
-1:
-	ldmfd sp!,{r0-r4,r10}
-	bx lr
-	.endif
 @----------------------------------------------------------------------------
 emu_reset:	@called by loadcart (r0-r9 are free to use)
 @----------------------------------------------------------------------------
 	str lr,[sp,#-4]!
-
 	bl IO_reset
 	bl Sound_reset
 	bl GFX_reset
@@ -2639,10 +2447,32 @@ emu_reset:	@called by loadcart (r0-r9 are free to use)
 	@gfx_reset zeroes doublespeed byte, this commits that change
 	bl_long updatespeed
 cpu_reset:
+	@reset SRAM size - so it can tell the actual SRAM size detected
+	ldr r0,=save_start
+	ldr r0,[r0]
+	cmp r0,#0xE000
+	
+	ldreq r0,sram_W2_instruction_save64
+	ldrne r0,sram_W2_instruction_save32
+	ldr r1,=sram_W2_modify
+	str r0,[r1]
+
+	mov r0,#0
+	str_ r0,FF41_PC
+	str_ r0,FF41_PC_2
+	str_ r0,FF41_PC_3
+
+	
 @---cpu reset
-	.if SPEEDHACKS
-	bl cpuhack_reset
-	.endif
+#if SPEEDHACKS_NEW
+	bl speedhack_reset
+#endif
+#if JOYSTICK_READ_HACKS
+	mov r1,#-64
+	strb_ r1,joy_read_count
+#endif
+
+	bl game_specific_hacks_reset
  .if PROFILE
 	bl profile_reset
  .endif
@@ -2662,8 +2492,13 @@ cpu_reset:
 	mov r0,#0
 	bl_long _FF70W  @set WRAM page #0
 	mov r1,#0
-	strb_ r1,doublespeed
-	str_ r1,gb_ime		@disable all IRQ
+	@strb_ r1,doublespeed
+	@bl_long updatespeed
+	@mov r1,#0
+	@IRQ gets disabled by setting cycles to 0
+@	str_ r1,gb_ime		@disable all IRQ
+	strb_ r1,gb_if
+	strb_ r1,gb_ie
 	str_ r1,dividereg
 	str_ r1,timercounter	@reset timers
 	str_ r1,timermodulo	@reset timers
@@ -2671,8 +2506,7 @@ cpu_reset:
 	str_ r1,frame		@frame count reset
 
 	ldr gb_sp,=0xfffe0000
-	mov cycles,#0
-
+	mov cycles,#CYC_LCD_ENABLED		@IRQ enable bit is clear here
 
 	@(clear irq/nmi/res source)...
 
@@ -2684,37 +2518,192 @@ cpu_reset:
 	stmia r0,{gb_flg-gb_pc,gb_sp}
 	ldr pc,[sp],#4
 
-run:
-	b_long run_core
-
-
-
- .align
- .pool
- .section .iwram, "ax", %progbits
- .subsection 105
- .align
- .pool
 @----------------------------------------------------------------------------
-fiveminutes: .word 5*60*60 @fiveminutes_
-sleeptime: .word 5*60*60 @sleeptime_
-dontstop: .byte 0 @dontstop_
-g_hackflags: .byte 0 @hackflags
-g_hackflags2: .byte 0 @hackflags2
- .byte 0
+run:	@r0=0 to return after frame
+@----------------------------------------------------------------------------
+	tst r0,#1
+	stmeqfd sp!,{gb_flg-gb_pc,globalptr,r11,lr}
+
+	ldr globalptr,=GLOBAL_PTR_BASE
+	strb_ r0,dontstop_
+	mov r1,#0
+	strb_ r1,novblankwait_
+
+	b_long line0x
+
+.text
+
+
+#if SPEEDHACKS_NEW
+speedhack_reset:
+	ldr r10,=GLOBAL_PTR_BASE
+	mov r0,#0
+	str_ r0,speedhack_pc
+	strb_ r0,quickhackused
+	strb_ r0,quickhackcounter
+	
+	ldr r2,=speedhack_modify
+	ldr r0,speedhack_modify_values+0
+	str r0,[r2]
+	
+	ldr r0,=_18
+	str r0,[r10,#0x18 * 4]
+	ldr r0,=_20
+	str r0,[r10,#0x20 * 4]
+	ldr r0,=_28
+	str r0,[r10,#0x28 * 4]
+	ldr r0,=_30
+	str r0,[r10,#0x30 * 4]
+	ldr r0,=_38
+	str r0,[r10,#0x38 * 4]
+	ldr r0,=_C2
+	str r0,[r10,#0xC2 * 4]
+	ldr r0,=_C3
+	str r0,[r10,#0xC3 * 4]
+	ldr r0,=_CA
+	str r0,[r10,#0xCA * 4]
+	ldr r0,=_D2
+	str r0,[r10,#0xD2 * 4]
+	ldr r0,=_DA
+	str r0,[r10,#0xDA * 4]
+	bx lr
+speedhack_modify_values:
+	bx lr
+	nop
+	
+install_speedhack:
+	mov r11,r11
+	@r0 = speedhack_pc
+	cmp r1,#0
+	mov r1,r0
+	stmfd sp!,{lr}
+	bl speedhack_reset
+	adr lr,0f
+	bne speedhack_jumps
+	ldrb r0,[r1,#-2]
+	ldrsb r2,[r1,#-1]
+	add r12,r1,r2
+	str_ r12,speedhack_pc
+	and r2,r2,#0xFF
+	rsb r2,r2,#0x100
+	
+	@new code: speedhacks with RAM values if first instruction is FA, and branch length is 8 or less
+	cmp r2,#0x09
+	bgt 1f
+	ldrb r1,[r12]
+	cmp r1,#0xFA
+	bne 1f
+	@ldrb_ r1,speedhack_mode
+	@tst r1,#0x01
+	@beq 1f
+	
+	ldrb r1,[r12,#1]
+	ldrb r12,[r12,#2]
+	orr r1,r1,r12,lsl#8
+	strh_ r1,speedhack_ram_address
+	ldr r1,=speedhack_modify
+	ldr r12,speedhack_modify_values+4
+	str r12,[r1]
+	
+1:	
+	cmp r0,#0x18  @jr
+	beq speedhack_jr  
+	cmp r0,#0x20  @jr nz
+	beq speedhack_jrnz
+	cmp r0,#0x28  @jr z
+	beq speedhack_jrz
+	cmp r0,#0x30  @jr nc
+	beq speedhack_jrnc
+	cmp r0,#0x38  @jr c
+	beq speedhack_jrc
+	bx lr
+speedhack_jumps:
+	str_ r1,speedhack_pc
+	ldrb r0,[r1,#-1]
+	cmp r0,#0xC2
+	beq speedhack_jpnz
+	cmp r0,#0xC3
+	beq speedhack_jp
+	cmp r0,#0xCA
+	beq speedhack_jpz
+	cmp r0,#0xD2
+	beq speedhack_jpnc
+	cmp r0,#0xDA
+	beq speedhack_jpc
+0:
+	ldmfd sp!,{lr}
+	bx lr
+speedhack_jr:
+	ldr r0,=_18x_modify
+	strb r2,[r0]
+	ldr r0,=_18x
+	str r0,[r10,#0x18*4]
+	bx lr
+speedhack_jrnz:
+	ldr r0,=_20x_modify
+	strb r2,[r0]
+	ldr r0,=_20x
+	str r0,[r10,#0x20*4]
+	bx lr
+speedhack_jrz:
+	ldr r0,=_28x_modify
+	strb r2,[r0]
+	ldr r0,=_28x
+	str r0,[r10,#0x28*4]
+	bx lr
+speedhack_jrnc:
+	ldr r0,=_30x_modify
+	strb r2,[r0]
+	ldr r0,=_30x
+	str r0,[r10,#0x30*4]
+	bx lr
+speedhack_jrc:
+	ldr r0,=_38x_modify
+	strb r2,[r0]
+	ldr r0,=_38x
+	str r0,[r10,#0x38*4]
+	bx lr
+
+speedhack_jp:
+	ldr r0,=_C3x
+	str r0,[r10,#0xC3*4]
+	bx lr
+speedhack_jpnz:
+	ldr r0,=_C2x
+	str r0,[r10,#0xC2*4]
+	bx lr
+speedhack_jpz:
+	ldr r0,=_CAx
+	str r0,[r10,#0xCA*4]
+	bx lr
+speedhack_jpnc:
+	ldr r0,=_D2x
+	str r0,[r10,#0xD2*4]
+	bx lr
+speedhack_jpc:
+	ldr r0,=_DAx
+	str r0,[r10,#0xDA*4]
+	bx lr
+
+#endif
+
+@----------------------------------------------------------------------------
+ .section .iwram.end.100, "ax", %progbits
 @----------------------------------------------------------------------------
 
+_speedhack_ram_address:
+	.byte 0,0
+	.byte 0,0
 
-
-@----------------------------------------------------------------------------
- .align
- .pool
- .section .iwram, "ax", %progbits
- .subsection 100
- .align
- .pool
-@----------------------------------------------------------------------------
-
+_quickhackused:
+	.byte 0 @quickhackused
+_quickhackcounter:
+	.byte 0 @quickhackcounter
+_joy_read_count:
+	.byte 0 @joy_read_count
+	.byte 0
+_speedhack_pc:
+	.word 0 @speedhack_pc
   @readmem_tbl_begin
 g_readmem_tbl:
 @table is backwards for speed
@@ -2742,7 +2731,7 @@ GLOBAL_PTR_BASE:
 op_table:
 	.word _00,_01,_02,_03,_04,_05,_06,_07,_08,_09,_0A,_0B,_0C,_0D,_0E,_0F
 	.word _10,_11,_12,_13,_14,_15,_16,_17,_18,_19,_1A,_1B,_1C,_1D,_1E,_1F
-	.word _20,_21,_22,_23,_24,_25,_26,_27,_28,_29,_2A,_2B,_2C,_2D,_2E,_2F
+	.word _20,_21,_22,_23,_24,_25,_26,_27,_28,_29,_2Ax,_2B,_2C,_2D,_2E,_2F
 	.word _30,_31,_32,_33,_34,_35,_36,_37,_38,_39,_3A,_3B,_3C,_3D,_3E,_3F
 	.word _40,_41,_42,_43,_44,_45,_46,_47,_48,_49,_4A,_4B,_4C,_4D,_4E,_4F
 	.word _50,_51,_52,_53,_54,_55,_56,_57,_58,_59,_5A,_5B,_5C,_5D,_5E,_5F
@@ -2766,8 +2755,8 @@ g_writemem_tbl:
 	.word void	@$5000   /
 	.word void	@$6000  /
 	.word void	@$7000  /
-	.word vram_W	@$8000
-	.word vram_W	@$9000
+	.word vram_W_8	@$8000
+	.word vram_W_9	@$9000
 	.word sram_W	@$A000	also RTC?
 	.word sram_W	@$B000	also RTC?
 	.word wram_W	@$C000
@@ -2788,41 +2777,57 @@ rommap:	.skip 8*4		@$0000-7FFF (rommap only used for savestates)
 cpustate:
 	@group these together for save/loadstate
 	.skip 8*4 @cpuregs (flg,a,bc,de,hl,cycles,pc)
-	.byte 0 @gb_ime:	(interrupt master enable)
+	.byte 0 @unused, was gb_ime (interrupt master enable)
+_gb_ie:
 	.byte 0 @gb_ie:	(interrupt enable, adr $FFFF)
+_gb_if:
 	.byte 0 @gb_if:	(interrupt flags, adr $FF0F)
 	.byte 0 @_
-
+_rambank:
 	.byte 0 @rambank
+_gbcmode:
 gbc_mode:
 	.byte 0 @gbcmode
+_sgbmode:
 sgb_mode:
 	.byte 0 @sgbmode
 	.byte 0 @_
 
+_dividereg:
 	.word 0 @dividereg
+_timercounter:
 	.word 0 @timercounter
+_timermodulo:
 	.byte 0 @timermodulo
+_timerctrl:
 	.byte 0 @timerctrl
+_stctrl:
 	.byte 0 @stctrl
 	.byte 0 @_
 frametotal:		@let ui.c see frame count for savestates
+_frame:
 	.word 0 @frame
 @@end of cpustate
-
+_nexttimeout:
 	.word 0 @nexttimeout:  jump here when cycles runs out
+_nexttimeout_alt:
 	.word 0 @nexttimeout_alt
+_scanlinehook:
 	.word 0 @scanlinehook
+_lastbank:
 	.word 0 @lastbank: last memmap added to PC (used to calculate current PC)
-
+_cyclesperscanline:
 	.word 0 @cyclesperscanline (DMG=456*CYCLE, CGB=912*CYCLE)
+_scanline_oam_position:
 	.word 0 @scanline_oam_position (DMG=204*CYCLE, CGB=408*CYCLE)
+_timercyclesperscanline:
 	.word 0 @timercyclesperscanline
- .if PROFILE
-	.word 0x02008000 @profiler
- .endif
+@ .if PROFILE
+@	.word 0x02008000 @profiler
+@ .endif
 doubletimer:
 	.byte 2 @doubletimer_
+_gbamode:
 request_gba_mode:
 	.byte 0 @gbamode
 request_gb_type:
@@ -2848,16 +2853,16 @@ SGB_attributes:	.word 0
 	.skip 12	@padding
  .endif
 @----------------------------------------------------------------------------
- .align
- .pool
- .section .iwram, "ax", %progbits
- .subsection 106
- .align
- .pool
+ .section .iwram.end.107, "ax", %progbits
 XGB_RAM: .skip 0x2000
 XGB_HRAM: .skip 0x80
+ .section .bss.end
+ .align
+CANARY1:	.skip 4
+gbc_palette:	.skip 128	@CGB $FF68-$FF6D???
+gbc_palette2:	.skip 128
 CHR_DECODE: .skip 0x400
-
+CANARY2:	.skip 4
 
 
 	@.end

@@ -16,8 +16,8 @@
 	@IMPORT echo_W
 	@IMPORT echo_R
 	
-	@IMPORT memset_
-	@IMPORT memcpy_
-	@IMPORT memset__
-	@IMPORT memcpy__
+	@IMPORT memset32_
+	@IMPORT memcpy32_
+	@IMPORT memset32
+	@IMPORT memcpy32
 	@.end

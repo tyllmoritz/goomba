@@ -1,3 +1,14 @@
+#pragma once
+
+	.macro global_func function
+	.global \function
+	.type   \function STT_FUNC
+	.endm
+
+	.macro adrl2 reg,label
+	mov \reg,#\label&0x0FF00000
+	add \reg,\reg,#\label&0x000FFFFF
+	.endm
 
 	.macro start_map base, register
 	@GBLA _map_address_
@@ -254,6 +265,16 @@
 	ldrgt pc,=\label
 	.endm
 
+	.macro blle_long label
+	movle lr,pc
+	ldrle pc,=\label
+	.endm
+
+	.macro blge_long label
+	movge lr,pc
+	ldrge pc,=\label
+	.endm
+
 	.macro blne_long label
 	movne lr,pc
 	ldrne pc,=\label
@@ -267,6 +288,66 @@
 	.macro blpl_long label
 	movpl lr,pc
 	ldrpl pc,=\label
+	.endm
+
+	.macro blx_long label
+	add lr,pc,#4
+	ldr r12,=\label
+	bx r12
+	.endm
+
+	.macro blxeq_long label
+	addeq lr,pc,#4
+	ldreq r12,=\label
+	bxeq r12
+	.endm
+
+	.macro blxlo_long label
+	addlo lr,pc,#4
+	ldrlo r12,=\label
+	bxlo r12
+	.endm
+
+	.macro blxhi_long label
+	addhi lr,pc,#4
+	ldrhi r12,=\label
+	bxhi r12
+	.endm
+
+	.macro blxlt_long label
+	addlt lr,pc,#4
+	ldrlt r12,=\label
+	bxlt r12
+	.endm
+
+	.macro blxgt_long label
+	addgt lr,pc,#4
+	ldrgt r12,=\label
+	bxgt r12
+	.endm
+
+	.macro blxne_long label
+	addne lr,pc,#4
+	ldrne r12,=\label
+	bxne r12
+	.endm
+
+	.macro blxcc_long label
+	addcc lr,pc,#4
+	ldrcc r12,=\label
+	bxcc r12
+	.endm
+
+	.macro blxpl_long label
+	addpl lr,pc,#4
+	ldrpl r12,=\label
+	bxpl r12
+	.endm
+
+	.macro blxmi_long label
+	addmi lr,pc,#4
+	ldrmi r12,=\label
+	bxmi r12
 	.endm
 
 	.macro b_long label
@@ -305,6 +386,14 @@
 	ldrlt pc,=\label
 	.endm
 
+	.macro bge_long label
+	ldrge pc,=\label
+	.endm
+
+	.macro ble_long label
+	ldrle pc,=\label
+	.endm
+
 	.macro bcs_long label
 	ldrcs pc,=\label
 	.endm
@@ -318,6 +407,66 @@
 	.endm
 
 	.else
+
+	.macro blx_long label
+	add lr,pc,#4
+	ldr r12,=\label
+	bx r12
+	.endm
+
+	.macro blxeq_long label
+	addeq lr,pc,#4
+	ldreq r12,=\label
+	bxeq r12
+	.endm
+
+	.macro blxlo_long label
+	addlo lr,pc,#4
+	ldrlo r12,=\label
+	bxlo r12
+	.endm
+
+	.macro blxhi_long label
+	addhi lr,pc,#4
+	ldrhi r12,=\label
+	bxhi r12
+	.endm
+
+	.macro blxlt_long label
+	addlt lr,pc,#4
+	ldrlt r12,=\label
+	bxlt r12
+	.endm
+
+	.macro blxgt_long label
+	addgt lr,pc,#4
+	ldrgt r12,=\label
+	bxgt r12
+	.endm
+
+	.macro blxne_long label
+	addne lr,pc,#4
+	ldrne r12,=\label
+	bxne r12
+	.endm
+
+	.macro blxcc_long label
+	addcc lr,pc,#4
+	ldrcc r12,=\label
+	bxcc r12
+	.endm
+
+	.macro blxpl_long label
+	addpl lr,pc,#4
+	ldrpl r12,=\label
+	bxpl r12
+	.endm
+
+	.macro blxmi_long label
+	addmi lr,pc,#4
+	ldrmi r12,=\label
+	bxmi r12
+	.endm
 
 	.macro bl_long label
 	bl \label
@@ -341,6 +490,14 @@
 
 	.macro blgt_long label
 	blgt \label
+	.endm
+	
+	.macro blle_long label
+	blle \label
+	.endm
+
+	.macro blge_long label
+	blge \label
 	.endm
 
 	.macro blne_long label
@@ -391,6 +548,14 @@
 	blt \label
 	.endm
 
+	.macro bge_long label
+	bge \label
+	.endm
+
+	.macro ble_long label
+	ble \label
+	.endm
+
 	.macro bcs_long label
 	bcs \label
 	.endm
@@ -405,3 +570,4 @@
  .endif
 
 	@.end
+

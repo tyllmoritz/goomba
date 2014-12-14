@@ -1,52 +1,52 @@
 @	#include "equates.h"
 @	#include "lcd.h"
 
-	.global Sound_reset
-	.global _FF10W
-	.global _FF11W
-	.global _FF12W
-	.global _FF13W
-	.global _FF14W
-	.global _FF16W
-	.global _FF17W
-	.global _FF18W
-	.global _FF19W
-	.global _FF1AW
-	.global _FF1BW
-	.global _FF1CW
-	.global _FF1DW
-	.global _FF1EW
-	.global _FF20W
-	.global _FF21W
-	.global _FF22W
-	.global _FF23W
-	.global _FF24W
-	.global _FF25W
-	.global _FF26W
-	.global _FF30W
+	global_func Sound_reset
+	global_func _FF10W
+	global_func _FF11W
+	global_func _FF12W
+	global_func _FF13W
+	global_func _FF14W
+	global_func _FF16W
+	global_func _FF17W
+	global_func _FF18W
+	global_func _FF19W
+	global_func _FF1AW
+	global_func _FF1BW
+	global_func _FF1CW
+	global_func _FF1DW
+	global_func _FF1EW
+	global_func _FF20W
+	global_func _FF21W
+	global_func _FF22W
+	global_func _FF23W
+	global_func _FF24W
+	global_func _FF25W
+	global_func _FF26W
+	global_func _FF30W
 
-	.global _FF10R
-	.global _FF11R
-	.global _FF12R
-	.global _FF13R
-	.global _FF14R
-	.global _FF16R
-	.global _FF17R
-	.global _FF18R
-	.global _FF19R
-	.global _FF1AR
-	.global _FF1BR
-	.global _FF1CR
-	.global _FF1DR
-	.global _FF1ER
-	.global _FF20R
-	.global _FF21R
-	.global _FF22R
-	.global _FF23R
-	.global _FF24R
-	.global _FF25R
-	.global _FF26R
-	.global _FF30R
+	global_func _FF10R
+	global_func _FF11R
+	global_func _FF12R
+	global_func _FF13R
+	global_func _FF14R
+	global_func _FF16R
+	global_func _FF17R
+	global_func _FF18R
+	global_func _FF19R
+	global_func _FF1AR
+	global_func _FF1BR
+	global_func _FF1CR
+	global_func _FF1DR
+	global_func _FF1ER
+	global_func _FF20R
+	global_func _FF21R
+	global_func _FF22R
+	global_func _FF23R
+	global_func _FF24R
+	global_func _FF25R
+	global_func _FF26R
+	global_func _FF30R
  .align
  .pool
  .text
@@ -92,6 +92,7 @@ _FF11W:@		NR11 - Channel 1 Sound length/Wave pattern duty
 @----------------------------------------------------------------------------
 	mov addy,#REG_BASE
 	strb r0,[addy,#REG_SG1CNT_H]
+	strb_ r0,sound_shadow+0
 	mov pc,lr
 @----------------------------------------------------------------------------
 _FF12W:@		NR12 - Channel 1 Volume Envelope
@@ -104,12 +105,14 @@ _FF13W:@		NR13 - Channel 1 Frequency lo
 @----------------------------------------------------------------------------
 	mov addy,#REG_BASE
 	strb r0,[addy,#REG_SG1CNT_X]
+	strb_ r0,sound_shadow+1
 	mov pc,lr
 @----------------------------------------------------------------------------
 _FF14W:@		NR14 - Channel 1 Frequency hi
 @----------------------------------------------------------------------------
 	mov addy,#REG_BASE
 	strb r0,[addy,#REG_SG1CNT_X+1]
+	strb_ r0,sound_shadow+2
 	mov pc,lr
 
 @----------------------------------------------------------------------------
@@ -117,6 +120,7 @@ _FF16W:@		NR21 - Channel 2 Sound Length/Wave Pattern Duty
 @----------------------------------------------------------------------------
 	mov addy,#REG_BASE
 	strb r0,[addy,#REG_SG2CNT_L]
+	strb_ r0,sound_shadow+3
 	mov pc,lr
 @----------------------------------------------------------------------------
 _FF17W:@		NR22 - Channel 2 Volume Envelope
@@ -129,12 +133,14 @@ _FF18W:@		NR23 - Channel 2 Frequency lo
 @----------------------------------------------------------------------------
 	mov addy,#REG_BASE
 	strb r0,[addy,#REG_SG2CNT_H]
+	strb_ r0,sound_shadow+4
 	mov pc,lr
 @----------------------------------------------------------------------------
 _FF19W:@		NR24 - Channel 2 Frequency hi
 @----------------------------------------------------------------------------
 	mov addy,#REG_BASE
 	strb r0,[addy,#REG_SG2CNT_H+1]
+	strb_ r0,sound_shadow+5
 	mov pc,lr
 
 @----------------------------------------------------------------------------
@@ -150,6 +156,7 @@ _FF1BW:@		NR31 - Channel 3 Sound Length
 @----------------------------------------------------------------------------
 	mov addy,#REG_BASE
 	strb r0,[addy,#REG_SG3CNT_H]
+	strb_ r0,sound_shadow+6
 	mov pc,lr
 @----------------------------------------------------------------------------
 _FF1CW:@		NR32 - Channel 3 Select output level
@@ -163,12 +170,14 @@ _FF1DW:@		NR33 - Channel 3 Frequency lo
 @----------------------------------------------------------------------------
 	mov addy,#REG_BASE
 	strb r0,[addy,#REG_SG3CNT_X]
+	strb_ r0,sound_shadow+7
 	mov pc,lr
 @----------------------------------------------------------------------------
 _FF1EW:@		NR34 - Channel 3 Frequency hi
 @----------------------------------------------------------------------------
 	mov addy,#REG_BASE
 	strb r0,[addy,#REG_SG3CNT_X+1]
+	strb_ r0,sound_shadow+8
 	mov pc,lr
 
 @----------------------------------------------------------------------------
@@ -365,7 +374,13 @@ _FF26R:@		NR52 - Sound on/off
 @----------------------------------------------------------------------------
 	mov r1,#REG_BASE
 	ldrb r0,[r1,#REG_SGCNT_X]
+	@work around for bugs in VBA-M, fixes Zelda Oracles games when running Goomba Color in that emulator
+	ldrb r2,[r1,#REG_SG3CNT_L]	@is channel 3 "play" flag off?
+	tst r2,#0x80
+	biceq r0,#0x04				@clear "channel 3 is playing" bit
+	
 	mov pc,lr
 
 @----------------------------------------------------------------------------
 	@.end
+

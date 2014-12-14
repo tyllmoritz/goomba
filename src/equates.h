@@ -1,3 +1,9 @@
+#pragma once
+#include "config.h"
+
+//Must update cleanup_ewram if EWRAM equates are changed!
+
+
 	VERSION_IN_ROM = 1
 #ifndef _GBAMP_VERSION
 #define _GBAMP_VERSION 0
@@ -9,7 +15,7 @@
 		@GBLL DEBUG
 		@GBLL SAFETY
 		@GBLL PROFILE
-		@GBLL SPEEDHACKS
+		@GBLL SPEEDHACKS_OLD
 		@GBLL MOVIEPLAYER
 		@GBLL RESIZABLE
 		@GBLL RUMBLE
@@ -25,28 +31,31 @@
 
  DEBUG		= 0
  PROFILE		= 0
- SPEEDHACKS		= 0
- LITTLESOUNDDJ   = 0
+@ SPEEDHACKS_OLD		= 0
+// LITTLESOUNDDJ   = 0
 
- .if GBAMPVERSION
- MOVIEPLAYER		= 1
- RESIZABLE		= 1
- RUMBLE	= 0
- VISOLY = 0
- .else
- MOVIEPLAYER		= 0
- RESIZABLE		= 0
- RUMBLE	= 1
- VISOLY = 1
- .endif
+// .if GBAMPVERSION
+// MOVIEPLAYER		= 1
+// RESIZABLE		= 1
+// RUMBLE	= 0
+// VISOLY = 0
+// .else
+// MOVIEPLAYER		= 0
+// RESIZABLE		= 0
+// RUMBLE	= 1
+// VISOLY = 1
+// .endif
 
  SAVESTATES	= 0
+
 
 @BUILD		SETS "DEBUG"/"GBA"	(defined at cmdline)
 @----------------------------------------------------------------------------
 
- MAX_RECENT_TILES = 96  @if you change this, change RECENT_TILES as well!
- BG_CACHE_SIZE = 512
+MAX_RECENT_TILES = 96  @if you change this, change RECENT_TILES as well!
+RECENT_TILENUM_SIZE = 128
+
+@ BG_CACHE_SIZE = 512
 
 
 @statck starts at 0x03007700
@@ -105,21 +114,23 @@
  Next = GBC_EXRAM
 	.endif
 
- INSTANT_PAGES	= 0x06004c00 @SGB_PACKET-1024		;formerly 0x0600CC00
+@ INSTANT_PAGES	= 0x06004c00 @SGB_PACKET-1024		;formerly 0x0600CC00
 
  SGB_PALETTE	= Next-16*4
 
- DIRTY_ROWS = SGB_PALETTE-48
- DIRTY_TILES = DIRTY_ROWS-768-4
- RECENT_TILENUM	= DIRTY_TILES-(MAX_RECENT_TILES+2)*2
+ Next = SGB_PALETTE
 
- BG_CACHE	= RECENT_TILENUM-BG_CACHE_SIZE
+@ DIRTY_ROWS = Next-48
+@ DIRTY_TILES = DIRTY_ROWS-768-4
+@ RECENT_TILENUM	= DIRTY_TILES-(MAX_RECENT_TILES+2)*2
 
- Next	= BG_CACHE
+@ BG_CACHE	= RECENT_TILENUM-BG_CACHE_SIZE
+
+@ Next	= RECENT_TILENUM
 
 	.if RESIZABLE
 	.else
- SGB_PALS	= BG_CACHE-4096
+ SGB_PALS	= Next-4096
  SGB_ATFS	= SGB_PALS-4096
  SGB_PACKET	= SGB_ATFS-112
  SGB_ATTRIBUTES = SGB_PACKET-360
@@ -132,8 +143,9 @@
 
  GBOAMBUFF1	= Next-160
  GBOAMBUFF2	= GBOAMBUFF1-160
+ GBOAMBUFF3	= GBOAMBUFF2-160
 
- BG0CNT_SCROLL_BUFF	= GBOAMBUFF2-144*24
+ BG0CNT_SCROLL_BUFF	= GBOAMBUFF3-144*24
  WINDOWBUFF	= BG0CNT_SCROLL_BUFF-144*2
  DISPCNTBUFF	= WINDOWBUFF-144*2
 
@@ -152,13 +164,46 @@
 @XSCROLLBUFF2	EQU YSCROLLBUFF2-144
 @LCDCBUFF2	EQU XSCROLLBUFF2-144
 
-	.if SPEEDHACKS
- SPEEDHACK_FIND_JR_Z_BUF		= DISPCNTBUFF2-64
+
+ TEXTMEM = Next - 632
+ Next = TEXTMEM
+
+ ewram_canary_2 = Next - 4
+ Next = ewram_canary_2
+
+ DIRTY_TILE_BITS = Next - 48
+ dirty_map_words = DIRTY_TILE_BITS - 64
+ Next = dirty_map_words
+
+ RECENT_TILENUM = Next - RECENT_TILENUM_SIZE @32 words
+ Next = RECENT_TILENUM
+
+@24 packets at 8 bytes per packet, 20 packets might be okay too...  (modify dma.c as well)
+ vram_packets_incoming = Next - 192
+ vram_packets_registered_bank0 = vram_packets_incoming - 192
+ vram_packets_registered_bank1 = vram_packets_registered_bank0 - 192
+ vram_packets_dirty = vram_packets_registered_bank1 - 196
+
+ Next = vram_packets_dirty
+
+ INSTANT_PAGES	= Next-1024
+ Next = INSTANT_PAGES
+
+ ewram_canary_1 = Next - 4
+ Next = ewram_canary_1
+
+	.if SPEEDHACKS_OLD
+ SPEEDHACK_FIND_JR_Z_BUF		= Next - 64
  SPEEDHACK_FIND_JR_NZ_BUF	= SPEEDHACK_FIND_JR_Z_BUF-64
  SPEEDHACK_FIND_JR_C_BUF		= SPEEDHACK_FIND_JR_NZ_BUF-64
  SPEEDHACK_FIND_JR_NC_BUF	= SPEEDHACK_FIND_JR_C_BUF-64
  Next	= SPEEDHACK_FIND_JR_NC_BUF
 	.endif
+
+@ _FF41_PC_4 = Next - 168
+@ Next = _FF41_PC_4
+
+
  MULTIBOOT_LIMIT	= Next	@How much data is left for Multiboot to work.
  END_OF_EXRAM = MULTIBOOT_LIMIT
 
@@ -268,8 +313,15 @@
 
 @everything in wram_globals* areas:
 
- start_map 0,globalptr	@gbz80.s
- _m_ readmem_tbl_begin,-16*4
+ start_map -19*4,globalptr	@gbz80.s
+ _m_ speedhack_ram_address,4
+ _m_ quickhackused,1
+ _m_ quickhackcounter,1
+ _m_ joy_read_count,1
+ _m_ speedhack_mode,1
+ _m_ speedhack_pc,4
+@readmem_tbl
+ _m_ readmem_tbl_begin,0
  _m_ readmem_tbl_end,16*4
  _m_ ,-4
  _m_ readmem_tbl_,0
@@ -278,10 +330,10 @@
  _m_ writemem_tbl,16*4
  _m_ memmap_tbl,16*4
  _m_ cpuregs,8*4
- _m_ gb_ime,1
+ _m_ ,1 @gb_ime,1  @not used
  _m_ gb_ie,1
  _m_ gb_if,1
- _m_ ,1  
+ _m_ ,1   @gb_interrupt_lines, not used
  _m_ rambank,1
  _m_ gbcmode,1
  _m_ sgbmode,1
@@ -353,8 +405,10 @@
 
  _m_ dma_src,2
  _m_ dma_dest,2
- _m_ dirty_tiles,4
- _m_ dirty_rows,4
+ _m_ dirty_tile_bits,4
+ _m_ gb_oam_buffer_alt,4
+@ _m_ dirty_tiles,4
+@ _m_ dirty_rows,4
 
 	_m_ bigbuffer,4
 		_m_ bg01cnt,4
@@ -397,18 +451,25 @@
  _m_ consume_buffer,1
  _m_ vblank_happened,1
 
- _m_ gboambuff,4
- _m_ active_gboambuff,4
+ _m_ gb_oam_buffer_screen,4
+ _m_ gb_oam_buffer_writing,4
 
  _m_ _palettebank,4
 
- _m_ bg_cache_cursor,4
- _m_ bg_cache_base,4
- _m_ bg_cache_limit,4
- _m_ bg_cache_full,1
+@ _m_ bg_cache_cursor,4
+@ _m_ bg_cache_base,4
+@ _m_ bg_cache_limit,4
+@ _m_ bg_cache_full,1
+@ _m_ bg_cache_updateok,1
+@	_m_ lcdhack,1
+@	_m_ dmamode,1
+
+ _m_ sound_shadow,12
+ _m_ ,1
  _m_ bg_cache_updateok,1
 	_m_ lcdhack,1
-	_m_ ,1
+	_m_ dmamode,1
+
 
 @VRAM_name0_ptr # 4
 
@@ -465,15 +526,31 @@
 	 _m_ hackflags,1
 	 _m_ hackflags2,1
  _m_ ,1
-			@gbz80.s (wram_globals6)
-	_m_ xgb_ram,0x2000
- _m_ xgb_hram,0x80
- _m_ chr_decode,0x400
-
-			@lcd.s (wram_globals7)
+			@lcd.s (wram_globals6)
  _m_ FF41_R_function,4
  _m_ FF41_R_vblank_function,4
+ _m_ vram_packet_dest,4
+ _m_ vram_packet_source,4
 
+ _m_ FF41_PC,4
+ _m_ FF41_handler,4
+ _m_ FF41_PC_2,4
+ _m_ FF41_handler_2,4
+ _m_ FF41_PC_3,4
+ _m_ FF41_handler_3,4
+ _m_ FF41_PC_4,4
+ _m_ FF41_handler_4,4
+ 
+ _m_ FF44_PC,4
+ _m_ FF44_handler,4
+ _m_ FF44_PC_2,4
+ _m_ FF44_handler_2,4
+
+			@gbz80.s (wram_globals7)
+	_m_ xgb_ram,0x2000
+ _m_ xgb_hram,0x80
+
+ 
 
 @----------------------------------------------------------------------------
 @IRQ_VECTOR EQU 0xfffe ; IRQ/BRK interrupt vector address
@@ -502,16 +579,18 @@
 
 @cycle flags- (stored in cycles reg for speed)
 
- BRANCH			= 0x01 @branch instruction encountered
-@				EQU 0x02
+ CYC_IE			= 0x01 @interrupts are enabled
+ CYC_LCD_ENABLED = 0x02  @LCD controller is enabled
+@ CYC_LYC 		= 0x04  @LY matches LYC
+@ BRANCH			= 0x02 @branch instruction encountered
 @				EQU 0x04
 @				EQU 0x08
  CYC_MASK		= CYCLE-1	@Mask
 
  SINGLE_SPEED = 456*CYCLE
  DOUBLE_SPEED = 912*CYCLE
- SINGLE_SPEED_SCANLINE_OAM_POSITION = 172*CYCLE  @should be 204
- DOUBLE_SPEED_SCANLINE_OAM_POSITION = 172*2*CYCLE
+ SINGLE_SPEED_SCANLINE_OAM_POSITION = 204*CYCLE  @should be 204
+ DOUBLE_SPEED_SCANLINE_OAM_POSITION = 204*2*CYCLE
 
 @SINGLE_SPEED_HBLANK EQU 204*CYCLE  ;should be 204
 @DOUBLE_SPEED_HBLANK EQU 408*CYCLE

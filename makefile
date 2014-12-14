@@ -15,22 +15,25 @@ include $(DEVKITARM)/gba_rules
 #--------
 # Overrides for default rules
 
-%.o: %.s
-	@echo $(notdir $<)
-	$(CC) -MMD -MP -MF $(DEPSDIR)/$*.d -x assembler-with-cpp $(ASFLAGS) -c $< -o $@
+#%.o: %.s
+#	@echo $(notdir $<)
+#	$(CC) -MMD -MP -MF $(DEPSDIR)/$*.d -x assembler-with-cpp $(ASFLAGS) -c $< -o $@
+#
+#%.o: %.S
+#	@echo $(notdir $<)
+#	$(CC) -MMD -MP -MF $(DEPSDIR)/$*.d -x assembler-with-cpp $(ASFLAGS) -c $< -o $@
 
-%.o: %.S
-	@echo $(notdir $<)
-	$(CC) -MMD -MP -MF $(DEPSDIR)/$*.d -x assembler-with-cpp $(ASFLAGS) -c $< -o $@
+#OBJCOPY		:=	$(OBJCOPY) -R.pad
 
-OBJCOPY		:=	$(OBJCOPY) -R.pad
+# We override the specs file because the default crt0 always clears EWRAM, and we don't want this.
+# when DevKitArm changes the specs files, change the copy in the project too!
 
-#%_mb.elf:
-#	@echo linking multiboot
-#	@$(LD) -specs=gba_mb.specs $(LDFLAGS) $(OFILES) $(LIBPATHS) $(LIBS) -o $@
+%_mb.elf:
+	@echo linking multiboot CUSTOM
+	@$(LD) $(LDFLAGS) -specs=../src/gba_mb_my.specs $(OFILES) $(LIBPATHS) $(LIBS) -o $@
 %.elf:
-	@echo linking cartridge
-	@$(LD) $(LDFLAGS) $(OFILES) $(LIBPATHS) $(LIBS) -specs=../src/my.specs -o $@
+	@echo linking cartridge CUSTOM
+	@$(LD)  $(LDFLAGS) -specs=../src/gba_my.specs $(OFILES) $(LIBPATHS) $(LIBS) -o $@
 
 #-------
 
@@ -53,12 +56,16 @@ INCLUDES	:=
 ARCH	:=	-mthumb -mthumb-interwork
 
 CFLAGS	:=	-g -Wall -Os\
-		-mcpu=arm7tdmi -mtune=arm7tdmi\
- 		-fomit-frame-pointer\
-		-ffast-math \
-		$(ARCH)
+			-mcpu=arm7tdmi -mtune=arm7tdmi\
+ 			-fomit-frame-pointer\
+			-ffast-math \
+			-std=c99 \
+			$(ARCH)
 
 CFLAGS	+=	$(INCLUDE)
+
+CXXFLAGS := $(CFLAGS) \
+ 			-fno-rtti -fno-exceptions
 
 ASFLAGS	:=	$(ARCH)
 LDFLAGS	=	-g $(ARCH) -Wl,-Map,$(notdir $@).map
@@ -100,7 +107,7 @@ CPPFILES	:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
 SFILES		:=	all.s
 DATA1		:=	font.lz77
 DATA2		:=	fontpal.bin
-DATA3		:=	../goomba_mb.gba
+DATA3		:=	#../goomba_mb.gba
 
 #---------------------------------------------------------------------------------
 # use CXX for linking C++ projects, CC for standard C
@@ -139,9 +146,13 @@ $(BUILD):
 
 all	: $(BUILD)
 #---------------------------------------------------------------------------------
-clean:
-	@echo clean ...
-	@rm -fr $(BUILD) $(TARGET).elf $(TARGET).gba
+semiclean:
+	@echo deleting intermediate files...
+	@rm -fr $(BUILD) $(TARGET).elf
+
+clean: semiclean
+	@echo deleting main binary
+	@rm -f $(TARGET).gba
 
 #---------------------------------------------------------------------------------
 else

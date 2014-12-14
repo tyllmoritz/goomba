@@ -15,14 +15,10 @@
 	.global g_update_border_palette
 	.global sgb_reset
 	.global g_sgb_mask
+	.global _autoborderstate
 
 
- .align
- .pool
- .section .iwram, "ax", %progbits
- .subsection 104
- .align
- .pool
+ .section .iwram.end.104, "ax", %progbits
 	.word 0	@packetcursor
 	.word 0   @packetbitcursor
 	.byte 0	@packetstate   ;0=invalid, 1=reset, 2=awaiting_stopbit, 3=awaiting_reset
@@ -33,6 +29,7 @@ g_update_border_palette:
 	.byte 0   @update_border_palette
 auto_border:
 	.byte 1	@autoborder
+_autoborderstate:
 	.byte 0	@autoborderstate
 	.byte 0	@borderpartsadded
 	
@@ -101,25 +98,25 @@ sgb_reset:
 	ldr_ r0,sgb_pals
 	mov r2,#4096
 	movs r0,r0
-	blne memset_
+	blne memset32_
 	ldr_ r0,sgb_atfs
 	mov r2,#4096
 	movs r0,r0
-	blne memset_
+	blne memset32_
 	ldr_ r0,sgb_attributes
 	mov r2,#360
 	movs r0,r0
-	blne memset_
+	blne memset32_
 	.else
 	ldr r0,=SGB_PALS
 	mov r2,#4096
-	bl memset_
+	bl memset32_
 	ldr r0,=SGB_ATFS
 	mov r2,#4096
-	bl memset_
+	bl memset32_
 	ldr r0,=SGB_ATTRIBUTES
 	mov r2,#360
-	bl memset_
+	bl memset32_
 	.endif
 	
 	@don't remove border after we went through everything to add it
@@ -131,11 +128,11 @@ sgb_reset:
 	@erase SGB border
 	ldr r0,=AGB_SGB_MAP
 	mov r2,#0x800
-	bl memset_
+	bl memset32_
 	@erase SGB border tiles
 	ldr r0,=AGB_SGB_VRAM
 	mov r2,#0x2000
-	bl memset_
+	bl memset32_
 	
 	ldrb_ r1,_ui_border_visible
 	bic r1,r1,#2
@@ -153,25 +150,37 @@ sgb_reset:
 	ldr_ r0,sgb_packet
 	mov r2,#112
 	movs r0,r0
-	blne memset_
+	blne memset32_
 	.else
 	mov r1,#0
 	ldr r0,=SGB_PACKET
 	mov r2,#112
-	bl memset_
+	bl memset32_
 	.endif
 	
 	ldmfd sp!,{pc}
 
-
-@----------------------------------------------------------------------------
-joy0_R_SGB:		@FF00
-@----------------------------------------------------------------------------
-	ldrb_ r0,joy0serial
-	ldrb_ r1,lineslow
-	orr r1,r1,#0x04
-	strb_ r1,lineslow
-	mov pc,lr
+@@----------------------------------------------------------------------------
+@joy0_R_SGB:		@FF00
+@@----------------------------------------------------------------------------
+@	ldrb_ r0,joy0serial
+@	ldrb_ r1,lineslow
+@	orr r1,r1,#0x04
+@	strb_ r1,lineslow
+@	
+@	b_long joy0_R_subsequent_check
+@	
+@	#if 0
+@	#if JOYSTICK_READ_HACKS
+@	@joystick polling speed hack
+@	ldrsb r1,[r10,#joy_read_count]
+@	adds r1,r1,#1
+@	strb_ r1,joy_read_count
+@	andpl cycles,cycles,#CYC_MASK
+@	#endif
+@	#endif
+@	
+@	@mov pc,lr
 
 @----------------------------------------------------------------------------
 joy0_W_SGB:		@FF00

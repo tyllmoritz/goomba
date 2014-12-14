@@ -1,9 +1,4 @@
- .align
- .pool
- .section .iwram, "ax", %progbits
- .subsection 3
- .align
- .pool
+ .section .iwram.2, "ax", %progbits
 
 @	#include "equates.h"
 @	#include "memory.h"
@@ -14,21 +9,22 @@
  .if RUMBLE
 	@IMPORT DoRumble
  .endif
-	.global mbc0init
-	.global mbc1init
-	.global mbc2init
-	.global mbc3init
-	.global mbc4init
-	.global mbc5init
-	.global mbc6init
-	.global mbc7init
-	.global mmm01init
-	.global huc1init
-	.global huc3init
+	global_func mbc0init
+	global_func mbc1init
+	global_func mbc2init
+	global_func mbc3init
+	global_func mbc4init
+	global_func mbc5init
+	global_func mbc6init
+	global_func mbc7init
+	global_func mmm01init
+	global_func huc1init
+	global_func huc3init
+	global_func RamSelect
 @----------------------------------------------------------------------------
 RamSelect:
 @----------------------------------------------------------------------------
-	ldrb_ r0,mapperdata+2
+	ldrb_ r0,mapperdata+2	@ram enable
 @----------------------------------------------------------------------------
 RamEnable:
 @----------------------------------------------------------------------------
@@ -46,6 +42,7 @@ RamEnable:
 	ldrb_ r0,mapperdata+4		@rambank
 	b mapAB_
 
+	.pushsection .text
 @----------------------------------------------------------------------------
 mbc0init:
 @----------------------------------------------------------------------------
@@ -65,6 +62,8 @@ mbc1init:
 @----------------------------------------------------------------------------
 	.word RamEnable,MBC1map0,MBC1map1,MBC1mode
 	mov pc,lr
+	
+	.popsection
 @----------------------------------------------------------------------------
 MBC1map0:
 @----------------------------------------------------------------------------
@@ -74,6 +73,8 @@ MBC1map0:
 	ldrb_ r1,mapperdata+1
 	orr r0,r0,r1,lsl#5
 	b map4567_
+	
+	.pushsection .text
 @----------------------------------------------------------------------------
 MBC1map1:
 @----------------------------------------------------------------------------
@@ -105,6 +106,7 @@ mbc2init:
 @----------------------------------------------------------------------------
 	.word MBC2RamEnable,MBC2map,void,void
 	mov pc,lr
+	.popsection
 @----------------------------------------------------------------------------
 MBC2map:
 @----------------------------------------------------------------------------
@@ -113,10 +115,11 @@ MBC2map:
 	ands r0,r0,#0xf
 	moveq r0,#1
 	b map4567_
+	.pushsection .text
 @----------------------------------------------------------------------------
 MBC2RamEnable:
 	tst addy,#0x0100
-	beq RamEnable
+	beq_long RamEnable
 	mov pc,lr
 
 @----------------------------------------------------------------------------
@@ -143,10 +146,10 @@ mbc3bank:
 	strb_ r0,mapperdata+4
 	tst r0,#8
 	beq RamSelect
-	adrl r1,empty_W
+	ldr r1,=empty_W
 	str_ r1,writemem_tbl+40
 	str_ r1,writemem_tbl+44
-	adrl r1,empty_R
+	ldr r1,=empty_R
 	cmp r0,#0x8
 	adreq r1,clk_sec
 	cmp r0,#0x9
@@ -194,6 +197,7 @@ mbc5init:
 @----------------------------------------------------------------------------
 	.word RamEnable,MBC5map0,MBC5RAMB,void
 	mov pc,lr
+	.popsection
 @----------------------------------------------------------------------------
 MBC5map0:
 @----------------------------------------------------------------------------
@@ -215,11 +219,13 @@ MBC5RAMB:
  .endif
 	b RamSelect
 
+	.pushsection .text
 @----------------------------------------------------------------------------
 mbc7init:
 @----------------------------------------------------------------------------
 	.word void,MBC7map,MBC7RAMB,void
 	mov pc,lr
+	.popsection
 @----------------------------------------------------------------------------
 MBC7map:
 @----------------------------------------------------------------------------
@@ -227,6 +233,7 @@ MBC7map:
 	moveq r0,#1
 	strb_ r0,mapperdata
 	b map4567_
+	.pushsection .text
 @----------------------------------------------------------------------------
 MBC7RAMB:
 @----------------------------------------------------------------------------
@@ -243,6 +250,7 @@ huc1init:
 	.word RamEnable,HUC1map0,MBC1map1,MBC1mode
 @	DCD RamEnable,HUC1map0,MBC5RAMB,void
 	mov pc,lr
+	.popsection
 @----------------------------------------------------------------------------
 HUC1map0:
 @----------------------------------------------------------------------------
@@ -253,6 +261,7 @@ HUC1map0:
 @	orr r0,r0,r1,lsl#5
 	b map4567_
 
+	.pushsection .text
 @----------------------------------------------------------------------------
 huc3init:
 @----------------------------------------------------------------------------
@@ -266,6 +275,7 @@ mbc6init:
 @----------------------------------------------------------------------------
 	.word RamEnable,map4567_,void,void
 	mov pc,lr
+	.popsection
 
 @----------------------------------------------------------------------------
 @----------------------------------------------------------------------------

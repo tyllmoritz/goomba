@@ -5,6 +5,10 @@
 	extern "C" {
 #endif
 
+#ifndef ARRSIZE
+#define ARRSIZE(xxxx) (sizeof((xxxx))/sizeof((xxxx)[0]))
+#endif
+
 #include "config.h"
 
 //#if !RESIZABLE
@@ -25,6 +29,8 @@
 #include "rumble.h"
 #include "mbclient.h"
 #include "cache.h"
+#include "dma.h"
+#include "pocketnes_text.h"
 
 #if MOVIEPLAYER
 #include "filemenu.h"

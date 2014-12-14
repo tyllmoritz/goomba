@@ -15,16 +15,16 @@
 	@IMPORT update_cache
 	.endif
 
-	.global loadcart
-	.global loadcart_after_sgb_border
+	global_func loadcart
+	global_func loadcart_after_sgb_border
 @	EXPORT mapBIOS_
-	.global map0123_
-	.global map4567_
+	global_func map0123_
+	global_func map4567_
 @	EXPORT map01234567_
-	.global mapAB_
+	global_func mapAB_
  .if SAVESTATES
-	.global savestate
-	.global loadstate
+	global_func savestate
+	global_func loadstate
  .endif
 	.global g_emuflags
 	.global g_sramsize
@@ -41,12 +41,17 @@
 	.global END_OF_EXRAM
 	
 	.global INSTANT_PAGES
+	.if MOVIEPLAYER
 	.global SramName
 	.global fatBuffer
 	.global fatWriteBuffer
 	.global globalBuffer
 	.global openFiles
 	.global lfnName
+	.endif
+	
+	.global ewram_canary_1
+	.global ewram_canary_2
 	
 @----------------------------------------------------------------------------
  .align
@@ -146,11 +151,14 @@ loadcart: @called from C:  r0=rom number, r1=emuflags
 0:
 	strb_ r1,autoborderstate
 
-	ldr r1,=findrom2
-	bl thumbcall_r1
-	ldr r1,=make_instant_pages
-	bl thumbcall_r1
-
+	@ldr r1,=findrom2
+	@bl thumbcall_r1
+	@ldr r1,=make_instant_pages
+	@bl thumbcall_r1
+	
+	blx_long findrom2
+	blx_long make_instant_pages
+	
 	mov r3,r0		@r0 now points to rom image
 	str_ r3,rombase		@set rom base
 				@r3=rombase til end of loadcart so DON'T FUCK IT UP
@@ -158,12 +166,12 @@ loadcart: @called from C:  r0=rom number, r1=emuflags
 @	mov r1,#0
 @	ldr r0,=AGB_VRAM+0x4000	;clear AGB Tiles
 @	mov r2,#0x8000
-@	bl memset_
+@	bl memset32_
 
 @	ldr r1,=0x01000100
 @	ldr r0,=AGB_BG1		;clear AGB BG (GB Window sides)
 @	mov r2,#0x2000
-@	bl memset_
+@	bl memset32_
 
 	ldmfd sp!,{r0-r1}
 	str_ r0,romnumber
@@ -298,8 +306,9 @@ loadcart: @called from C:  r0=rom number, r1=emuflags
  .endif
 
 	stmfd sp!,{r0-addy,lr}
-	ldr r1,=init_cache
-	bl thumbcall_r1
+	@ldr r1,=init_cache
+	@bl thumbcall_r1
+	blx_long init_cache
 	ldmfd sp!,{r0-addy,lr}
 	
 	mov r0,#0
@@ -348,31 +357,31 @@ dont_use_true_sram:
 	mov r1,#0xe0		@was 0xe0
 	mov r0,#AGB_OAM
 	mov r2,#0x400
-	bl memset_		@no stray sprites please
+	bl memset32_		@no stray sprites please
 
 	mov r1,#0		@clear gb ram+hram
 	ldr r0,=XGB_RAM
 	mov r2,#0x2080
-	bl memset_
+	bl memset32_
  .if RESIZABLE
 	mov r1,#0
 
 	ldr_ r0,xgb_vram
 	ldr_ r2,xgb_vramsize
-	blne memset_		@clear GB VRAM
+	blne memset32_		@clear GB VRAM
 
 	ldr_ r0,xgb_sram		@clear gb sram, it will be loaded later anyway
 	ldr_ r2,xgb_sramsize
-	blne memset_
+	blne memset32_
  .else
 	ldr r0,=XGB_SRAM	@clear gb sram, it will be loaded later anyway
 	mov r2,#0x8000
-	bl memset_
+	bl memset32_
  .endif
 
 	ldr r0,=mapperstate	@clear mapperdata so we don't have to do that in every MapperInit.
 	mov r2,#32
-	bl memset_
+	bl memset32_
 
 	ldr r0,=joy0_W
 	ldr r1,=joypad_write_ptr
@@ -436,13 +445,13 @@ lc1:				@call mapper*init
 0:
 @	bl mirror1_		;(call after mapperinit to allow mappers to set up cartflags first)
 	
-	.if LITTLESOUNDDJ
+	#if LITTLESOUNDDJ
 	@Little Sound DJ stuff
 	ldrb_ r0,sramsize
 	cmp r0,#4
 	bleq little_sound_dj_init
 	@END Little Sound DJ stuff
-	.endif
+	#endif
 
 	bl emu_reset		@reset everything else
 	ldr r0,=get_saved_sram
@@ -461,7 +470,7 @@ rammasktbl:
 	.word 0x7FFF @little sound DJ 128k
 	.word 0x01FF
 
-	.if LITTLESOUNDDJ
+	#if LITTLESOUNDDJ
 @LITTLE SOUND DJ STUFF!
 
 @----------------------------------------------------------------------------
@@ -517,13 +526,13 @@ little_sound_dj_init:
 	mov r1,#0
 	ldr r0,=M3_SRAM_BUFFER
 	mov r2,#128*1024
-	bl memset_
+	bl memset32_
 	mov lr,addy
 	
 	bx lr
 
 @END LITTLE SOUND DJ STUFF!
-	.endif
+	#endif
 
 
 @----------------------------------------------------------------------------
@@ -666,13 +675,6 @@ DMGBIOS:
 @	% 256
 
 @----------------------------------------------------------------------------
- .align
- .pool
- .section .iwram, "ax", %progbits
- .subsection 4
- .align
- .pool
-@----------------------------------------------------------------------------
 @mirror1_
 @	ldr r0,=m0000
 @	stmfd sp!,{r0,r3-r5,lr}
@@ -693,7 +695,7 @@ mapBIOS_:
 	ldr_ r0,biosbase
 	str_ r0,memmap_tbl
 	str_ r0,memmap_tbl+4
-	b flush
+	b_long flush
 @----------------------------------------------------------------------------
 map0123_:
 @----------------------------------------------------------------------------
@@ -718,7 +720,7 @@ map0123_:
 @	str r0,memmap_tbl+4
 @	str r0,memmap_tbl+8
 @	str r0,memmap_tbl+12
-	b flush
+	b_long flush
 @@----------------------------------------------------------------------------
 @mapCDEF_
 @@----------------------------------------------------------------------------
@@ -741,6 +743,8 @@ map0123_:
 @	str r0,memmap_tbl+28
 @	b flush
 
+@----------------------------------------------------------------------------
+ .section .iwram.4, "ax", %progbits
 @----------------------------------------------------------------------------
 map4567_:
 @----------------------------------------------------------------------------
@@ -839,12 +843,7 @@ mapAB_:
 	str_ r0,memmap_tbl+44
 	b flush
 @----------------------------------------------------------------------------
- .align
- .pool
- .section .iwram, "ax", %progbits
- .subsection 102
- .align
- .pool
+ .section .iwram.end.102, "ax", %progbits
 
 g_banks:
 	.word 0	@bank0
@@ -852,7 +851,15 @@ g_banks:
 	.word 0   @srambank
 mapperstate:
 	.skip 32	@mapperdata
-
+	@0: MBC1: low bits of bank
+	@1: 
+	@2: ram enable
+	@3: 
+	@4: sram bank
+	@5: bankswitch ram/rom mode
+	@more....
+	
+	
 	.word 0	@sramwptr
 biosstart:
 	.word 0	@biosbase
