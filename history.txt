@@ -1,5 +1,8 @@
 Goomba revision history
 -=-=-=-=-=-=-=-=-=-=-=-
+version 2019-05-04
+   fixed a bug that broke 32K save files
+
 version 2014-12-14
    Rewrote some of the save system, now it works correctly with less RAM avaliable.
 Added a system to fix up some EWRAM variables if they get overwritten, but it hasn't been necessary yet.
