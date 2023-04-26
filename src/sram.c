@@ -122,7 +122,7 @@ typedef struct {		//(modified stateheader)
 	char palettebank;
 	char misc;
 	char reserved3;
-	u32 sram_checksum;	//checksum of rom using SRAM e000-ffff	
+	u32 sram_checksum;	//checksum of rom using SRAM e000-ffff
 	u32 zero;	//=0
 	char reserved4[32];  //="CFG"
 } configdata;
@@ -242,7 +242,7 @@ void getsram()	//copy GBA sram to sram_copy
 	u32 *sramCopy32 = (u32*)sramCopy;
 	
 	if(sramCopy32[0] != STATEID)	//if sram hasn't been copied already
-	{	
+	{
 		probe_sram_size();  //stop NO$GBA from copying out-of-range data
 		bytecopy(sramCopy, sram, save_start);	//copy everything to sram_copy
 		if(!(sramCopy32[0] == STATEID || sramCopy32[0] == STATEID2)) //valid gba save ram data?
@@ -374,7 +374,7 @@ void memset8(u8 *p, int value, int size)
 //returns TRUE if successful
 //IMPORTANT!!! totalstatesize is assumed to be current
 //need to check this
-int updatestates(int index,int erase,int type) 
+int updatestates(int index,int erase,int type)
 {
 	if (sram_copy == NULL)
 	{
@@ -1309,11 +1309,29 @@ void setup_sram_after_loadstate() {
 		if(i>=0) if(chk!=cfg->sram_checksum) {//if someone else was using sram, save it
 			backup_gb_sram(0);
 		}
-		bytecopy(MEM_SRAM+save_start,XGB_SRAM,0x2000);		//copy gb sram to real sram
+		
+		if (g_sramsize < 3)
+		{
+			//For 8KB size or less:
+			bytecopy(MEM_SRAM+save_start,XGB_SRAM,0x2000);		//copy gb sram to real sram
+		}
+		else
+		{
+			no_sram_owner();
+		}
 		i=findstate(chk,SRAMSAVE,(stateheader**)&cfg);	//does packed SRAM for this rom exist?
 		if(i<0)						//if not, create it
 			save_new_sram(XGB_SRAM);
-		register_sram_owner();//register new sram owner
+		if (g_sramsize < 3)
+		{
+			//For 8KB size or less:
+			register_sram_owner();//register new sram owner
+		}
+		else
+		{
+			//otherwise rewrite the SRAM to the save file immediately
+			backup_gb_sram(1);
+		}
 	}
 }
 

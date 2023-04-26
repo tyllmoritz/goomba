@@ -181,6 +181,16 @@ $(OUTPUT).elf	:	$(OFILES)	gba_crt0_my.o
 
 -include $(DEPENDS)
 
+#replacement rule for gbafix
+#---------------------------------------------------------------------------------
+%.gba: %.elf
+	@$(OBJCOPY) -O binary $< $@
+	@echo CUSTOM built ... $(notdir $@)
+	@echo gbafix $@ -t GOOMBA COLOR -c GMBC
+	@gbafix $@ "-tGOOMBA COLOR" "-cGMBC"
+
+
+
 #---------------------------------------------------------------------------------
 endif
 #---------------------------------------------------------------------------------
