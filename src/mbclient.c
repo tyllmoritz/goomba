@@ -153,7 +153,7 @@ int swi25(void *p) {
 	__asm{mov r1,#1}
 	__asm{swi 0x25, {r0-r1}, {}, {r0-r2} }
 }
-#endif
+#endif
 //returns error code:  1=no link, 2=bad send, 3=too big
 #define TIMEOUT 40
 int SendMBImageToClient(void) {
