@@ -151,7 +151,7 @@ void errmsg(char *s) {
 
 void flush_end_sram()
 {
-	u8* sram=MEM_SRAM;
+	vu8* sram=MEM_SRAM;
 	int i;
 	int save_end = save_start + 0x2000;
 	for (i=save_start;i<save_end;i++)
@@ -163,6 +163,9 @@ void flush_end_sram()
 
 void probe_sram_size()
 {
+	//probe only once for a 64K SRAM build and we already detected a 32K SRAM size.
+	if (SRAM_SIZE == 64 && save_start == SAVE_START_32K) return;
+
 	vu8* sram=MEM_SRAM;
 	vu8* sram2=MEM_SRAM + 0x8000;
 	u32 val1;
@@ -177,7 +180,7 @@ void probe_sram_size()
 		if (val1 == STATEID || val1 == STATEID2)
 		{
 			sram[0] = (val1^(STATEID^STATEID2)) & 0xFF;
-			newval2 = sram2[0]+(sram2[1]<<8)+(sram2[2]<<16)+(sram2[3]<<24);
+			newval2 = (val2 & 0xFFFFFF00) | sram2[0];
 			//value has changed => 32k save is mirrored
 			if (newval2 != val2)
 			{
@@ -237,14 +240,14 @@ void getsram()	//copy GBA sram to sram_copy
 		//compressed_save = NULL;
 	}
 	
-	u8 *sram = MEM_SRAM;
+	vu8 *sram = MEM_SRAM;
 	u8 *sramCopy = sram_copy;
 	u32 *sramCopy32 = (u32*)sramCopy;
 	
 	if(sramCopy32[0] != STATEID)	//if sram hasn't been copied already
 	{
 		probe_sram_size();  //stop NO$GBA from copying out-of-range data
-		bytecopy(sramCopy, sram, save_start);	//copy everything to sram_copy
+		bytecopy_from_sram(sramCopy, sram, save_start);	//copy everything to sram_copy
 		if(!(sramCopy32[0] == STATEID || sramCopy32[0] == STATEID2)) //valid gba save ram data?
 		{
 			sramCopy32[0] = STATEID;	//nope.  initialize
@@ -435,7 +438,7 @@ int updatestates(int index,int erase,int type)
 	terminator[1] = 0xFFFFFFFF;
 	
 	totalstatesize = newSaveEnd - sram_copy;
-	bytecopy(MEM_SRAM, sram_copy, totalstatesize + 8);
+	bytecopy_to_sram(MEM_SRAM, sram_copy, totalstatesize + 8);
 	memset8(MEM_SRAM + totalstatesize + 8, 0, save_start - (totalstatesize + 8));
 	return 1;
 	/*
@@ -511,7 +514,7 @@ int updatestates(int index,int erase,int type)
 		*dst++=0;
 		total++;
 	}
-	bytecopy(MEM_SRAM,sram_copy,total);	//copy to sram
+	bytecopy_to_sram(MEM_SRAM,sram_copy,total);	//copy to sram
 	return 1;
 	*/
 }
@@ -702,7 +705,7 @@ stateheader* drawstates(int menutype,int *menuitems,int *menuoffset, int needed_
 }
 
 //compress src into dest (adding header), using 64k of workspace
-void compressstate(lzo_uint size,u16 type,const u8 *src,u8 *dest, void *workspace)
+void compressstate(lzo_uint size,u16 type,const vu8 *src,u8 *dest, void *workspace)
 {
 	//called by save_new_sram only
 	
@@ -710,7 +713,8 @@ void compressstate(lzo_uint size,u16 type,const u8 *src,u8 *dest, void *workspac
 	stateheader *sh;
 
 	if (workspace == NULL) {
-		memcpy(dest+sizeof(stateheader),src,size);
+		//this code path is never used, workspace is always provided
+		bytecopy_from_sram(dest+sizeof(stateheader),src,size);
 		compressedsize=size;
 	} else {
 		lzo1x_1_compress(src,size,dest+sizeof(stateheader),&compressedsize,workspace);	//workspace needs to be 64k
@@ -1089,7 +1093,7 @@ restart:
 	if (called_from==1 && chk==sram_owner)
 	{
 		//copy XGB_SRAM to MEM_SRAM, because some instructions (push) don't properly modify GBA SRAM
-		bytecopy(MEM_SRAM+save_start,XGB_SRAM,0x2000);
+		bytecopy_to_sram(MEM_SRAM+save_start,XGB_SRAM,0x2000);
 	}
 	
 	if(i>=0 && cfg->sram_checksum)	//SRAM is occupied?
@@ -1172,7 +1176,8 @@ restart:
 
 //make new saved sram (using XGB_SRAM contents)
 //this is to ensure that we have all info for this rom and can save it even after this rom is removed
-int save_new_sram(u8 *SRAM_SOURCE)
+//source may be either XGB_SRAM or within MEM_SRAM, so pointer must be volatile to force 8-bit memory access
+int save_new_sram(vu8 *SRAM_SOURCE)
 {
 	int sramsize=0;
 	if (g_sramsize==1) sramsize=0x2000;			//8KB
@@ -1235,7 +1240,7 @@ int get_saved_sram(void)
 		//probably shouldn't do this
 /*
 		if(i>=0) if(chk==cfg->sram_checksum) {	//SRAM is already ours
-			bytecopy(XGB_SRAM,MEM_SRAM+save_start,0x2000);
+			bytecopy_from_sram(XGB_SRAM,MEM_SRAM+save_start,0x2000);
 			if(j<0) save_new_sram();	//save it if we need to
 			return;
 		}
@@ -1261,7 +1266,7 @@ int get_saved_sram(void)
 			//#endif
 			retval=1;
 		} else { //pack new sram and save it.
-			save_new_sram(XGB_SRAM);
+			save_new_sram((vu8*)XGB_SRAM);
 			retval=2;
 		}
 		
@@ -1273,7 +1278,7 @@ int get_saved_sram(void)
 		else
 		{
 			//otherwise, use the sram saving system
-			bytecopy(MEM_SRAM+save_start,XGB_SRAM,0x2000);
+			bytecopy_to_sram(MEM_SRAM+save_start,XGB_SRAM,0x2000);
 			register_sram_owner();//register new sram owner
 		}
 		return retval;
@@ -1313,7 +1318,7 @@ void setup_sram_after_loadstate() {
 		if (g_sramsize < 3)
 		{
 			//For 8KB size or less:
-			bytecopy(MEM_SRAM+save_start,XGB_SRAM,0x2000);		//copy gb sram to real sram
+			bytecopy_to_sram(MEM_SRAM+save_start,XGB_SRAM,0x2000);		//copy gb sram to real sram
 		}
 		else
 		{
@@ -1321,7 +1326,7 @@ void setup_sram_after_loadstate() {
 		}
 		i=findstate(chk,SRAMSAVE,(stateheader**)&cfg);	//does packed SRAM for this rom exist?
 		if(i<0)						//if not, create it
-			save_new_sram(XGB_SRAM);
+			save_new_sram((vu8*)XGB_SRAM);
 		if (g_sramsize < 3)
 		{
 			//For 8KB size or less:
@@ -1420,7 +1425,7 @@ void writeconfig()
 	i=findstate(0,CONFIGSAVE,(stateheader**)&cfg);
 	if(i<0) {//make new config
 		memcpy(compressed_save,&configtemplate,sizeof(configdata));
-		cfg=current_save_file;
+		cfg=(configdata*)current_save_file;
 	}
 //	cfg->bordercolor=bcolor;					//store current border type
 	cfg->palettebank=palettebank;				//store current DMG palette
@@ -1433,7 +1438,7 @@ void writeconfig()
 	if(i<0) {	//create new config
 		updatestates(0,0,CONFIGSAVE);
 	} else {		//config already exists, update sram directly (faster)
-		bytecopy((u8*)cfg-sram_copy+MEM_SRAM,(u8*)cfg,sizeof(configdata));
+		bytecopy_to_sram((u8*)cfg-sram_copy+MEM_SRAM,(u8*)cfg,sizeof(configdata));
 	}
 	
 	compressed_save = NULL;
@@ -1482,7 +1487,7 @@ void clean_gb_sram() {
 	if(i<0) {	//create new config
 		updatestates(0,0,CONFIGSAVE);
 	} else {		//config already exists, update sram directly (faster)
-		bytecopy((u8*)cfg-buffer1+MEM_SRAM,(u8*)cfg,sizeof(configdata));
+		bytecopy_to_sram((u8*)cfg-buffer1+MEM_SRAM,(u8*)cfg,sizeof(configdata));
 	}
 }
 

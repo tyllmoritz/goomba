@@ -86,7 +86,6 @@ extern u8 request_gba_mode;
 
 extern u8 g_hackflags;
 extern u32 num_speedhacks;
-extern u16 speedhacks[256];
 
 extern u8 gbc_mode;
 extern u8 sgb_mode;
@@ -161,7 +160,7 @@ extern int bcolor;		//Border Color
 extern u32 joycfg;				//from io.s
 //void resetSIO(u32);				//io.s
 void vbaprint(const char *text);		//io.s
-void LZ77UnCompVram(const void *source,u16 *destination);		//io.s
+void LZ77UnCompVram(const void *source,vu16 *destination);		//io.s
 void waitframe(void);			//io.s
 int CheckGBAVersion(void);		//io.s
 void suspend(void);			//io.s
@@ -170,9 +169,7 @@ int gettime(void);			//io.s
 
 /*
 //memory.s
-extern u32 sram_R[];
 extern u32 sram_W[];
-extern u32 rom_R60[];
 extern u32 empty_W[];
 */
 
@@ -219,53 +216,20 @@ extern u8* _gb_oam_buffer_alt;
 
 extern u8 dirty_map_words[];
 
+//memcpy32 and memcpy32_to_vram (along with memset32 and memset32_to_vram)
+//are two different names for the exact same function, but the
+//destination parameter is declared as volatile u16* to suppress warnings.
 void memcpy32(void *dest, const void *src, int byteCount);
+void memcpy32_to_vram(vu16 *dest, const void *src, int byteCount);
 void memset32(void *dest, u32 value, int byteCount);
-void memset8(u8 *dest, u8 value, int byteCount);
+void memset32_to_vram(vu16 *dest, u32 value, int byteCount);
+void memset8(vu8 *dest, u8 value, int byteCount);
 void memcpy_unaligned_src(void *dest, const void *src, int byteCount);
 
 void copy_map_and_compare(u8 *destAddress, u8 *sourceAddress, int byteCount, u8* dirtyMapWordsPtr);
 
 
 void update_lcdhack(void);
-
-//ppu.s
-/*
-extern u32 *vblankfptr;			//from ppu.s
-extern u32 vbldummy;			//from ppu.s
-extern u32 vblankinterrupt;		//from ppu.s
-extern u32 AGBinput;			//from ppu.s
-extern u32 EMUinput;
-
-void debug_(int,int);		//ppu.s
-void paletteinit(void);		//ppu.s
-void PaletteTxAll(void);	//ppu.s
-
-void PPU_reset(void);
-void PPU_init(void);
-
-extern u32 FPSValue;		//from ppu.s
-extern char fpsenabled;		//from ppu.s
-extern char gammavalue;		//from ppu.s
-extern char twitch;			//from ppu.s
-extern char flicker;		//from ppu.s
-extern u32 wtop;			//from ppu.s
-
-extern u32 ppustate[8];
-extern u16 agb_pal[48];
-extern u32 agb_nt_map[4];
-
-*/
-
-//sound.s
-/*
-void make_freq_table(void);
-extern u16* freqtbl;
-extern u16 FREQTBL2[2048];
-*/
-
-/*
-*/
 
 //visoly.s
 void doReset(void);
